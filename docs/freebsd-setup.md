@@ -46,6 +46,13 @@ If you want a nicer monospace font for terminals and editors, also install:
 sudo pkg install jetbrains-mono
 ```
 
+The included `kitty.conf` uses:
+
+- `JetBrains Mono`
+- `font_size 12.0`
+
+If the X1 panel makes text look too small, try `13.0` or `14.0`.
+
 ## Services
 
 ```sh
