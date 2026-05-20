@@ -1,6 +1,7 @@
 * {
     background:     #11090a;
     background-alt: #170c0e;
+    background-alt-2: #211013;
     foreground:     #fff1f3;
     selected:       #8f1f34;
     selected-text:  #fff7f8;
@@ -73,20 +74,43 @@ element normal.normal {
     text-color: @foreground;
 }
 
+element alternate.normal {
+    background-color: @background-alt-2;
+    text-color: @foreground;
+}
+
 element selected.normal {
     background-color: @selected;
     text-color: @selected-text;
     border-color: @accent;
 }
 
+element selected.alternate {
+    background-color: @selected;
+    text-color: @selected-text;
+    border-color: @accent;
+}
+
+element selected.active {
+    background-color: @selected;
+    text-color: @selected-text;
+    border-color: @accent;
+}
+
+element selected.urgent {
+    background-color: @urgent;
+    text-color: @background;
+    border-color: @accent;
+}
+
 element-text {
     background-color: transparent;
-    text-color: inherit;
+    text-color: @foreground;
     vertical-align: 0.5;
 }
 
 element-icon {
     background-color: transparent;
-    text-color: inherit;
+    text-color: @foreground;
     size: 1.1em;
 }
