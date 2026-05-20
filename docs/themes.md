@@ -29,6 +29,72 @@ Each corp theme should eventually be able to style:
 
 The base Hyprland startup path should remain theme-neutral.
 
+## On-Disk Structure
+
+Themes live under:
+
+```text
+~/.config/bsdrunner/
+├── current-theme
+└── themes/
+    ├── default/
+    │   ├── palette.conf
+    │   ├── kitty.conf
+    │   └── rofi.rasi
+    ├── haas-bioroid/
+    │   ├── palette.conf
+    │   ├── kitty.conf
+    │   └── rofi.rasi
+    ├── jinteki/
+    │   ├── palette.conf
+    │   ├── kitty.conf
+    │   └── rofi.rasi
+    ├── nbn/
+    │   ├── palette.conf
+    │   ├── kitty.conf
+    │   └── rofi.rasi
+    └── weyland/
+        ├── palette.conf
+        ├── kitty.conf
+        └── rofi.rasi
+```
+
+Rules:
+
+- `current-theme` stores the active theme name
+- `default` means "no corp theme"
+- files under `themes/` are source files, not the active runtime files
+- active app configs still live in normal locations like `~/.config/kitty/kitty.conf`
+
+## Theme Responsibilities
+
+Each theme folder should be responsible for:
+
+- `palette.conf`: named colors and semantic accents
+- `kitty.conf`: terminal-specific theme overrides
+- `rofi.rasi`: launcher styling
+
+Later additions may include:
+
+- `waybar.css`
+- wallpaper references
+- icon or asset notes
+
+## Theme Switching Model
+
+The intended switching model is:
+
+1. keep stable, neutral base configs in normal app locations
+2. choose a theme name from `themes/`
+3. copy or render theme fragments into active config files
+4. allow `default` to restore the neutral visual baseline
+
+Important:
+
+- switching themes should never replace `hyprland.conf`
+- theme switching should not be required for the desktop to boot
+- a broken theme should be recoverable by switching back to `default`
+
 ## Haas-Bioroid
 
 Mood:

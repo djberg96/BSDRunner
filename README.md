@@ -15,6 +15,7 @@ The goal is a boring, bootable base session for Hyprland `0.54.x` on FreeBSD.
 
 - `dotfiles/.config/hypr/hyprland.conf`
 - `dotfiles/.config/kitty/kitty.conf`
+- `dotfiles/.config/bsdrunner/themes/`
 - `scripts/install-dotfiles.sh`
 - `docs/freebsd-setup.md`
 - `docs/themes.md`
