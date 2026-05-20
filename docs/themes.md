@@ -49,7 +49,8 @@ Themes live under:
     │   ├── palette.conf
     │   ├── kitty.conf
     │   ├── rofi.rasi
-    │   └── dolphin.colors
+    │   ├── dolphin.colors
+    │   └── qt6ct.conf
     ├── nbn/
     │   ├── palette.conf
     │   ├── kitty.conf
@@ -75,6 +76,7 @@ Each theme folder should be responsible for:
 - `kitty.conf`: terminal-specific theme overrides
 - `rofi.rasi`: launcher styling
 - `dolphin.colors`: KDE/Qt color scheme for Dolphin and related Qt apps
+- `qt6ct.conf`: qt6ct palette file for Qt application theming outside Plasma
 
 Later additions may include:
 
@@ -97,12 +99,49 @@ Current implementation:
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
+- qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
 
 Important:
 
 - switching themes should never replace `hyprland.conf`
 - theme switching should not be required for the desktop to boot
 - a broken theme should be recoverable by switching back to `default`
+
+## Manual Qt/Dolphin Test
+
+On your FreeBSD laptop, if `qt6ct` is already active and `~/.config/qt6ct/qt6ct.conf` points at a file like:
+
+```ini
+style=Breeze
+color_scheme_path=/usr/share/qt6ct/colors/darker.conf
+```
+
+then the safest Jinteki test is to keep the global Qt style alone and swap only the color scheme path.
+
+1. Copy the Jinteki qt6ct palette into your user palette directory:
+
+```sh
+mkdir -p ~/.config/qt6ct/colors
+cp ~/.config/bsdrunner/themes/jinteki/qt6ct.conf ~/.config/qt6ct/colors/jinteki.conf
+```
+
+2. Edit `~/.config/qt6ct/qt6ct.conf` and change:
+
+```ini
+color_scheme_path=/usr/share/qt6ct/colors/darker.conf
+```
+
+to:
+
+```ini
+color_scheme_path=/home/YOUR_USER/.config/qt6ct/colors/jinteki.conf
+```
+
+3. Fully quit Dolphin and reopen it.
+
+4. If the result looks wrong, revert by restoring the original `color_scheme_path`.
+
+This keeps the test reversible and avoids overwriting any system-provided qt6ct color files.
 
 ## Haas-Bioroid
 
@@ -255,10 +294,4 @@ Current implementation status:
 - `kitty.conf`: first-pass theme fragment defined
 - `rofi.rasi`: first-pass theme defined
 - `dolphin.colors`: first-pass KDE color scheme defined
-
-Recommended second implementation: `Haas-Bioroid`
-
-Why:
-
-- it is easier to make polished and broadly usable
-- it can become the most practical “daily driver” theme
+- `qt6ct.conf`: first-pass qt6ct palette defined

@@ -119,6 +119,23 @@ The currently validated application stack for the early BSDRunner setup is:
 - launcher: `rofi`
 - file manager: `dolphin`
 
+## Manual Qt Theme Test For Dolphin
+
+If your session already uses `qt6ct`, you can test the Jinteki Qt palette without touching Hyprland itself:
+
+```sh
+mkdir -p ~/.config/qt6ct/colors
+cp ~/.config/bsdrunner/themes/jinteki/qt6ct.conf ~/.config/qt6ct/colors/jinteki.conf
+```
+
+Then change `color_scheme_path` in `~/.config/qt6ct/qt6ct.conf` from the system scheme to your user copy, for example:
+
+```ini
+color_scheme_path=/home/YOUR_USER/.config/qt6ct/colors/jinteki.conf
+```
+
+Fully quit Dolphin and reopen it. To revert, restore the previous `color_scheme_path`.
+
 ## ThinkPad X1 Gen 9 Notes
 
 The shipped config uses:
