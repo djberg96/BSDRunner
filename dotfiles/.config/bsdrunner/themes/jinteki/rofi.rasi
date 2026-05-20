@@ -1,12 +1,12 @@
 * {
     background:     #11090a;
-    background-alt: #1c0f12;
-    foreground:     #f3d7da;
-    selected:       #c61f3a;
-    selected-text:  #fff1f3;
+    background-alt: #170c0e;
+    foreground:     #fff1f3;
+    selected:       #8f1f34;
+    selected-text:  #fff7f8;
     accent:         #ff5a6f;
     urgent:         #ffb36b;
-    border:         #5b1a27;
+    border:         #6d2231;
 }
 
 window {
@@ -62,7 +62,7 @@ element {
     padding: 10px 12px;
     border: 1px;
     border-radius: 10px;
-    border-color: transparent;
+    border-color: #261014;
     background-color: @background-alt;
     text-color: @foreground;
     spacing: 10px;
