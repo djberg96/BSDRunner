@@ -89,6 +89,12 @@ The intended switching model is:
 3. copy or render theme fragments into active config files
 4. allow `default` to restore the neutral visual baseline
 
+Current implementation:
+
+- `install-dotfiles.sh --theme <name>` writes `current-theme`
+- Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
+- Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
+
 Important:
 
 - switching themes should never replace `hyprland.conf`

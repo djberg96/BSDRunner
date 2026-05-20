@@ -73,6 +73,18 @@ From the repo root:
 
 That copies `dotfiles/` into your home directory with `.pre-bsdrunner` backups.
 
+To apply a corp theme during install:
+
+```sh
+./scripts/install-dotfiles.sh --theme jinteki
+```
+
+To return to the neutral baseline:
+
+```sh
+./scripts/install-dotfiles.sh --theme default
+```
+
 ## First Test
 
 Do the first test with only the shipped `hyprland.conf`.

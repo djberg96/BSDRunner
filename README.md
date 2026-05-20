@@ -26,6 +26,18 @@ The goal is a boring, bootable base session for Hyprland `0.54.x` on FreeBSD.
 ./scripts/install-dotfiles.sh
 ```
 
+Install and apply a corp theme:
+
+```sh
+./scripts/install-dotfiles.sh --theme jinteki
+```
+
+Return to the neutral baseline:
+
+```sh
+./scripts/install-dotfiles.sh --theme default
+```
+
 ## Default Binds
 
 - `Super+Return`: open `foot`
