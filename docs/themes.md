@@ -240,6 +240,12 @@ Why:
 - it can feel dramatic without needing many components
 - it will look good first in `kitty` and `rofi`, where contrast matters
 
+Current implementation status:
+
+- `palette.conf`: scaffolded
+- `kitty.conf`: first-pass theme fragment defined
+- `rofi.rasi`: placeholder
+
 Recommended second implementation: `Haas-Bioroid`
 
 Why:
