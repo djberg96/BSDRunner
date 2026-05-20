@@ -30,6 +30,18 @@ sudo pkg install \
   playerctl
 ```
 
+If you want the file manager currently validated in BSDRunner testing, also install:
+
+```sh
+sudo pkg install dolphin
+```
+
+If you prefer a lighter Qt file manager to experiment with later:
+
+```sh
+sudo pkg install pcmanfm-qt
+```
+
 ## Recommended Fonts
 
 For a practical desktop and terminal font stack, install:
@@ -99,6 +111,13 @@ Do not add:
 - Quickshell
 
 until the base session is proven stable.
+
+The currently validated application stack for the early BSDRunner setup is:
+
+- terminal: `kitty`
+- browser: `firefox`
+- launcher: `rofi`
+- file manager: `dolphin`
 
 ## ThinkPad X1 Gen 9 Notes
 

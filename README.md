@@ -47,6 +47,19 @@ Return to the neutral baseline:
 - `Super+F`: toggle fullscreen
 - `Super+V`: toggle floating
 
+## Validated Apps
+
+The following have been tested in the current FreeBSD/Hyprland bring-up:
+
+- terminal: `kitty`
+- browser: `firefox`
+- launcher: `rofi`
+- file manager: `dolphin`
+
+Possible lighter Qt alternative:
+
+- `pcmanfm-qt`
+
 ## Scope
 
 This starter is targeted at:
