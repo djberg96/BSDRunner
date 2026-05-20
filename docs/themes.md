@@ -48,7 +48,8 @@ Themes live under:
     ├── jinteki/
     │   ├── palette.conf
     │   ├── kitty.conf
-    │   └── rofi.rasi
+    │   ├── rofi.rasi
+    │   └── dolphin.colors
     ├── nbn/
     │   ├── palette.conf
     │   ├── kitty.conf
@@ -73,6 +74,7 @@ Each theme folder should be responsible for:
 - `palette.conf`: named colors and semantic accents
 - `kitty.conf`: terminal-specific theme overrides
 - `rofi.rasi`: launcher styling
+- `dolphin.colors`: KDE/Qt color scheme for Dolphin and related Qt apps
 
 Later additions may include:
 
@@ -94,6 +96,7 @@ Current implementation:
 - `install-dotfiles.sh --theme <name>` writes `current-theme`
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
+- Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 
 Important:
 
@@ -250,7 +253,8 @@ Current implementation status:
 
 - `palette.conf`: scaffolded
 - `kitty.conf`: first-pass theme fragment defined
-- `rofi.rasi`: placeholder
+- `rofi.rasi`: first-pass theme defined
+- `dolphin.colors`: first-pass KDE color scheme defined
 
 Recommended second implementation: `Haas-Bioroid`
 
