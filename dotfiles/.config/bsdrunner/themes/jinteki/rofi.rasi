@@ -1,1 +1,92 @@
-/* Jinteki rofi theme placeholder. */
+* {
+    background:     #11090a;
+    background-alt: #1c0f12;
+    foreground:     #f3d7da;
+    selected:       #c61f3a;
+    selected-text:  #fff1f3;
+    accent:         #ff5a6f;
+    urgent:         #ffb36b;
+    border:         #5b1a27;
+}
+
+window {
+    width: 42%;
+    border: 2px;
+    border-color: @border;
+    border-radius: 14px;
+    background-color: @background;
+    padding: 18px;
+    location: center;
+    anchor: center;
+}
+
+mainbox {
+    spacing: 12px;
+    children: [ inputbar, listview ];
+}
+
+inputbar {
+    background-color: @background-alt;
+    text-color: @foreground;
+    border: 1px;
+    border-color: @border;
+    border-radius: 10px;
+    padding: 10px 12px;
+    spacing: 10px;
+    children: [ prompt, entry ];
+}
+
+prompt {
+    text-color: @accent;
+    background-color: inherit;
+}
+
+entry {
+    text-color: @foreground;
+    background-color: inherit;
+    placeholder: "Search the grid";
+    placeholder-color: rgba(243, 215, 218, 0.45);
+}
+
+listview {
+    lines: 8;
+    columns: 1;
+    fixed-height: false;
+    border: 0;
+    background-color: transparent;
+    spacing: 8px;
+    scrollbar: false;
+}
+
+element {
+    padding: 10px 12px;
+    border: 1px;
+    border-radius: 10px;
+    border-color: transparent;
+    background-color: @background-alt;
+    text-color: @foreground;
+    spacing: 10px;
+}
+
+element normal.normal {
+    background-color: @background-alt;
+    text-color: @foreground;
+}
+
+element selected.normal {
+    background-color: @selected;
+    text-color: @selected-text;
+    border-color: @accent;
+}
+
+element-text {
+    background-color: transparent;
+    text-color: inherit;
+    vertical-align: 0.5;
+}
+
+element-icon {
+    background-color: transparent;
+    text-color: inherit;
+    size: 1.1em;
+}
