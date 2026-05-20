@@ -30,6 +30,22 @@ sudo pkg install \
   playerctl
 ```
 
+## Recommended Fonts
+
+For a practical desktop and terminal font stack, install:
+
+```sh
+sudo pkg install \
+  noto \
+  font-awesome
+```
+
+If you want a nicer monospace font for terminals and editors, also install:
+
+```sh
+sudo pkg install jetbrains-mono
+```
+
 ## Services
 
 ```sh
