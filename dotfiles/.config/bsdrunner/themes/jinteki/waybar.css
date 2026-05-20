@@ -1,0 +1,39 @@
+#workspaces button.active {
+    background: rgba(255, 90, 111, 0.22);
+    color: #fff7f8;
+}
+
+#window,
+#cpu,
+#memory,
+#pulseaudio,
+#network,
+#battery,
+#clock,
+#tray {
+    background: rgba(28, 15, 18, 0.94);
+    color: #fff1f3;
+    border: 1px solid rgba(198, 31, 58, 0.32);
+}
+
+#pulseaudio {
+    color: #ffb36b;
+}
+
+#network {
+    color: #ff8795;
+}
+
+#battery {
+    color: #f3d7da;
+}
+
+#clock {
+    color: #ff5a6f;
+}
+
+tooltip {
+    background: rgba(17, 9, 10, 0.97);
+    color: #fff1f3;
+    border: 1px solid rgba(198, 31, 58, 0.50);
+}

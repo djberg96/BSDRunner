@@ -1,0 +1,106 @@
+[
+  {
+    "layer": "top",
+    "position": "top",
+    "spacing": 8,
+    "height": 34,
+    "margin-top": 8,
+    "margin-left": 10,
+    "margin-right": 10,
+    "modules-left": ["hyprland/workspaces", "hyprland/window"],
+    "modules-center": [],
+    "modules-right": ["cpu", "memory", "pulseaudio", "network", "battery", "clock", "tray"],
+
+    "hyprland/workspaces": {
+      "disable-scroll": true,
+      "all-outputs": true,
+      "format": "{icon}",
+      "format-icons": {
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "6": "6",
+        "7": "7",
+        "8": "8",
+        "9": "9",
+        "10": "10",
+        "active": "*",
+        "default": "-"
+      },
+      "persistent-workspaces": {
+        "*": 5
+      }
+    },
+
+    "hyprland/window": {
+      "format": "{}",
+      "max-length": 56,
+      "separate-outputs": true
+    },
+
+    "cpu": {
+      "interval": 3,
+      "format": "CPU {usage}%",
+      "tooltip-format": "CPU usage: {usage}%"
+    },
+
+    "memory": {
+      "interval": 5,
+      "format": "MEM {percentage}%",
+      "tooltip-format": "Memory in use: {used:0.1f}G / {total:0.1f}G"
+    },
+
+    "pulseaudio": {
+      "format": "{icon} {volume}%",
+      "format-muted": "MUTE",
+      "format-icons": {
+        "default": ["VOL", "VOL", "VOL"]
+      },
+      "tooltip-format": "Volume: {volume}%",
+      "tooltip-format-muted": "Audio muted",
+      "on-click": "pavucontrol"
+    },
+
+    "network": {
+      "format-wifi": "NET {essid}",
+      "format-ethernet": "NET wired",
+      "format-linked": "NET link",
+      "format-disconnected": "NET down",
+      "tooltip-format-wifi": "{essid} via {ifname}",
+      "tooltip-format-ethernet": "{ifname}",
+      "tooltip-format-disconnected": "No active network connection"
+    },
+
+    "battery": {
+      "states": {
+        "warning": 30,
+        "critical": 15
+      },
+      "format": "BAT {capacity}%",
+      "format-charging": "CHR {capacity}%",
+      "format-plugged": "AC",
+      "tooltip-format": "Battery: {capacity}%",
+      "tooltip-format-charging": "Charging: {capacity}%"
+    },
+
+    "clock": {
+      "interval": 1,
+      "format": "{:%a %Y-%m-%d %H:%M}",
+      "format-alt": "{:%A %B %d  %I:%M %p}",
+      "tooltip-format": "<tt>{calendar}</tt>",
+      "calendar": {
+        "mode": "month",
+        "mode-mon-col": 3,
+        "weeks-pos": "right",
+        "on-scroll": 1
+      }
+    },
+
+    "tray": {
+      "icon-size": 16,
+      "spacing": 8
+    }
+  }
+]

@@ -21,6 +21,7 @@ Recommended next layer after the base session works:
 
 ```sh
 sudo pkg install \
+  waybar \
   xdg-desktop-portal \
   xdg-desktop-portal-hyprland \
   xdg-desktop-portal-gtk \
@@ -118,6 +119,12 @@ The currently validated application stack for the early BSDRunner setup is:
 - browser: `firefox`
 - launcher: `rofi`
 - file manager: `dolphin`
+
+If you want to test the optional bar layer after the base session is stable:
+
+```sh
+waybar
+```
 
 ## Manual Qt Theme Test For Dolphin
 

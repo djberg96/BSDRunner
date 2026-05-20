@@ -40,25 +40,30 @@ Themes live under:
     ├── default/
     │   ├── palette.conf
     │   ├── kitty.conf
-    │   └── rofi.rasi
+    │   ├── rofi.rasi
+    │   └── waybar.css
     ├── haas-bioroid/
     │   ├── palette.conf
     │   ├── kitty.conf
-    │   └── rofi.rasi
+    │   ├── rofi.rasi
+    │   └── waybar.css
     ├── jinteki/
     │   ├── palette.conf
     │   ├── kitty.conf
     │   ├── rofi.rasi
+    │   ├── waybar.css
     │   ├── dolphin.colors
     │   └── qt6ct.conf
     ├── nbn/
     │   ├── palette.conf
     │   ├── kitty.conf
-    │   └── rofi.rasi
+    │   ├── rofi.rasi
+    │   └── waybar.css
     └── weyland/
         ├── palette.conf
         ├── kitty.conf
-        └── rofi.rasi
+        ├── rofi.rasi
+        └── waybar.css
 ```
 
 Rules:
@@ -75,6 +80,7 @@ Each theme folder should be responsible for:
 - `palette.conf`: named colors and semantic accents
 - `kitty.conf`: terminal-specific theme overrides
 - `rofi.rasi`: launcher styling
+- `waybar.css`: bar-specific color and panel overrides
 - `dolphin.colors`: KDE/Qt color scheme for Dolphin and related Qt apps
 - `qt6ct.conf`: qt6ct palette file for Qt application theming outside Plasma
 
@@ -98,6 +104,7 @@ Current implementation:
 - `install-dotfiles.sh --theme <name>` writes `current-theme`
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
+- Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
 
@@ -293,5 +300,6 @@ Current implementation status:
 - `palette.conf`: scaffolded
 - `kitty.conf`: first-pass theme fragment defined
 - `rofi.rasi`: first-pass theme defined
+- `waybar.css`: first-pass theme fragment defined
 - `dolphin.colors`: first-pass KDE color scheme defined
 - `qt6ct.conf`: first-pass qt6ct palette defined

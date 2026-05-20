@@ -1,0 +1,66 @@
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: rgba(12, 12, 14, 0.88);
+    color: #eceff4;
+}
+
+tooltip {
+    background: rgba(16, 16, 18, 0.96);
+    color: #eceff4;
+    border: 1px solid rgba(120, 124, 132, 0.45);
+    border-radius: 10px;
+}
+
+#workspaces,
+#window,
+#cpu,
+#memory,
+#pulseaudio,
+#network,
+#battery,
+#clock,
+#tray {
+    margin: 6px 0;
+    padding: 6px 12px;
+    background: rgba(28, 28, 32, 0.92);
+    border: 1px solid rgba(120, 124, 132, 0.24);
+    border-radius: 10px;
+}
+
+#workspaces {
+    padding: 4px 8px;
+}
+
+#workspaces button {
+    padding: 0 8px;
+    margin: 0 2px;
+    color: #d8dee9;
+    background: transparent;
+    border-radius: 8px;
+}
+
+#workspaces button:hover {
+    background: rgba(236, 239, 244, 0.10);
+    box-shadow: inherit;
+    text-shadow: inherit;
+}
+
+#workspaces button.active {
+    background: rgba(143, 211, 255, 0.18);
+    color: #f5fbff;
+}
+
+#window {
+    min-width: 260px;
+}
+
+#tray {
+    padding-right: 10px;
+}

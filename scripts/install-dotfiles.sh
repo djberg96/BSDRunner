@@ -55,6 +55,7 @@ fi
 rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
 
 mkdir -p "$HOME/.config/rofi"
+mkdir -p "$HOME/.config/waybar"
 
 printf '%s\n' "$theme" > "$HOME/.config/bsdrunner/current-theme"
 
@@ -65,6 +66,11 @@ cat \
 
 cp "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/rofi.rasi" \
    "$HOME/.config/rofi/config.rasi"
+
+cat \
+    "$repo_root/dotfiles/.config/waybar/style.css" \
+    "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar.css" \
+    > "$HOME/.config/waybar/style.css"
 
 echo ":: Installed BSDRunner dotfiles into $HOME"
 echo ":: Applied BSDRunner theme: $theme"
