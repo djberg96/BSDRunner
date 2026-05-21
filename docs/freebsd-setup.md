@@ -97,9 +97,14 @@ To apply a corp theme during install:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-Themed wallpapers are activated during install through `swww`. The Jinteki theme currently ships four bundled wallpaper images, writes `~/.config/bsdrunner/current-wallpaper` automatically, and uses `jinteki_wallpaper4.jpg` as the anchor wallpaper before rotating across the rest by workspace number.
+Implemented corp themes:
 
-The Haas-Bioroid theme also ships four bundled wallpaper images plus a Kitty watermark asset. Its first bundled wallpaper is used as the default anchor before rotating across the rest by workspace number.
+- `jinteki`
+- `haas-bioroid`
+- `nbn`
+- `weyland`
+
+All four implemented corp themes currently ship bundled wallpaper sets and Kitty watermark assets. Theme install writes `~/.config/bsdrunner/current-wallpaper` automatically, then the `swww` helper rotates the available wallpaper set by workspace number.
 
 To return to the neutral baseline:
 
@@ -112,7 +117,7 @@ To return to the neutral baseline:
 Do the first test with only the shipped BSDRunner stack:
 
 - `hyprland.conf`
-- autostarted `dbus-launch waybar`
+- autostarted `bsdrunner-start-waybar.sh`
 - autostarted `swww` wallpaper helper when a theme is active
 
 Do not add:
@@ -134,7 +139,7 @@ The currently validated application stack for the early BSDRunner setup is:
 On some FreeBSD Hyprland sessions, Waybar may need a DBus session wrapper even when manual launch works. BSDRunner currently autostarts it with:
 
 ```sh
-dbus-launch waybar
+sh ~/.config/bsdrunner/scripts/bsdrunner-start-waybar.sh
 ```
 
 If you install `quickshell`, BSDRunner also ships an optional welcome window. Launch it manually with:
@@ -149,11 +154,30 @@ To show it automatically on login later:
 touch ~/.config/bsdrunner/show-welcome-at-startup
 ```
 
-If you need to launch Waybar manually in the current session, use the same command:
+If you need to launch Waybar manually in the current session, use the same wrapper:
 
 ```sh
-dbus-launch waybar
+sh ~/.config/bsdrunner/scripts/bsdrunner-start-waybar.sh
 ```
+
+For quick theme switching after install, BSDRunner supports:
+
+- the Waybar theme button
+- the welcome window theme picker
+
+Both paths call:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-apply-theme.sh THEME
+```
+
+where `THEME` is one of:
+
+- `default`
+- `jinteki`
+- `haas-bioroid`
+- `nbn`
+- `weyland`
 
 ## Manual Qt Theme Test For Dolphin
 

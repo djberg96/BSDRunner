@@ -36,9 +36,22 @@ Install and apply a corp theme:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-The Jinteki theme installs a `swww` wallpaper target using the bundled Jinteki wallpaper assets. It uses `jinteki_wallpaper4.jpg` as the anchor wallpaper, then rotates across the other bundled wallpapers by workspace number.
+Implemented corp themes:
 
-The Haas-Bioroid theme now ships its own Kitty watermark, Waybar and Rofi styling, and four bundled wallpapers. It uses the first bundled wallpaper as the default anchor, then rotates across the rest by workspace number.
+- `jinteki`
+- `haas-bioroid`
+- `nbn`
+- `weyland`
+
+Each implemented corp theme currently ships:
+
+- a Kitty theme fragment
+- a Rofi theme
+- Waybar styling
+- bundled wallpapers for `swww`
+- a Kitty watermark asset
+
+Wallpaper selection is automatic during install. Themes that ship multiple wallpapers rotate them by workspace number through the `swww` helper.
 
 Return to the neutral baseline:
 
@@ -69,6 +82,23 @@ The following have been tested in the current FreeBSD/Hyprland bring-up:
 Possible lighter Qt alternative:
 
 - `pcmanfm-qt`
+
+## Theme Switching
+
+BSDRunner currently supports two in-session theme switching paths:
+
+- the optional welcome window on `Super+W`
+- the Waybar theme button on the left side of the bar
+
+Both paths call the same theme apply script and update:
+
+- Kitty config for new windows
+- Rofi theme
+- Waybar config and style
+- wallpaper selection and `swww` rotation
+- Hyprland border colors
+
+Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.
 
 ## Scope
 

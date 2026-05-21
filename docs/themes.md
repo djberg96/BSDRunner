@@ -47,7 +47,9 @@ Themes live under:
     │   ├── palette.conf
     │   ├── kitty.conf
     │   ├── rofi.rasi
-    │   └── waybar.css
+    │   ├── waybar.css
+    │   ├── waybar-config
+    │   └── wallpapers/
     ├── jinteki/
     │   ├── palette.conf
     │   ├── kitty.conf
@@ -60,12 +62,14 @@ Themes live under:
     │   ├── palette.conf
     │   ├── kitty.conf
     │   ├── rofi.rasi
-    │   └── waybar.css
+    │   ├── waybar.css
+    │   └── wallpapers/
     └── weyland/
         ├── palette.conf
         ├── kitty.conf
         ├── rofi.rasi
-        └── waybar.css
+        ├── waybar.css
+        └── wallpapers/
 ```
 
 Rules:
@@ -104,11 +108,14 @@ The intended switching model is:
 Current implementation:
 
 - `install-dotfiles.sh --theme <name>` writes `current-theme`
+- `bsdrunner-apply-theme.sh <name>` applies a theme in-session without rerunning the full installer
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
+- Waybar can also use a theme-specific `waybar-config` override when a theme wants a different layout instead of only different colors
 - if a theme ships `wallpapers/`, install writes a matching `~/.config/bsdrunner/current-wallpaper`
 - when a theme ships multiple wallpapers, the `swww` helper rotates them by workspace number
+- Hyprland border colors are generated into `~/.config/hypr/bsdrunner-theme.conf`
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
 - wallpapers are bundled as theme assets and can be activated through `swww` during install
@@ -120,6 +127,7 @@ Important:
 - a broken theme should be recoverable by switching back to `default`
 - `swww` is treated as part of the expected themed runtime
 - themes may ship multiple wallpaper assets even if only one is selected by default
+- the welcome window and Waybar theme button are convenience layers over the same theme-apply path
 
 ## Manual Qt/Dolphin Test
 
@@ -281,52 +289,43 @@ Typography direction:
 - less glow, more structure
 - stronger borders than the other corps
 
-## Recommended Rollout
+## Current Status
 
-Implement the corp themes in this order:
+All four corp themes now have first-pass implementations:
 
-1. `kitty`
-2. `rofi`
-3. `waybar`
-4. wallpapers and optional assets
+- `jinteki`
+  - `kitty.conf`
+  - `rofi.rasi`
+  - `waybar.css`
+  - `qt6ct.conf`
+  - `dolphin.colors`
+  - bundled wallpapers
+  - Kitty watermark asset
+- `haas-bioroid`
+  - `kitty.conf`
+  - `rofi.rasi`
+  - `waybar.css`
+  - theme-specific `waybar-config`
+  - bundled wallpapers
+  - Kitty watermark asset
+- `nbn`
+  - `kitty.conf`
+  - `rofi.rasi`
+  - `waybar.css`
+  - bundled wallpapers
+  - Kitty watermark asset
+- `weyland`
+  - `kitty.conf`
+  - `rofi.rasi`
+  - `waybar.css`
+  - bundled wallpapers
+  - Kitty watermark asset
 
-That order is now proven by the current Jinteki implementation and the first Haas-Bioroid pass.
+Theme switching now updates:
 
-## First Theme
-
-Recommended first implementation: `Jinteki`
-
-Why:
-
-- it is immediately distinctive
-- it can feel dramatic without needing many components
-- it will look good first in `kitty` and `rofi`, where contrast matters
-
-Current implementation status:
-
-- `palette.conf`: scaffolded
-- `kitty.conf`: first-pass theme fragment defined
-- `rofi.rasi`: first-pass theme defined
-- `waybar.css`: first-pass theme fragment defined
-- `dolphin.colors`: first-pass KDE color scheme defined
-- `qt6ct.conf`: first-pass qt6ct palette defined
-- `wallpapers/`: four bundled Jinteki wallpaper images
-
-## Second Theme
-
-Recommended second implementation: `Haas-Bioroid`
-
-Why:
-
-- it shares the same structure while pushing toward a very different mood
-- the cool steel-and-cyan palette works well for clean UI surfaces
-- it is a good test of whether the theme system can do more than one strong visual language
-
-Current implementation status:
-
-- `palette.conf`: scaffolded
-- `kitty.conf`: first-pass theme fragment defined
-- `rofi.rasi`: first-pass theme defined
-- `waybar.css`: first-pass theme fragment defined
-- `wallpapers/`: four bundled Haas-Bioroid wallpaper images
-- Kitty watermark asset: `haas_bioroid_hb.jpg`
+- Kitty config for new windows
+- Rofi theme
+- Waybar style and optional layout
+- `swww` wallpaper selection
+- Hyprland border colors
+- welcome-window theme chrome
