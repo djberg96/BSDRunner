@@ -6,6 +6,15 @@ action="${1:-}"
 home_config="$HOME/.config"
 
 case "$action" in
+    theme:default)
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-apply-theme.sh" default
+        ;;
+    theme:jinteki)
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-apply-theme.sh" jinteki
+        ;;
+    theme:haas-bioroid)
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-apply-theme.sh" haas-bioroid
+        ;;
     terminal)
         exec kitty
         ;;

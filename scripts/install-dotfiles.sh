@@ -54,14 +54,21 @@ fi
 
 rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
 
+mkdir -p "$HOME/.config/bsdrunner/base"
 mkdir -p "$HOME/.config/hypr"
 mkdir -p "$HOME/.config/rofi"
 mkdir -p "$HOME/.config/waybar"
 
 printf '%s\n' "$theme" > "$HOME/.config/bsdrunner/current-theme"
 
+cp "$repo_root/dotfiles/.config/kitty/kitty.conf" \
+   "$HOME/.config/bsdrunner/base/kitty.conf"
+
+cp "$repo_root/dotfiles/.config/waybar/style.css" \
+   "$HOME/.config/bsdrunner/base/waybar.css"
+
 cat \
-    "$repo_root/dotfiles/.config/kitty/kitty.conf" \
+    "$HOME/.config/bsdrunner/base/kitty.conf" \
     "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/kitty.conf" \
     > "$HOME/.config/kitty/kitty.conf"
 
@@ -69,7 +76,7 @@ cp "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/rofi.rasi" \
    "$HOME/.config/rofi/config.rasi"
 
 cat \
-    "$repo_root/dotfiles/.config/waybar/style.css" \
+    "$HOME/.config/bsdrunner/base/waybar.css" \
     "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar.css" \
     > "$HOME/.config/waybar/style.css"
 

@@ -77,6 +77,27 @@ ShellRoot {
             }
         ]
 
+        property var themeCards: [
+            {
+                "title": "Default",
+                "subtitle": "Neutral baseline",
+                "accent": "#d7e3ea",
+                "action": "theme:default"
+            },
+            {
+                "title": "Jinteki",
+                "subtitle": "Crimson lacquer",
+                "accent": "#ff6f83",
+                "action": "theme:jinteki"
+            },
+            {
+                "title": "Haas-Bioroid",
+                "subtitle": "Steel and cyan",
+                "accent": "#8fd3ff",
+                "action": "theme:haas-bioroid"
+            }
+        ]
+
         Rectangle {
             anchors.fill: parent
             radius: 24
@@ -115,8 +136,69 @@ ShellRoot {
                         }
                     }
 
+                    Column {
+                        spacing: 10
+
+                        Text {
+                            text: "Select Theme"
+                            color: "#f2cfd5"
+                            font.pixelSize: 16
+                            font.bold: true
+                        }
+
+                        Row {
+                            spacing: 12
+
+                            Repeater {
+                                model: window.themeCards
+
+                                delegate: Rectangle {
+                                    required property var modelData
+
+                                    width: 256
+                                    height: 86
+                                    radius: 16
+                                    color: "#251013"
+                                    border.width: 2
+                                    border.color: modelData.accent
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        spacing: 4
+
+                                        Text {
+                                            text: parent.parent.modelData.title
+                                            color: parent.parent.modelData.accent
+                                            font.pixelSize: 20
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: 220
+                                            wrapMode: Text.WordWrap
+                                            text: parent.parent.modelData.subtitle
+                                            color: "#fff1f3"
+                                            font.pixelSize: 14
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+
+                                        onEntered: parent.color = "#341417"
+                                        onExited: parent.color = "#251013"
+                                        onClicked: root.runAction(parent.modelData.action)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     Grid {
-                        columns: 2
+                        columns: 3
                         rowSpacing: 14
                         columnSpacing: 14
 
@@ -126,8 +208,8 @@ ShellRoot {
                             delegate: Rectangle {
                                 required property var modelData
 
-                                width: 394
-                                height: 112
+                                width: 256
+                                height: 96
                                 radius: 18
                                 color: "#251013"
                                 border.width: 2
@@ -135,22 +217,22 @@ ShellRoot {
 
                                 Column {
                                     anchors.fill: parent
-                                    anchors.margins: 18
-                                    spacing: 6
+                                    anchors.margins: 16
+                                    spacing: 4
 
                                     Text {
                                         text: parent.parent.modelData.title
                                         color: parent.parent.modelData.accent
-                                        font.pixelSize: 22
+                                        font.pixelSize: 19
                                         font.bold: true
                                     }
 
                                     Text {
-                                        width: 320
+                                        width: 220
                                         wrapMode: Text.WordWrap
                                         text: parent.parent.modelData.subtitle
                                         color: "#fff1f3"
-                                        font.pixelSize: 15
+                                        font.pixelSize: 14
                                     }
                                 }
 
