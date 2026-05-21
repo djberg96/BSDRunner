@@ -77,20 +77,13 @@ theme_wallpaper_dir="$repo_root/dotfiles/.config/bsdrunner/themes/$theme/wallpap
 active_wallpaper_dir="$HOME/.config/bsdrunner/themes/$theme/wallpapers"
 
 if [[ -d "$theme_wallpaper_dir" ]] && find "$theme_wallpaper_dir" -maxdepth 1 -type f | read -r _; then
-    first_wallpaper=""
-
     {
         printf 'splash = false\n'
         while IFS= read -r repo_wallpaper; do
             wallpaper_name="$(basename "$repo_wallpaper")"
             active_wallpaper="$active_wallpaper_dir/$wallpaper_name"
             printf 'preload = %s\n' "$active_wallpaper"
-            if [[ -z "$first_wallpaper" ]]; then
-                first_wallpaper="$active_wallpaper"
-            fi
         done < <(find "$theme_wallpaper_dir" -maxdepth 1 -type f | sort)
-
-        printf 'wallpaper = ,%s\n' "$first_wallpaper"
     } > "$HOME/.config/hypr/hyprpaper.conf"
 else
     rm -f "$HOME/.config/hypr/hyprpaper.conf"
