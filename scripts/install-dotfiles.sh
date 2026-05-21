@@ -22,6 +22,33 @@ theme_exists() {
     [[ -d "$repo_root/dotfiles/.config/bsdrunner/themes/$1" ]]
 }
 
+write_hypr_theme() {
+    local target="$1"
+    local selected_theme="$2"
+    local active_border=""
+    local inactive_border=""
+
+    case "$selected_theme" in
+        jinteki)
+            active_border='rgba(c61f3aee) rgba(7f1325ee) 45deg'
+            inactive_border='rgba(6a2a35cc)'
+            ;;
+        haas-bioroid)
+            active_border='rgba(2f5f8eee) rgba(17324aee) 45deg'
+            inactive_border='rgba(344652cc)'
+            ;;
+        *)
+            active_border='rgba(5a7fa0ee) rgba(2e4658ee) 45deg'
+            inactive_border='rgba(3c4652cc)'
+            ;;
+    esac
+
+    cat > "$target" <<EOF
+\$bsdrunner_active_border = $active_border
+\$bsdrunner_inactive_border = $inactive_border
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -t|--theme)
@@ -66,6 +93,8 @@ cp "$repo_root/dotfiles/.config/kitty/kitty.conf" \
 
 cp "$repo_root/dotfiles/.config/waybar/style.css" \
    "$HOME/.config/bsdrunner/base/waybar.css"
+
+write_hypr_theme "$HOME/.config/hypr/bsdrunner-theme.conf" "$theme"
 
 cat \
     "$HOME/.config/bsdrunner/base/kitty.conf" \

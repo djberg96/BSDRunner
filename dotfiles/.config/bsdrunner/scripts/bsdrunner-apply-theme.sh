@@ -21,6 +21,31 @@ Themes:
 EOF
 }
 
+write_hypr_theme() {
+    target="$1"
+    selected_theme="$2"
+
+    case "$selected_theme" in
+        jinteki)
+            active_border='rgba(c61f3aee) rgba(7f1325ee) 45deg'
+            inactive_border='rgba(6a2a35cc)'
+            ;;
+        haas-bioroid)
+            active_border='rgba(2f5f8eee) rgba(17324aee) 45deg'
+            inactive_border='rgba(344652cc)'
+            ;;
+        *)
+            active_border='rgba(5a7fa0ee) rgba(2e4658ee) 45deg'
+            inactive_border='rgba(3c4652cc)'
+            ;;
+    esac
+
+    cat > "$target" <<EOF
+\$bsdrunner_active_border = $active_border
+\$bsdrunner_inactive_border = $inactive_border
+EOF
+}
+
 [ -n "$theme" ] || {
     usage
     exit 1
@@ -42,9 +67,11 @@ EOF
     exit 1
 }
 
-mkdir -p "$config_home/kitty" "$config_home/rofi" "$config_home/waybar"
+mkdir -p "$config_home/hypr" "$config_home/kitty" "$config_home/rofi" "$config_home/waybar"
 
 printf '%s\n' "$theme" > "$runner_home/current-theme"
+
+write_hypr_theme "$config_home/hypr/bsdrunner-theme.conf" "$theme"
 
 cat \
     "$base_dir/kitty.conf" \
@@ -86,5 +113,7 @@ pkill waybar 2>/dev/null || true
 pkill -f bsdrunner-start-wallpaper.sh 2>/dev/null || true
 pkill swww-daemon 2>/dev/null || true
 (sh "$runner_home/scripts/bsdrunner-start-wallpaper.sh" >/tmp/bsdrunner-wallpaper.log 2>&1 &) >/dev/null 2>&1
+
+hyprctl reload >/tmp/bsdrunner-hypr-reload.log 2>&1 || true
 
 echo ":: Applied BSDRunner theme: $theme"
