@@ -9,6 +9,10 @@ waybar_style="$config_home/waybar/style.css"
 command -v dbus-launch >/dev/null 2>&1 || exit 0
 command -v waybar >/dev/null 2>&1 || exit 0
 
+launch_waybar() {
+    dbus-launch waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
+}
+
 pkill -x waybar 2>/dev/null || true
 pkill -f "dbus-launch waybar" 2>/dev/null || true
 
@@ -22,4 +26,15 @@ while pgrep -x waybar >/dev/null 2>&1; do
     fi
 done
 
-exec dbus-launch waybar -c "$waybar_config" -s "$waybar_style"
+launch_waybar
+sleep 0.5
+
+if ! pgrep -x waybar >/dev/null 2>&1; then
+    launch_waybar
+    sleep 0.5
+fi
+
+if ! pgrep -x waybar >/dev/null 2>&1; then
+    echo ":: Failed to start waybar" >&2
+    exit 1
+fi
