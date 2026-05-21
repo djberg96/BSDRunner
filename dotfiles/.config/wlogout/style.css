@@ -1,14 +1,15 @@
 window {
-    background-color: rgba(10, 6, 7, 0.78);
+    background-color: rgba(6, 4, 5, 0.92);
 }
 
 button {
+    background-image: none;
     background-repeat: no-repeat;
     background-position: center;
     background-size: 20%;
-    border: 2px solid rgba(198, 31, 58, 0.32);
+    border: 2px solid rgba(198, 31, 58, 0.65);
     border-radius: 18px;
-    background-color: rgba(28, 15, 18, 0.94);
+    background-color: rgba(28, 15, 18, 0.995);
     color: #fff1f3;
     font-family: "JetBrains Mono";
     font-size: 18px;
@@ -21,13 +22,13 @@ button {
 }
 
 button:hover {
-    background-color: rgba(98, 23, 36, 0.98);
-    border-color: rgba(255, 111, 131, 0.72);
+    background-color: rgba(98, 23, 36, 1.0);
+    border-color: rgba(255, 111, 131, 0.92);
 }
 
 button:focus {
-    background-color: rgba(98, 23, 36, 0.98);
-    border-color: rgba(255, 111, 131, 0.90);
+    background-color: rgba(98, 23, 36, 1.0);
+    border-color: rgba(255, 111, 131, 1.0);
     color: #ffffff;
 }
 

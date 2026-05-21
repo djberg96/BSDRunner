@@ -7,7 +7,7 @@
 
 {
   "label" : "logout",
-  "action" : "hyprctl dispatch exit",
+  "action" : "sh -c 'sleep 0.2; hyprctl dispatch exit; sleep 0.5; chvt 1'",
   "text" : "Logout",
   "keybind" : "e"
 }
