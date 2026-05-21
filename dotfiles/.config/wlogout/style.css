@@ -6,19 +6,20 @@ button {
     background-image: none;
     background-repeat: no-repeat;
     background-position: center;
-    background-size: 20%;
+    background-size: 0%;
     border: 2px solid rgba(198, 31, 58, 0.65);
-    border-radius: 18px;
+    border-radius: 22px;
     background-color: rgba(28, 15, 18, 0.995);
     color: #fff1f3;
     font-family: "JetBrains Mono";
-    font-size: 18px;
-    font-weight: 700;
-    margin: 18px;
-    min-width: 180px;
-    min-height: 180px;
+    font-size: 24px;
+    font-weight: 800;
+    margin: 14px;
+    min-width: 150px;
+    min-height: 150px;
     box-shadow: none;
     text-shadow: none;
+    padding: 0;
 }
 
 button:hover {
@@ -30,6 +31,12 @@ button:focus {
     background-color: rgba(98, 23, 36, 1.0);
     border-color: rgba(255, 111, 131, 1.0);
     color: #ffffff;
+}
+
+button label {
+    color: inherit;
+    font: inherit;
+    padding: 0;
 }
 
 #lock {

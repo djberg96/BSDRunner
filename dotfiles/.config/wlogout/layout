@@ -2,33 +2,43 @@
   "label" : "lock",
   "action" : "command -v hyprlock >/dev/null 2>&1 && hyprlock",
   "text" : "Lock",
-  "keybind" : "l"
+  "keybind" : "l",
+  "width" : 0.5,
+  "height" : 0.5
 }
 
 {
   "label" : "logout",
   "action" : "sh -c 'sleep 0.2; hyprctl dispatch exit; sleep 0.5; chvt 1'",
   "text" : "Logout",
-  "keybind" : "e"
+  "keybind" : "e",
+  "width" : 0.5,
+  "height" : 0.5
 }
 
 {
   "label" : "suspend",
   "action" : "command -v zzz >/dev/null 2>&1 && zzz",
   "text" : "Suspend",
-  "keybind" : "u"
+  "keybind" : "u",
+  "width" : 0.5,
+  "height" : 0.5
 }
 
 {
   "label" : "reboot",
   "action" : "command -v doas >/dev/null 2>&1 && doas -n shutdown -r now || shutdown -r now",
   "text" : "Reboot",
-  "keybind" : "r"
+  "keybind" : "r",
+  "width" : 0.5,
+  "height" : 0.5
 }
 
 {
   "label" : "shutdown",
   "action" : "command -v doas >/dev/null 2>&1 && doas -n shutdown -p now || shutdown -p now",
   "text" : "Shutdown",
-  "keybind" : "s"
+  "keybind" : "s",
+  "width" : 0.5,
+  "height" : 0.5
 }
