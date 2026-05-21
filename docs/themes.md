@@ -88,7 +88,6 @@ Each theme folder should be responsible for:
 
 Later additions may include:
 
-- `waybar.css`
 - wallpaper references
 - icon or asset notes
 
@@ -290,7 +289,7 @@ Implement the corp themes in this order:
 3. `waybar`
 4. wallpapers and optional assets
 
-That keeps the theme work visible without risking the base session.
+That order is now proven by the current Jinteki implementation.
 
 ## First Theme
 

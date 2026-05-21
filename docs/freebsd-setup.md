@@ -66,7 +66,7 @@ sudo pkg install jetbrains-mono
 The included `kitty.conf` uses:
 
 - `JetBrains Mono`
-- `font_size 12.0`
+- `font_size 14.0`
 
 If the X1 panel makes text look too small, try `13.0` or `14.0`.
 
@@ -106,12 +106,14 @@ To return to the neutral baseline:
 
 ## First Test
 
-Do the first test with only the shipped `hyprland.conf`.
+Do the first test with only the shipped BSDRunner stack:
+
+- `hyprland.conf`
+- autostarted `dbus-launch waybar`
+- autostarted `swww` wallpaper helper when a theme is active
 
 Do not add:
 
-- Waybar
-- hyprpaper
 - swaync
 - hypridle
 - hyprlock
@@ -126,13 +128,13 @@ The currently validated application stack for the early BSDRunner setup is:
 - launcher: `rofi`
 - file manager: `dolphin`
 
-If you want to test the optional bar layer after the base session is stable:
+On some FreeBSD Hyprland sessions, Waybar may need a DBus session wrapper even when manual launch works. BSDRunner currently autostarts it with:
 
 ```sh
-waybar
+dbus-launch waybar
 ```
 
-On some FreeBSD Hyprland sessions, Waybar may need a DBus session wrapper even when manual launch works. BSDRunner currently autostarts it with:
+If you need to launch Waybar manually in the current session, use the same command:
 
 ```sh
 dbus-launch waybar
@@ -162,5 +164,6 @@ The shipped config uses:
 - a fallback monitor rule: `monitor=,preferred,auto,1`
 - conservative touchpad options that are valid for Hyprland `0.54`
 - no custom GPU environment overrides
+- `brightnessctl` keybinds are still present in the current base config and may need a FreeBSD-specific replacement later
 
 That keeps the first startup path as hardware-agnostic as possible for either the 1920x1200 or higher-DPI X1 Gen 9 panels.

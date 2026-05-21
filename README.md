@@ -7,8 +7,9 @@ This repo is intentionally small:
 - one Hyprland config file
 - Waybar in the default startup path
 - `swww` in the themed startup path
-- no lockscreen, wallpaper, notifications, or idle daemon by default
+- no lockscreen, notification daemon, or idle daemon by default
 - no generated monitor config
+- a neutral base with optional corp theme layers
 
 The goal is a boring, bootable base session for Hyprland `0.54.x` on FreeBSD.
 
@@ -22,7 +23,7 @@ The goal is a boring, bootable base session for Hyprland `0.54.x` on FreeBSD.
 - `docs/freebsd-setup.md`
 - `docs/themes.md`
 
-## Install
+## Quick Start
 
 ```sh
 ./scripts/install-dotfiles.sh
@@ -42,20 +43,15 @@ Return to the neutral baseline:
 ./scripts/install-dotfiles.sh --theme default
 ```
 
-Run the optional Waybar layer manually:
-
-```sh
-waybar
-```
-
 ## Default Binds
 
-- `Super+Return`: open `foot`
+- `Super+Q`: open `kitty`
+- `Super+C`: close focused window
+- `Super+E`: open `dolphin`
 - `Super+D`: open `rofi -show drun`
-- `Super+Q`: close focused window
-- `Super+Shift+E`: exit Hyprland
-- `Super+F`: toggle fullscreen
+- `Super+F`: open `firefox`
 - `Super+V`: toggle floating
+- `Super+X`: exit Hyprland
 
 ## Validated Apps
 
@@ -78,4 +74,4 @@ This starter is targeted at:
 - Hyprland `0.54.x`
 - ThinkPad X1 Gen 9
 
-If you want bars, notifications, wallpaper, or lockscreen support later, add them only after this base session is stable.
+The current repo already includes a working Waybar autostart and `swww` wallpaper path. The next risky layers are things like lockscreen, idle, extra desktop daemons, or deeper Qt/KDE theming.
