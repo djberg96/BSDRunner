@@ -108,6 +108,7 @@ Current implementation:
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
 - if a theme ships `wallpapers/`, install writes a matching `~/.config/bsdrunner/current-wallpaper`
+- when a theme ships multiple wallpapers, the `swww` helper rotates them by workspace number
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
 - wallpapers are bundled as theme assets and can be activated through `swww` during install

@@ -96,7 +96,7 @@ To apply a corp theme during install:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-Themed wallpapers are activated during install through `swww`. The Jinteki theme currently ships four bundled wallpaper images, writes `~/.config/bsdrunner/current-wallpaper` automatically, and uses `jinteki_wallpaper4.jpg` as the default themed wallpaper.
+Themed wallpapers are activated during install through `swww`. The Jinteki theme currently ships four bundled wallpaper images, writes `~/.config/bsdrunner/current-wallpaper` automatically, and uses `jinteki_wallpaper4.jpg` as the anchor wallpaper before rotating across the rest by workspace number.
 
 To return to the neutral baseline:
 

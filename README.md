@@ -34,7 +34,7 @@ Install and apply a corp theme:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-The Jinteki theme installs a `swww` wallpaper target using the bundled Jinteki wallpaper assets. It currently uses `jinteki_wallpaper4.jpg` as the default themed wallpaper.
+The Jinteki theme installs a `swww` wallpaper target using the bundled Jinteki wallpaper assets. It uses `jinteki_wallpaper4.jpg` as the anchor wallpaper, then rotates across the other bundled wallpapers by workspace number.
 
 Return to the neutral baseline:
 
