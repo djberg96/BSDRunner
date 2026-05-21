@@ -33,12 +33,6 @@ button:focus {
     color: #ffffff;
 }
 
-button label {
-    color: inherit;
-    font: inherit;
-    padding: 0;
-}
-
 #lock {
     color: #ffd7dd;
 }
@@ -57,4 +51,8 @@ button label {
 
 #shutdown {
     color: #ff6f83;
+}
+
+#cancel {
+    color: #f7e2e5;
 }
