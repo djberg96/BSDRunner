@@ -4,6 +4,7 @@ set -eu
 
 value="${1:-0}"
 cache_dir="$HOME/.cache/bsdrunner"
+server_name=""
 
 case "$value" in
     ''|*[!0-9]*)
@@ -16,6 +17,14 @@ if [ "$value" -gt 100 ]; then
 fi
 
 if command -v pactl >/dev/null 2>&1; then
+    server_name="$(pactl info 2>/dev/null | awk -F': ' '/^Server Name:/{print $2; exit}')"
+fi
+
+if [ -n "$server_name" ] && printf '%s\n' "$server_name" | grep -qi 'pulseaudio'; then
+    pactl set-sink-volume @DEFAULT_SINK@ "${value}%"
+elif [ -n "$server_name" ] && printf '%s\n' "$server_name" | grep -qi 'pipewire' && command -v wpctl >/dev/null 2>&1; then
+    wpctl set-volume @DEFAULT_AUDIO_SINK@ "${value}%"
+elif command -v pactl >/dev/null 2>&1; then
     pactl set-sink-volume @DEFAULT_SINK@ "${value}%"
 elif command -v wpctl >/dev/null 2>&1; then
     wpctl set-volume @DEFAULT_AUDIO_SINK@ "${value}%"
