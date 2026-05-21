@@ -34,7 +34,7 @@ Install and apply a corp theme:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-The Jinteki theme installs a `hyprpaper` wallpaper config using the bundled Jinteki wallpaper assets. When multiple wallpapers are present, BSDRunner maps workspaces across them in order and repeats only after it runs out.
+The Jinteki theme installs a `hyprpaper` wallpaper config using the bundled Jinteki wallpaper assets. It currently uses `jinteki_wallpaper4.jpg` as the default themed wallpaper.
 
 Return to the neutral baseline:
 
