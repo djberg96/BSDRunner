@@ -67,6 +67,11 @@ EOF
     exit 1
 }
 
+[ -f "$base_dir/waybar-config" ] || {
+    echo ":: Missing base waybar config; rerun ./scripts/install-dotfiles.sh first" >&2
+    exit 1
+}
+
 mkdir -p "$config_home/hypr" "$config_home/kitty" "$config_home/rofi" "$config_home/waybar"
 
 printf '%s\n' "$theme" > "$runner_home/current-theme"
@@ -85,6 +90,14 @@ cat \
     "$base_dir/waybar.css" \
     "$theme_dir/waybar.css" \
     > "$config_home/waybar/style.css"
+
+theme_waybar_config="$theme_dir/waybar-config"
+
+if [ -f "$theme_waybar_config" ]; then
+    cp "$theme_waybar_config" "$config_home/waybar/config"
+else
+    cp "$base_dir/waybar-config" "$config_home/waybar/config"
+fi
 
 theme_wallpaper_dir="$theme_dir/wallpapers"
 

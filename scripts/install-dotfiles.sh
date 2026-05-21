@@ -94,6 +94,9 @@ cp "$repo_root/dotfiles/.config/kitty/kitty.conf" \
 cp "$repo_root/dotfiles/.config/waybar/style.css" \
    "$HOME/.config/bsdrunner/base/waybar.css"
 
+cp "$repo_root/dotfiles/.config/waybar/config" \
+   "$HOME/.config/bsdrunner/base/waybar-config"
+
 write_hypr_theme "$HOME/.config/hypr/bsdrunner-theme.conf" "$theme"
 
 cat \
@@ -108,6 +111,14 @@ cat \
     "$HOME/.config/bsdrunner/base/waybar.css" \
     "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar.css" \
     > "$HOME/.config/waybar/style.css"
+
+theme_waybar_config="$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar-config"
+
+if [[ -f "$theme_waybar_config" ]]; then
+    cp "$theme_waybar_config" "$HOME/.config/waybar/config"
+else
+    cp "$HOME/.config/bsdrunner/base/waybar-config" "$HOME/.config/waybar/config"
+fi
 
 theme_wallpaper_dir="$repo_root/dotfiles/.config/bsdrunner/themes/$theme/wallpapers"
 active_wallpaper_dir="$HOME/.config/bsdrunner/themes/$theme/wallpapers"

@@ -19,6 +19,7 @@ tooltip {
 }
 
 #workspaces,
+#custom-theme,
 #window,
 #cpu,
 #memory,
@@ -37,6 +38,36 @@ tooltip {
 
 #workspaces {
     padding: 4px 8px;
+}
+
+#custom-theme {
+    color: #d8dee9;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+}
+
+#custom-theme.default {
+    color: #d7e3ea;
+}
+
+#custom-theme.jinteki {
+    color: #ffb0bb;
+}
+
+#custom-theme.haas-bioroid {
+    color: #dff6ff;
+}
+
+#custom-theme.nbn {
+    color: #ffd76a;
+}
+
+#custom-theme.weyland {
+    color: #b7d59c;
+}
+
+#custom-theme:hover {
+    background: rgba(236, 239, 244, 0.10);
 }
 
 #workspaces button {

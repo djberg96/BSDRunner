@@ -3,6 +3,8 @@
     color: #f7fcff;
 }
 
+#workspaces,
+#custom-theme,
 #window,
 #cpu,
 #memory,
@@ -60,4 +62,49 @@ tooltip {
     background: rgba(15, 20, 24, 0.97);
     color: #e4eef4;
     border: 1px solid rgba(143, 211, 255, 0.40);
+}
+
+#custom-theme {
+    background: rgba(42, 62, 74, 0.96);
+    color: #eefcff;
+    border-color: rgba(143, 211, 255, 0.40);
+    font-weight: 900;
+    letter-spacing: 0.12em;
+}
+
+#workspaces {
+    background: rgba(21, 30, 36, 0.94);
+    padding: 4px 10px;
+}
+
+#workspaces button {
+    padding: 0 10px;
+    margin: 0 2px;
+    color: #bfd6e6;
+    border-radius: 6px;
+}
+
+#workspaces button.active {
+    background: rgba(95, 147, 184, 0.32);
+    color: #f7fcff;
+}
+
+#window {
+    min-width: 420px;
+    background: rgba(20, 28, 34, 0.97);
+    border-color: rgba(143, 211, 255, 0.34);
+    color: #f2fbff;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+#cpu,
+#memory,
+#pulseaudio,
+#custom-network,
+#custom-battery,
+#clock,
+#tray,
+#custom-power {
+    background: rgba(31, 41, 48, 0.97);
 }
