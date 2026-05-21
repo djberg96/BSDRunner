@@ -108,6 +108,7 @@ Current implementation:
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
 - if a theme ships `wallpapers/`, install writes a matching `~/.config/hypr/hyprpaper.conf`
+- when a theme ships multiple wallpapers, the wallpaper helper maps workspaces across them in order and repeats only after it runs out
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
 - wallpapers are bundled as theme assets and can be activated through `hyprpaper` during install
@@ -117,7 +118,7 @@ Important:
 - switching themes should never replace `hyprland.conf`
 - theme switching should not be required for the desktop to boot
 - a broken theme should be recoverable by switching back to `default`
-- wallpaper startup should fail harmlessly if `hyprpaper` is not installed
+- `hyprpaper` is treated as part of the expected themed runtime
 
 ## Manual Qt/Dolphin Test
 

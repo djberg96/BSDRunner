@@ -5,7 +5,8 @@ Minimal Hyprland config for FreeBSD 15 on a ThinkPad X1 Gen 9.
 This repo is intentionally small:
 
 - one Hyprland config file
-- no Waybar in the default startup path
+- Waybar in the default startup path
+- hyprpaper in the themed startup path
 - no lockscreen, wallpaper, notifications, or idle daemon by default
 - no generated monitor config
 
@@ -33,7 +34,7 @@ Install and apply a corp theme:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-If `hyprpaper` is installed, the Jinteki theme will also install a wallpaper config using the bundled Jinteki wallpaper assets.
+The Jinteki theme installs a `hyprpaper` wallpaper config using the bundled Jinteki wallpaper assets. When multiple wallpapers are present, BSDRunner maps workspaces across them in order and repeats only after it runs out.
 
 Return to the neutral baseline:
 

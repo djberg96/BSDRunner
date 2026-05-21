@@ -9,6 +9,7 @@ Install the smallest useful set first:
 ```sh
 sudo pkg install \
   hyprland \
+  hyprpaper \
   foot \
   rofi-wayland \
   dbus \
@@ -21,7 +22,6 @@ Recommended next layer after the base session works:
 
 ```sh
 sudo pkg install \
-  hyprpaper \
   waybar \
   xdg-desktop-portal \
   xdg-desktop-portal-hyprland \
@@ -93,7 +93,7 @@ To apply a corp theme during install:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-If `hyprpaper` is installed, themed wallpapers can be activated during install. The Jinteki theme currently ships four bundled wallpaper images and writes `~/.config/hypr/hyprpaper.conf` automatically.
+Themed wallpapers are activated during install through `hyprpaper`. The Jinteki theme currently ships four bundled wallpaper images, writes `~/.config/hypr/hyprpaper.conf` automatically, and maps workspaces across those wallpapers in order before repeating.
 
 To return to the neutral baseline:
 
