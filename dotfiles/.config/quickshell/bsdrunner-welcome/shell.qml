@@ -2,6 +2,8 @@ import Quickshell
 import QtQuick
 
 ShellRoot {
+    id: root
+
     readonly property string homeDir: Quickshell.env("HOME") || ""
 
     function runAction(action) {
@@ -92,8 +94,8 @@ ShellRoot {
 
                 Column {
                     anchors.fill: parent
-                    anchors.margins: 34
-                    spacing: 26
+                    anchors.margins: 28
+                    spacing: 20
 
                     Column {
                         spacing: 8
@@ -106,25 +108,17 @@ ShellRoot {
                         }
 
                         Text {
-                            text: "Welcome to the Jinteki desk."
+                            text: "Welcome to the Jinteki Desktop."
                             color: "#fff1f3"
-                            font.pixelSize: 38
+                            font.pixelSize: 34
                             font.bold: true
-                        }
-
-                        Text {
-                            width: 760
-                            wrapMode: Text.WordWrap
-                            text: "This window is optional and meant to act as a small control surface. Launch apps, reload Hyprland, or open the power menu without touching the base session logic."
-                            color: "#f2cfd5"
-                            font.pixelSize: 17
                         }
                     }
 
                     Grid {
                         columns: 2
-                        rowSpacing: 18
-                        columnSpacing: 18
+                        rowSpacing: 14
+                        columnSpacing: 14
 
                         Repeater {
                             model: window.cards
@@ -132,8 +126,8 @@ ShellRoot {
                             delegate: Rectangle {
                                 required property var modelData
 
-                                width: 400
-                                height: 132
+                                width: 394
+                                height: 112
                                 radius: 18
                                 color: "#251013"
                                 border.width: 2
@@ -141,13 +135,13 @@ ShellRoot {
 
                                 Column {
                                     anchors.fill: parent
-                                    anchors.margins: 22
-                                    spacing: 8
+                                    anchors.margins: 18
+                                    spacing: 6
 
                                     Text {
                                         text: parent.parent.modelData.title
                                         color: parent.parent.modelData.accent
-                                        font.pixelSize: 24
+                                        font.pixelSize: 22
                                         font.bold: true
                                     }
 
@@ -156,7 +150,7 @@ ShellRoot {
                                         wrapMode: Text.WordWrap
                                         text: parent.parent.modelData.subtitle
                                         color: "#fff1f3"
-                                        font.pixelSize: 16
+                                        font.pixelSize: 15
                                     }
                                 }
 
@@ -167,7 +161,7 @@ ShellRoot {
 
                                     onEntered: parent.color = "#341417"
                                     onExited: parent.color = "#251013"
-                                    onClicked: window.runAction(parent.modelData.action)
+                                    onClicked: root.runAction(parent.modelData.action)
                                 }
                             }
                         }
