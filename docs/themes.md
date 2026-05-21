@@ -24,6 +24,7 @@ Each corp theme should eventually be able to style:
 - `kitty`
 - `rofi`
 - `waybar`
+- optional welcome/control surfaces
 - wallpaper choices
 - accent colors for future scripts or templates
 

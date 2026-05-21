@@ -17,6 +17,7 @@ The goal is a boring, bootable base session for Hyprland `0.54.x` on FreeBSD.
 
 - `dotfiles/.config/hypr/hyprland.conf`
 - `dotfiles/.config/kitty/kitty.conf`
+- `dotfiles/.config/quickshell/`
 - `dotfiles/.config/waybar/`
 - `dotfiles/.config/bsdrunner/themes/`
 - `scripts/install-dotfiles.sh`
@@ -51,6 +52,7 @@ Return to the neutral baseline:
 - `Super+D`: open `rofi -show drun`
 - `Super+F`: open `firefox`
 - `Super+V`: toggle floating
+- `Super+W`: open the optional welcome window
 - `Super+X`: exit Hyprland
 
 ## Validated Apps

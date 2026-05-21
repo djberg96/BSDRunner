@@ -22,6 +22,7 @@ Recommended next layer after the base session works:
 
 ```sh
 sudo pkg install \
+  quickshell \
   waybar \
   wlogout \
   xdg-desktop-portal \
@@ -132,6 +133,18 @@ On some FreeBSD Hyprland sessions, Waybar may need a DBus session wrapper even w
 
 ```sh
 dbus-launch waybar
+```
+
+If you install `quickshell`, BSDRunner also ships an optional welcome window. Launch it manually with:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-welcome.sh
+```
+
+To show it automatically on login later:
+
+```sh
+touch ~/.config/bsdrunner/show-welcome-at-startup
 ```
 
 If you need to launch Waybar manually in the current session, use the same command:
