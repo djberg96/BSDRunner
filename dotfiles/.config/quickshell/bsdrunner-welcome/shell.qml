@@ -75,6 +75,29 @@ ShellRoot {
                 "power": "#bde9ff",
                 "close": "#f5fbff"
             }
+        },
+        "nbn": {
+            "name": "NBN",
+            "eyebrow": "BSDRunner",
+            "frameBackground": "#171108",
+            "panelBackground": "#22180a",
+            "cardBackground": "#2a1d0a",
+            "cardHover": "#3a280b",
+            "frameBorder": "#8d6513",
+            "panelBorder": "#f3c316",
+            "primaryText": "#fff6dd",
+            "secondaryText": "#fff0c7",
+            "mutedText": "#d8c18a",
+            "accent": "#f3c316",
+            "accentStrong": "#ffb347",
+            "actionAccents": {
+                "terminal": "#f3c316",
+                "files": "#ffd76a",
+                "browser": "#ffb347",
+                "reload": "#ffcf5a",
+                "power": "#fff0c7",
+                "close": "#fffaf0"
+            }
         }
     })
     readonly property string activeTheme: {

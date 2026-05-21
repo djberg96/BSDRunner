@@ -37,6 +37,10 @@ write_hypr_theme() {
             active_border='rgba(2f5f8eee) rgba(17324aee) 45deg'
             inactive_border='rgba(344652cc)'
             ;;
+        nbn)
+            active_border='rgba(f3c316ee) rgba(8d6513ee) 45deg'
+            inactive_border='rgba(5a4316cc)'
+            ;;
         *)
             active_border='rgba(5a7fa0ee) rgba(2e4658ee) 45deg'
             inactive_border='rgba(3c4652cc)'
