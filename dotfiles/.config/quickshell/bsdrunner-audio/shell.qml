@@ -82,6 +82,7 @@ ShellRoot {
 
     property int currentVolume: 0
     property bool currentMuted: false
+    property int pendingVolume: -1
 
     function refreshState() {
         var text = stateFile.text()
@@ -109,6 +110,15 @@ ShellRoot {
     function setVolume(value) {
         var rounded = Math.max(0, Math.min(100, Math.round(value)))
         currentVolume = rounded
+        pendingVolume = rounded
+        applyTimer.restart()
+    }
+
+    function commitVolume(value) {
+        var rounded = Math.max(0, Math.min(100, Math.round(value)))
+        currentVolume = rounded
+        pendingVolume = -1
+        applyTimer.stop()
         Quickshell.execDetached([
             "sh",
             homeDir + "/.config/bsdrunner/scripts/bsdrunner-audio-set.sh",
@@ -155,6 +165,19 @@ ShellRoot {
         watchChanges: true
 
         onFileChanged: root.refreshState()
+    }
+
+    Timer {
+        id: applyTimer
+
+        interval: 90
+        running: false
+        repeat: false
+        onTriggered: {
+            if (root.pendingVolume >= 0) {
+                root.commitVolume(root.pendingVolume)
+            }
+        }
     }
 
     Timer {
@@ -255,6 +278,7 @@ ShellRoot {
                                         root.setVolumeFromPosition(mouse.x, width)
                                     }
                                 }
+                                onReleased: root.commitVolume(root.currentVolume)
                             }
                         }
                     }
