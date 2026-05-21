@@ -132,19 +132,7 @@ else
     rm -f "$runner_home/current-wallpaper"
 fi
 
-pkill waybar 2>/dev/null || true
-
-waybar_wait=0
-while pgrep -x waybar >/dev/null 2>&1; do
-    sleep 0.1
-    waybar_wait=$((waybar_wait + 1))
-    if [ "$waybar_wait" -ge 20 ]; then
-        pkill -9 waybar 2>/dev/null || true
-        break
-    fi
-done
-
-(dbus-launch waybar >/tmp/bsdrunner-waybar.log 2>&1 &) >/dev/null 2>&1
+(sh "$runner_home/scripts/bsdrunner-start-waybar.sh" >/tmp/bsdrunner-waybar.log 2>&1 &) >/dev/null 2>&1
 
 pkill -f bsdrunner-start-wallpaper.sh 2>/dev/null || true
 pkill swww-daemon 2>/dev/null || true
