@@ -7,6 +7,7 @@ config_home="$HOME/.config"
 runner_home="$config_home/bsdrunner"
 theme_dir="$runner_home/themes/$theme"
 base_dir="$runner_home/base"
+lock_dir="$runner_home/.theme-apply.lock"
 
 usage() {
     cat <<'EOF' >&2
@@ -46,6 +47,10 @@ write_hypr_theme() {
 EOF
 }
 
+cleanup() {
+    rmdir "$lock_dir" 2>/dev/null || true
+}
+
 [ -n "$theme" ] || {
     usage
     exit 1
@@ -71,6 +76,13 @@ EOF
     echo ":: Missing base waybar config; rerun ./scripts/install-dotfiles.sh first" >&2
     exit 1
 }
+
+if ! mkdir "$lock_dir" 2>/dev/null; then
+    echo ":: Theme switch already in progress" >&2
+    exit 0
+fi
+
+trap cleanup EXIT INT TERM
 
 mkdir -p "$config_home/hypr" "$config_home/kitty" "$config_home/rofi" "$config_home/waybar"
 
@@ -121,6 +133,17 @@ else
 fi
 
 pkill waybar 2>/dev/null || true
+
+waybar_wait=0
+while pgrep -x waybar >/dev/null 2>&1; do
+    sleep 0.1
+    waybar_wait=$((waybar_wait + 1))
+    if [ "$waybar_wait" -ge 20 ]; then
+        pkill -9 waybar 2>/dev/null || true
+        break
+    fi
+done
+
 (dbus-launch waybar >/tmp/bsdrunner-waybar.log 2>&1 &) >/dev/null 2>&1
 
 pkill -f bsdrunner-start-wallpaper.sh 2>/dev/null || true
