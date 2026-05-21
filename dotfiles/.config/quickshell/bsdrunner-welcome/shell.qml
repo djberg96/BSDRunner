@@ -1,10 +1,68 @@
 import Quickshell
+import Quickshell.Io
 import QtQuick
 
 ShellRoot {
     id: root
 
     readonly property string homeDir: Quickshell.env("HOME") || ""
+    readonly property var themeDefinitions: ({
+        "default": {
+            "name": "BSDRunner",
+            "eyebrow": "BSDRunner",
+            "frameBackground": "#111216",
+            "panelBackground": "#181b21",
+            "cardBackground": "#20242b",
+            "cardHover": "#2a3038",
+            "frameBorder": "#5b6470",
+            "panelBorder": "#7f8794",
+            "primaryText": "#eef2f7",
+            "secondaryText": "#cfd6df",
+            "mutedText": "#a8b1bd",
+            "accent": "#d7e3ea",
+            "accentStrong": "#f5fbff"
+        },
+        "jinteki": {
+            "name": "Jinteki",
+            "eyebrow": "BSDRunner",
+            "frameBackground": "#12090b",
+            "panelBackground": "#1c0f12",
+            "cardBackground": "#251013",
+            "cardHover": "#341417",
+            "frameBorder": "#8f1f34",
+            "panelBorder": "#c61f3a",
+            "primaryText": "#fff1f3",
+            "secondaryText": "#f2cfd5",
+            "mutedText": "#cda9b0",
+            "accent": "#ff6f83",
+            "accentStrong": "#ffd7dd"
+        },
+        "haas-bioroid": {
+            "name": "Haas-Bioroid",
+            "eyebrow": "BSDRunner",
+            "frameBackground": "#0f1418",
+            "panelBackground": "#172026",
+            "cardBackground": "#1d2830",
+            "cardHover": "#283741",
+            "frameBorder": "#5f7280",
+            "panelBorder": "#8fd3ff",
+            "primaryText": "#eef7fc",
+            "secondaryText": "#d7e3ea",
+            "mutedText": "#aebec9",
+            "accent": "#8fd3ff",
+            "accentStrong": "#dff6ff"
+        }
+    })
+    readonly property string activeTheme: {
+        var text = themeFile.text().trim()
+        return text.length > 0 ? text : "default"
+    }
+    readonly property var palette: themeDefinitions[activeTheme] || themeDefinitions["default"]
+
+    function actionThemeName(action) {
+        if (action.indexOf("theme:") !== 0) return ""
+        return action.slice(6)
+    }
 
     function runAction(action) {
         if (action === "close") {
@@ -26,6 +84,15 @@ ShellRoot {
         function onLastWindowClosed() {
             Qt.quit()
         }
+    }
+
+    FileView {
+        id: themeFile
+        path: root.homeDir + "/.config/bsdrunner/current-theme"
+        blockLoading: true
+        watchChanges: true
+
+        onFileChanged: this.reload()
     }
 
     FloatingWindow {
@@ -101,17 +168,17 @@ ShellRoot {
         Rectangle {
             anchors.fill: parent
             radius: 24
-            color: "#12090b"
+            color: root.palette.frameBackground
             border.width: 2
-            border.color: "#8f1f34"
+            border.color: root.palette.frameBorder
 
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: 18
                 radius: 18
-                color: "#1c0f12"
+                color: root.palette.panelBackground
                 border.width: 1
-                border.color: "#c61f3a"
+                border.color: root.palette.panelBorder
 
                 Column {
                     anchors.fill: parent
@@ -122,15 +189,15 @@ ShellRoot {
                         spacing: 8
 
                         Text {
-                            text: "BSDRunner"
-                            color: "#ffb0bb"
+                            text: root.palette.eyebrow
+                            color: root.palette.accent
                             font.pixelSize: 18
                             font.bold: true
                         }
 
                         Text {
-                            text: "Welcome to the Jinteki Desktop."
-                            color: "#fff1f3"
+                            text: "Welcome to the " + root.palette.name + " Desktop."
+                            color: root.palette.primaryText
                             font.pixelSize: 34
                             font.bold: true
                         }
@@ -141,7 +208,7 @@ ShellRoot {
 
                         Text {
                             text: "Select Theme"
-                            color: "#f2cfd5"
+                            color: root.palette.secondaryText
                             font.pixelSize: 16
                             font.bold: true
                         }
@@ -155,12 +222,14 @@ ShellRoot {
                                 delegate: Rectangle {
                                     required property var modelData
 
+                                    property bool isSelected: root.activeTheme === root.actionThemeName(modelData.action)
+
                                     width: 256
                                     height: 86
                                     radius: 16
-                                    color: "#251013"
+                                    color: isSelected ? root.palette.cardHover : root.palette.cardBackground
                                     border.width: 2
-                                    border.color: modelData.accent
+                                    border.color: isSelected ? root.palette.accentStrong : modelData.accent
 
                                     Column {
                                         anchors.fill: parent
@@ -178,7 +247,7 @@ ShellRoot {
                                             width: 220
                                             wrapMode: Text.WordWrap
                                             text: parent.parent.modelData.subtitle
-                                            color: "#fff1f3"
+                                            color: root.palette.primaryText
                                             font.pixelSize: 14
                                         }
                                     }
@@ -188,8 +257,8 @@ ShellRoot {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
 
-                                        onEntered: parent.color = "#341417"
-                                        onExited: parent.color = "#251013"
+                                        onEntered: parent.color = root.palette.cardHover
+                                        onExited: parent.color = parent.isSelected ? root.palette.cardHover : root.palette.cardBackground
                                         onClicked: root.runAction(parent.modelData.action)
                                     }
                                 }
@@ -211,7 +280,7 @@ ShellRoot {
                                 width: 256
                                 height: 96
                                 radius: 18
-                                color: "#251013"
+                                color: root.palette.cardBackground
                                 border.width: 2
                                 border.color: modelData.accent
 
@@ -231,7 +300,7 @@ ShellRoot {
                                         width: 220
                                         wrapMode: Text.WordWrap
                                         text: parent.parent.modelData.subtitle
-                                        color: "#fff1f3"
+                                        color: root.palette.primaryText
                                         font.pixelSize: 14
                                     }
                                 }
@@ -241,8 +310,8 @@ ShellRoot {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
 
-                                    onEntered: parent.color = "#341417"
-                                    onExited: parent.color = "#251013"
+                                    onEntered: parent.color = root.palette.cardHover
+                                    onExited: parent.color = root.palette.cardBackground
                                     onClicked: root.runAction(parent.modelData.action)
                                 }
                             }
@@ -251,7 +320,7 @@ ShellRoot {
 
                     Text {
                         text: "Enable startup later with: touch ~/.config/bsdrunner/show-welcome-at-startup"
-                        color: "#cda9b0"
+                        color: root.palette.mutedText
                         font.pixelSize: 14
                     }
                 }
