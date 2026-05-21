@@ -5,7 +5,29 @@ set -eu
 volume="0"
 muted="0"
 
-if command -v wpctl >/dev/null 2>&1; then
+if command -v pactl >/dev/null 2>&1; then
+    pactl_volume="$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | awk '
+        {
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^[0-9]+%$/) {
+                    gsub(/%/, "", $i)
+                    print $i
+                    exit
+                }
+            }
+        }
+    ')"
+
+    if [ -n "$pactl_volume" ]; then
+        volume="$pactl_volume"
+    fi
+
+    case "$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null || true)" in
+        *yes*)
+            muted="1"
+            ;;
+    esac
+elif command -v wpctl >/dev/null 2>&1; then
     wpctl_output="$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || true)"
 
     case "$wpctl_output" in
@@ -28,28 +50,6 @@ if command -v wpctl >/dev/null 2>&1; then
     if [ -n "$wpctl_volume" ]; then
         volume="$wpctl_volume"
     fi
-elif command -v pactl >/dev/null 2>&1; then
-    pactl_volume="$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | awk '
-        {
-            for (i = 1; i <= NF; i++) {
-                if ($i ~ /^[0-9]+%$/) {
-                    gsub(/%/, "", $i)
-                    print $i
-                    exit
-                }
-            }
-        }
-    ')"
-
-    if [ -n "$pactl_volume" ]; then
-        volume="$pactl_volume"
-    fi
-
-    case "$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null || true)" in
-        *yes*)
-            muted="1"
-            ;;
-    esac
 fi
 
 printf 'volume=%s\nmuted=%s\n' "$volume" "$muted"

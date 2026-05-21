@@ -171,8 +171,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Audio"
-        minimumSize: Qt.size(420, 220)
-        maximumSize: Qt.size(420, 220)
+        minimumSize: Qt.size(420, 210)
+        maximumSize: Qt.size(420, 210)
 
         color: "transparent"
 
@@ -193,26 +193,26 @@ ShellRoot {
 
                 Column {
                     anchors.fill: parent
-                    anchors.margins: 24
-                    spacing: 18
+                    anchors.margins: 18
+                    spacing: 14
 
                     Text {
                         text: root.palette.name
                         color: root.palette.accent
-                        font.pixelSize: 18
+                        font.pixelSize: 17
                         font.bold: true
                     }
 
                     Text {
                         text: root.sliderLabel()
                         color: root.palette.primaryText
-                        font.pixelSize: 28
+                        font.pixelSize: 24
                         font.bold: true
                     }
 
                     Item {
                         width: parent.width
-                        height: 34
+                        height: 28
 
                         Rectangle {
                             id: sliderTrack
@@ -263,8 +263,8 @@ ShellRoot {
                         spacing: 12
 
                         Rectangle {
-                            width: 120
-                            height: 42
+                            width: 110
+                            height: 36
                             radius: 12
                             color: root.palette.cardBackground
                             border.width: 1
@@ -274,7 +274,7 @@ ShellRoot {
                                 anchors.centerIn: parent
                                 text: root.currentMuted ? "Unmute" : "Mute"
                                 color: root.palette.primaryText
-                                font.pixelSize: 16
+                                font.pixelSize: 15
                                 font.bold: true
                             }
 
@@ -289,8 +289,8 @@ ShellRoot {
                         }
 
                         Rectangle {
-                            width: 120
-                            height: 42
+                            width: 110
+                            height: 36
                             radius: 12
                             color: root.palette.cardBackground
                             border.width: 1
@@ -300,7 +300,7 @@ ShellRoot {
                                 anchors.centerIn: parent
                                 text: "Close"
                                 color: root.palette.primaryText
-                                font.pixelSize: 16
+                                font.pixelSize: 15
                                 font.bold: true
                             }
 

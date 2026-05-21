@@ -15,10 +15,10 @@ if [ "$value" -gt 100 ]; then
     value=100
 fi
 
-if command -v wpctl >/dev/null 2>&1; then
-    wpctl set-volume @DEFAULT_AUDIO_SINK@ "${value}%"
-elif command -v pactl >/dev/null 2>&1; then
+if command -v pactl >/dev/null 2>&1; then
     pactl set-sink-volume @DEFAULT_SINK@ "${value}%"
+elif command -v wpctl >/dev/null 2>&1; then
+    wpctl set-volume @DEFAULT_AUDIO_SINK@ "${value}%"
 fi
 
 mkdir -p "$cache_dir"
