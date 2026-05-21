@@ -101,7 +101,7 @@
       "format": "PWR",
       "tooltip": true,
       "tooltip-format": "Open power menu",
-      "on-click": "wlogout"
+      "on-click": "wlogout --layout ~/.config/wlogout/layout --css ~/.config/wlogout/style.css --buttons-per-row 5"
     }
   }
 ]
