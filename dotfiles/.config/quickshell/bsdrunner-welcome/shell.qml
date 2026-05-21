@@ -215,30 +215,35 @@ ShellRoot {
 
         property var themeCards: [
             {
+                "short": "DEF",
                 "title": "Default",
                 "subtitle": "Neutral baseline",
                 "accent": "#d7e3ea",
                 "action": "theme:default"
             },
             {
+                "short": "JIN",
                 "title": "Jinteki",
                 "subtitle": "Crimson lacquer",
                 "accent": "#ff6f83",
                 "action": "theme:jinteki"
             },
             {
+                "short": "HB",
                 "title": "Haas-Bioroid",
                 "subtitle": "Steel and cyan",
                 "accent": "#8fd3ff",
                 "action": "theme:haas-bioroid"
             },
             {
+                "short": "NBN",
                 "title": "NBN",
                 "subtitle": "Broadcast gold",
                 "accent": "#f3c316",
                 "action": "theme:nbn"
             },
             {
+                "short": "WYL",
                 "title": "Weyland",
                 "subtitle": "Industrial green",
                 "accent": "#5d8c45",
@@ -285,7 +290,7 @@ ShellRoot {
                     }
 
                     Column {
-                        spacing: 10
+                        spacing: 12
 
                         Text {
                             text: "Select Theme"
@@ -295,52 +300,56 @@ ShellRoot {
                         }
 
                         Row {
-                            spacing: 12
+                            spacing: 8
 
                             Repeater {
                                 model: window.themeCards
 
-                                delegate: Rectangle {
+                                delegate: Column {
                                     required property var modelData
 
                                     property bool isSelected: root.activeTheme === root.actionThemeName(modelData.action)
+                                    width: 160
+                                    spacing: 8
 
-                                    width: 256
-                                    height: 86
-                                    radius: 16
-                                    color: isSelected ? root.palette.cardHover : root.palette.cardBackground
-                                    border.width: 2
-                                    border.color: isSelected ? root.palette.accentStrong : modelData.accent
+                                    Rectangle {
+                                        id: themeCircle
 
-                                    Column {
-                                        anchors.fill: parent
-                                        anchors.margins: 16
-                                        spacing: 4
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: 88
+                                        height: 88
+                                        radius: 44
+                                        color: parent.isSelected ? root.palette.cardHover : root.palette.cardBackground
+                                        border.width: 3
+                                        border.color: parent.isSelected ? root.palette.accentStrong : parent.modelData.accent
 
                                         Text {
-                                            text: parent.parent.modelData.title
+                                            anchors.centerIn: parent
+                                            text: parent.parent.modelData.short
                                             color: parent.parent.modelData.accent
-                                            font.pixelSize: 20
+                                            font.pixelSize: 22
                                             font.bold: true
                                         }
 
-                                        Text {
-                                            width: 220
-                                            wrapMode: Text.WordWrap
-                                            text: parent.parent.modelData.subtitle
-                                            color: root.palette.primaryText
-                                            font.pixelSize: 14
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+
+                                            onEntered: themeCircle.color = root.palette.cardHover
+                                            onExited: themeCircle.color = parent.parent.isSelected ? root.palette.cardHover : root.palette.cardBackground
+                                            onClicked: root.runAction(parent.parent.modelData.action)
                                         }
                                     }
 
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-
-                                        onEntered: parent.color = root.palette.cardHover
-                                        onExited: parent.color = parent.isSelected ? root.palette.cardHover : root.palette.cardBackground
-                                        onClicked: root.runAction(parent.modelData.action)
+                                    Text {
+                                        width: parent.width
+                                        horizontalAlignment: Text.AlignHCenter
+                                        wrapMode: Text.WordWrap
+                                        text: modelData.title
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 13
+                                        font.bold: parent.isSelected
                                     }
                                 }
                             }
