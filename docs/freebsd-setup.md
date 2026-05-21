@@ -132,6 +132,12 @@ If you want to test the optional bar layer after the base session is stable:
 waybar
 ```
 
+On some FreeBSD Hyprland sessions, Waybar may need a DBus session wrapper even when manual launch works. BSDRunner currently autostarts it with:
+
+```sh
+dbus-launch waybar
+```
+
 ## Manual Qt Theme Test For Dolphin
 
 If your session already uses `qt6ct`, you can test the Jinteki Qt palette without touching Hyprland itself:
