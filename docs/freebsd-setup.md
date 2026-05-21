@@ -45,6 +45,8 @@ If you prefer a lighter Qt file manager to experiment with later:
 sudo pkg install pcmanfm-qt
 ```
 
+For the bundled power menu, `wlogout` is expected. If you want the shutdown and reboot buttons to work without a password prompt, a `doas` rule for `shutdown` may be useful on FreeBSD.
+
 ## Recommended Fonts
 
 For a practical desktop and terminal font stack, install:

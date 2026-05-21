@@ -1,0 +1,32 @@
+[
+  {
+    "label" : "lock",
+    "action" : "command -v hyprlock >/dev/null 2>&1 && hyprlock",
+    "text" : "Lock",
+    "keybind" : "l"
+  },
+  {
+    "label" : "logout",
+    "action" : "hyprctl dispatch exit",
+    "text" : "Logout",
+    "keybind" : "e"
+  },
+  {
+    "label" : "suspend",
+    "action" : "command -v zzz >/dev/null 2>&1 && zzz",
+    "text" : "Suspend",
+    "keybind" : "u"
+  },
+  {
+    "label" : "reboot",
+    "action" : "command -v doas >/dev/null 2>&1 && doas -n shutdown -r now || shutdown -r now",
+    "text" : "Reboot",
+    "keybind" : "r"
+  },
+  {
+    "label" : "shutdown",
+    "action" : "command -v doas >/dev/null 2>&1 && doas -n shutdown -p now || shutdown -p now",
+    "text" : "Shutdown",
+    "keybind" : "s"
+  }
+]
