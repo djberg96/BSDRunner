@@ -20,7 +20,15 @@ ShellRoot {
             "secondaryText": "#cfd6df",
             "mutedText": "#a8b1bd",
             "accent": "#d7e3ea",
-            "accentStrong": "#f5fbff"
+            "accentStrong": "#f5fbff",
+            "actionAccents": {
+                "terminal": "#d7e3ea",
+                "files": "#c4d4e2",
+                "browser": "#ffb86b",
+                "reload": "#8eb6d6",
+                "power": "#f5fbff",
+                "close": "#ffffff"
+            }
         },
         "jinteki": {
             "name": "Jinteki",
@@ -35,7 +43,15 @@ ShellRoot {
             "secondaryText": "#f2cfd5",
             "mutedText": "#cda9b0",
             "accent": "#ff6f83",
-            "accentStrong": "#ffd7dd"
+            "accentStrong": "#ffd7dd",
+            "actionAccents": {
+                "terminal": "#ff6f83",
+                "files": "#f0c0b7",
+                "browser": "#ffb36b",
+                "reload": "#ff8795",
+                "power": "#ffd7dd",
+                "close": "#ffffff"
+            }
         },
         "haas-bioroid": {
             "name": "Haas-Bioroid",
@@ -50,7 +66,15 @@ ShellRoot {
             "secondaryText": "#d7e3ea",
             "mutedText": "#aebec9",
             "accent": "#8fd3ff",
-            "accentStrong": "#dff6ff"
+            "accentStrong": "#dff6ff",
+            "actionAccents": {
+                "terminal": "#8fd3ff",
+                "files": "#dff6ff",
+                "browser": "#ffb86b",
+                "reload": "#9fcfe8",
+                "power": "#bde9ff",
+                "close": "#f5fbff"
+            }
         }
     })
     readonly property string activeTheme: {
@@ -62,6 +86,11 @@ ShellRoot {
     function actionThemeName(action) {
         if (action.indexOf("theme:") !== 0) return ""
         return action.slice(6)
+    }
+
+    function actionAccent(action) {
+        var accents = root.palette.actionAccents || {}
+        return accents[action] || root.palette.accent
     }
 
     function runAction(action) {
@@ -109,37 +138,31 @@ ShellRoot {
             {
                 "title": "Open Terminal",
                 "subtitle": "Launch kitty",
-                "accent": "#ff6f83",
                 "action": "terminal"
             },
             {
                 "title": "Open Files",
                 "subtitle": "Launch dolphin",
-                "accent": "#f0c0b7",
                 "action": "files"
             },
             {
                 "title": "Open Browser",
                 "subtitle": "Launch firefox",
-                "accent": "#ffb36b",
                 "action": "browser"
             },
             {
                 "title": "Reload Hyprland",
                 "subtitle": "Reload the live config",
-                "accent": "#ff8795",
                 "action": "reload"
             },
             {
                 "title": "Power Menu",
                 "subtitle": "Open the BSDRunner shutdown menu",
-                "accent": "#ffd7dd",
                 "action": "power"
             },
             {
                 "title": "Close",
                 "subtitle": "Dismiss this welcome window",
-                "accent": "#ffffff",
                 "action": "close"
             }
         ]
@@ -276,13 +299,14 @@ ShellRoot {
 
                             delegate: Rectangle {
                                 required property var modelData
+                                readonly property color accentColor: root.actionAccent(modelData.action)
 
                                 width: 256
                                 height: 96
                                 radius: 18
                                 color: root.palette.cardBackground
                                 border.width: 2
-                                border.color: modelData.accent
+                                border.color: accentColor
 
                                 Column {
                                     anchors.fill: parent
@@ -291,7 +315,7 @@ ShellRoot {
 
                                     Text {
                                         text: parent.parent.modelData.title
-                                        color: parent.parent.modelData.accent
+                                        color: parent.parent.accentColor
                                         font.pixelSize: 19
                                         font.bold: true
                                     }
