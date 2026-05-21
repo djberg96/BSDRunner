@@ -69,7 +69,8 @@
       },
       "tooltip-format": "Volume: {volume}%",
       "tooltip-format-muted": "Audio muted",
-      "on-click": "pavucontrol"
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-audio-popup.sh",
+      "on-click-right": "sh ~/.config/bsdrunner/scripts/bsdrunner-audio-mute.sh"
     },
 
     "custom/network": {
