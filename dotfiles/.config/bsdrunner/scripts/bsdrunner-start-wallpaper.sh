@@ -24,6 +24,13 @@ wallpapers="$(find "$wallpaper_dir" -maxdepth 1 -type f | sort)"
 wallpaper_count="$(printf '%s\n' "$wallpapers" | sed '/^$/d' | wc -l | tr -d ' ')"
 [ "${wallpaper_count:-0}" -gt 0 ] || exit 0
 
+monitor_names() {
+    hyprctl monitors -j 2>/dev/null |
+        tr '\n' ' ' |
+        sed 's/},{/}\n{/g' |
+        sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+}
+
 active_workspace_id() {
     hyprctl activeworkspace -j 2>/dev/null |
         tr '\n' ' ' |
@@ -44,7 +51,10 @@ apply_workspace_wallpaper() {
     wallpaper_path="$(wallpaper_for_workspace "$workspace_id")"
     [ -n "$wallpaper_path" ] || return 0
 
-    hyprctl hyprpaper wallpaper ",$wallpaper_path" >/dev/null 2>&1 || true
+    monitor_names | while IFS= read -r monitor_name; do
+        [ -n "$monitor_name" ] || continue
+        hyprctl hyprpaper wallpaper "$monitor_name,$wallpaper_path" >/dev/null 2>&1 || true
+    done
 }
 
 sleep 1
