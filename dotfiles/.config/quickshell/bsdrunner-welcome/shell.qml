@@ -231,6 +231,18 @@ ShellRoot {
                 "subtitle": "Steel and cyan",
                 "accent": "#8fd3ff",
                 "action": "theme:haas-bioroid"
+            },
+            {
+                "title": "NBN",
+                "subtitle": "Broadcast gold",
+                "accent": "#f3c316",
+                "action": "theme:nbn"
+            },
+            {
+                "title": "Weyland",
+                "subtitle": "Industrial green",
+                "accent": "#5d8c45",
+                "action": "theme:weyland"
             }
         ]
 
