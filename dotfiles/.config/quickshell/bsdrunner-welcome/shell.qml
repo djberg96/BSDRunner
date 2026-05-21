@@ -98,6 +98,29 @@ ShellRoot {
                 "power": "#fff0c7",
                 "close": "#fffaf0"
             }
+        },
+        "weyland": {
+            "name": "Weyland",
+            "eyebrow": "BSDRunner",
+            "frameBackground": "#10140f",
+            "panelBackground": "#182017",
+            "cardBackground": "#212a1d",
+            "cardHover": "#2d3827",
+            "frameBorder": "#5d8c45",
+            "panelBorder": "#b4a14d",
+            "primaryText": "#edf3e3",
+            "secondaryText": "#dce4d3",
+            "mutedText": "#b9c4af",
+            "accent": "#5d8c45",
+            "accentStrong": "#b4a14d",
+            "actionAccents": {
+                "terminal": "#5d8c45",
+                "files": "#b4a14d",
+                "browser": "#d9a15d",
+                "reload": "#88a16c",
+                "power": "#dce4d3",
+                "close": "#f1f4eb"
+            }
         }
     })
     readonly property string activeTheme: {

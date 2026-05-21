@@ -1,1 +1,74 @@
-/* Reserved for future Weyland Waybar overrides. */
+#workspaces button.active {
+    background: rgba(93, 140, 69, 0.24);
+    color: #f1f4eb;
+}
+
+#custom-theme {
+    background: rgba(59, 70, 43, 0.98);
+    color: #eef3e8;
+    border-color: rgba(180, 161, 77, 0.44);
+    font-weight: 900;
+}
+
+#window,
+#cpu,
+#memory,
+#pulseaudio,
+#custom-network,
+#custom-battery,
+#clock,
+#tray,
+#custom-power {
+    background: rgba(26, 34, 25, 0.96);
+    color: #dce4d3;
+    border: 1px solid rgba(93, 140, 69, 0.24);
+}
+
+#window {
+    color: #edf3e3;
+}
+
+#pulseaudio {
+    color: #d9a15d;
+}
+
+#custom-network {
+    color: #b4a14d;
+}
+
+#custom-battery {
+    color: #dce4d3;
+}
+
+#custom-battery.warning {
+    color: #d9a15d;
+}
+
+#custom-battery.critical {
+    color: #d96b2b;
+}
+
+#custom-battery.charging,
+#custom-battery.full {
+    color: #9eb88b;
+}
+
+#clock {
+    color: #b4a14d;
+}
+
+#custom-power {
+    color: #eef3e8;
+    font-weight: 800;
+}
+
+#custom-power:hover {
+    background: rgba(59, 70, 43, 0.98);
+    border-color: rgba(180, 161, 77, 0.52);
+}
+
+tooltip {
+    background: rgba(15, 19, 15, 0.98);
+    color: #dce4d3;
+    border: 1px solid rgba(93, 140, 69, 0.42);
+}

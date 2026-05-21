@@ -41,6 +41,10 @@ write_hypr_theme() {
             active_border='rgba(f3c316ee) rgba(8d6513ee) 45deg'
             inactive_border='rgba(5a4316cc)'
             ;;
+        weyland)
+            active_border='rgba(5d8c45ee) rgba(5b4f24ee) 45deg'
+            inactive_border='rgba(45543acc)'
+            ;;
         *)
             active_border='rgba(5a7fa0ee) rgba(2e4658ee) 45deg'
             inactive_border='rgba(3c4652cc)'

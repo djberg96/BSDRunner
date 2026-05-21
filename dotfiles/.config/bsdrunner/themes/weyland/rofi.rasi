@@ -1,1 +1,116 @@
-/* Weyland rofi theme placeholder. */
+* {
+    background:     #141812;
+    background-alt: #1b2117;
+    background-alt-2: #232a1d;
+    foreground:     #dce4d3;
+    selected:       #38462b;
+    selected-text:  #f1f4eb;
+    accent:         #5d8c45;
+    urgent:         #d96b2b;
+    border:         #6d7b54;
+}
+
+window {
+    width: 42%;
+    border: 2px;
+    border-color: @border;
+    border-radius: 12px;
+    background-color: @background;
+    padding: 18px;
+    location: center;
+    anchor: center;
+}
+
+mainbox {
+    spacing: 12px;
+    children: [ inputbar, listview ];
+}
+
+inputbar {
+    background-color: @background-alt;
+    text-color: @foreground;
+    border: 1px;
+    border-color: @border;
+    border-radius: 10px;
+    padding: 10px 12px;
+    spacing: 10px;
+    children: [ prompt, entry ];
+}
+
+prompt {
+    text-color: @accent;
+    background-color: inherit;
+}
+
+entry {
+    text-color: @foreground;
+    background-color: inherit;
+    placeholder: "Deploy assets";
+    placeholder-color: rgba(220, 228, 211, 0.42);
+}
+
+listview {
+    lines: 8;
+    columns: 1;
+    fixed-height: false;
+    border: 0;
+    background-color: transparent;
+    spacing: 8px;
+    scrollbar: false;
+}
+
+element {
+    padding: 10px 12px;
+    border: 1px;
+    border-radius: 10px;
+    border-color: #2f3727;
+    background-color: @background-alt;
+    text-color: @foreground;
+    spacing: 10px;
+}
+
+element normal.normal {
+    background-color: @background-alt;
+    text-color: @foreground;
+}
+
+element alternate.normal {
+    background-color: @background-alt-2;
+    text-color: @foreground;
+}
+
+element selected.normal {
+    background-color: @selected;
+    text-color: @selected-text;
+    border-color: @accent;
+}
+
+element selected.alternate {
+    background-color: @selected;
+    text-color: @selected-text;
+    border-color: @accent;
+}
+
+element selected.active {
+    background-color: @selected;
+    text-color: @selected-text;
+    border-color: @accent;
+}
+
+element selected.urgent {
+    background-color: @urgent;
+    text-color: @foreground;
+    border-color: @accent;
+}
+
+element-text {
+    background-color: transparent;
+    text-color: @foreground;
+    vertical-align: 0.5;
+}
+
+element-icon {
+    background-color: transparent;
+    text-color: @foreground;
+    size: 1.1em;
+}
