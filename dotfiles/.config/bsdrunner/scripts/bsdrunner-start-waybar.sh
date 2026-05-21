@@ -9,7 +9,11 @@ waybar_style="$config_home/waybar/style.css"
 command -v dbus-launch >/dev/null 2>&1 || exit 0
 command -v waybar >/dev/null 2>&1 || exit 0
 
-launch_waybar() {
+launch_waybar_direct() {
+    waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
+}
+
+launch_waybar_dbus() {
     dbus-launch waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
 }
 
@@ -26,12 +30,23 @@ while pgrep -x waybar >/dev/null 2>&1; do
     fi
 done
 
-launch_waybar
-sleep 0.5
+if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    launch_waybar_direct
+    first_mode="direct"
+else
+    launch_waybar_dbus
+    first_mode="dbus"
+fi
+
+sleep 0.7
 
 if ! pgrep -x waybar >/dev/null 2>&1; then
-    launch_waybar
-    sleep 0.5
+    if [ "$first_mode" = "direct" ]; then
+        launch_waybar_dbus
+    else
+        launch_waybar_direct
+    fi
+    sleep 0.7
 fi
 
 if ! pgrep -x waybar >/dev/null 2>&1; then
