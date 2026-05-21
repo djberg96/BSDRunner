@@ -79,23 +79,19 @@ active_wallpaper_dir="$HOME/.config/bsdrunner/themes/$theme/wallpapers"
 if [[ -d "$theme_wallpaper_dir" ]] && find "$theme_wallpaper_dir" -maxdepth 1 -type f | read -r _; then
     selected_wallpaper=""
 
-    {
-        printf 'splash = false\n'
-        while IFS= read -r repo_wallpaper; do
-            wallpaper_name="$(basename "$repo_wallpaper")"
-            active_wallpaper="$active_wallpaper_dir/$wallpaper_name"
-            printf 'preload = %s\n' "$active_wallpaper"
-            if [[ "$theme" == "jinteki" && "$wallpaper_name" == "jinteki_wallpaper4.jpg" ]]; then
-                selected_wallpaper="$active_wallpaper"
-            elif [[ -z "$selected_wallpaper" ]]; then
-                selected_wallpaper="$active_wallpaper"
-            fi
-        done < <(find "$theme_wallpaper_dir" -maxdepth 1 -type f | sort)
+    while IFS= read -r repo_wallpaper; do
+        wallpaper_name="$(basename "$repo_wallpaper")"
+        active_wallpaper="$active_wallpaper_dir/$wallpaper_name"
+        if [[ "$theme" == "jinteki" && "$wallpaper_name" == "jinteki_wallpaper4.jpg" ]]; then
+            selected_wallpaper="$active_wallpaper"
+        elif [[ -z "$selected_wallpaper" ]]; then
+            selected_wallpaper="$active_wallpaper"
+        fi
+    done < <(find "$theme_wallpaper_dir" -maxdepth 1 -type f | sort)
 
-        printf 'wallpaper = ,%s\n' "$selected_wallpaper"
-    } > "$HOME/.config/hypr/hyprpaper.conf"
+    printf '%s\n' "$selected_wallpaper" > "$HOME/.config/bsdrunner/current-wallpaper"
 else
-    rm -f "$HOME/.config/hypr/hyprpaper.conf"
+    rm -f "$HOME/.config/bsdrunner/current-wallpaper"
 fi
 
 echo ":: Installed BSDRunner dotfiles into $HOME"

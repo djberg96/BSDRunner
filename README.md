@@ -6,7 +6,7 @@ This repo is intentionally small:
 
 - one Hyprland config file
 - Waybar in the default startup path
-- hyprpaper in the themed startup path
+- `swww` in the themed startup path
 - no lockscreen, wallpaper, notifications, or idle daemon by default
 - no generated monitor config
 
@@ -34,7 +34,7 @@ Install and apply a corp theme:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
-The Jinteki theme installs a `hyprpaper` wallpaper config using the bundled Jinteki wallpaper assets. It currently uses `jinteki_wallpaper4.jpg` as the default themed wallpaper.
+The Jinteki theme installs a `swww` wallpaper target using the bundled Jinteki wallpaper assets. It currently uses `jinteki_wallpaper4.jpg` as the default themed wallpaper.
 
 Return to the neutral baseline:
 

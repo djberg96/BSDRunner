@@ -107,17 +107,17 @@ Current implementation:
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
-- if a theme ships `wallpapers/`, install writes a matching `~/.config/hypr/hyprpaper.conf`
+- if a theme ships `wallpapers/`, install writes a matching `~/.config/bsdrunner/current-wallpaper`
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
-- wallpapers are bundled as theme assets and can be activated through `hyprpaper` during install
+- wallpapers are bundled as theme assets and can be activated through `swww` during install
 
 Important:
 
 - switching themes should never replace `hyprland.conf`
 - theme switching should not be required for the desktop to boot
 - a broken theme should be recoverable by switching back to `default`
-- `hyprpaper` is treated as part of the expected themed runtime
+- `swww` is treated as part of the expected themed runtime
 - themes may ship multiple wallpaper assets even if only one is selected by default
 
 ## Manual Qt/Dolphin Test
