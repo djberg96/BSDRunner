@@ -290,7 +290,7 @@ Implement the corp themes in this order:
 3. `waybar`
 4. wallpapers and optional assets
 
-That order is now proven by the current Jinteki implementation.
+That order is now proven by the current Jinteki implementation and the first Haas-Bioroid pass.
 
 ## First Theme
 
@@ -311,3 +311,22 @@ Current implementation status:
 - `dolphin.colors`: first-pass KDE color scheme defined
 - `qt6ct.conf`: first-pass qt6ct palette defined
 - `wallpapers/`: four bundled Jinteki wallpaper images
+
+## Second Theme
+
+Recommended second implementation: `Haas-Bioroid`
+
+Why:
+
+- it shares the same structure while pushing toward a very different mood
+- the cool steel-and-cyan palette works well for clean UI surfaces
+- it is a good test of whether the theme system can do more than one strong visual language
+
+Current implementation status:
+
+- `palette.conf`: scaffolded
+- `kitty.conf`: first-pass theme fragment defined
+- `rofi.rasi`: first-pass theme defined
+- `waybar.css`: first-pass theme fragment defined
+- `wallpapers/`: four bundled Haas-Bioroid wallpaper images
+- Kitty watermark asset: `haas_bioroid_hb.jpg`

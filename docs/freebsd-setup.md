@@ -99,6 +99,8 @@ To apply a corp theme during install:
 
 Themed wallpapers are activated during install through `swww`. The Jinteki theme currently ships four bundled wallpaper images, writes `~/.config/bsdrunner/current-wallpaper` automatically, and uses `jinteki_wallpaper4.jpg` as the anchor wallpaper before rotating across the rest by workspace number.
 
+The Haas-Bioroid theme also ships four bundled wallpaper images plus a Kitty watermark asset. Its first bundled wallpaper is used as the default anchor before rotating across the rest by workspace number.
+
 To return to the neutral baseline:
 
 ```sh

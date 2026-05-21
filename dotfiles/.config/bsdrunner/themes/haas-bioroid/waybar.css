@@ -1,1 +1,63 @@
-/* Reserved for future Haas-Bioroid Waybar overrides. */
+#workspaces button.active {
+    background: rgba(143, 211, 255, 0.18);
+    color: #f7fcff;
+}
+
+#window,
+#cpu,
+#memory,
+#pulseaudio,
+#custom-network,
+#custom-battery,
+#clock,
+#tray,
+#custom-power {
+    background: rgba(27, 35, 41, 0.94);
+    color: #e4eef4;
+    border: 1px solid rgba(143, 211, 255, 0.22);
+}
+
+#pulseaudio {
+    color: #ffb86b;
+}
+
+#custom-network {
+    color: #8fd3ff;
+}
+
+#custom-battery {
+    color: #d7e3ea;
+}
+
+#custom-battery.warning {
+    color: #ffb86b;
+}
+
+#custom-battery.critical {
+    color: #ff9d7a;
+}
+
+#custom-battery.charging,
+#custom-battery.full {
+    color: #b9e9db;
+}
+
+#clock {
+    color: #dff6ff;
+}
+
+#custom-power {
+    color: #dff6ff;
+    font-weight: 800;
+}
+
+#custom-power:hover {
+    background: rgba(49, 65, 75, 0.98);
+    border-color: rgba(143, 211, 255, 0.48);
+}
+
+tooltip {
+    background: rgba(15, 20, 24, 0.97);
+    color: #e4eef4;
+    border: 1px solid rgba(143, 211, 255, 0.40);
+}

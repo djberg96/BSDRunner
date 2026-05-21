@@ -38,6 +38,8 @@ Install and apply a corp theme:
 
 The Jinteki theme installs a `swww` wallpaper target using the bundled Jinteki wallpaper assets. It uses `jinteki_wallpaper4.jpg` as the anchor wallpaper, then rotates across the other bundled wallpapers by workspace number.
 
+The Haas-Bioroid theme now ships its own Kitty watermark, Waybar and Rofi styling, and four bundled wallpapers. It uses the first bundled wallpaper as the default anchor, then rotates across the rest by workspace number.
+
 Return to the neutral baseline:
 
 ```sh
