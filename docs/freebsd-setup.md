@@ -21,6 +21,7 @@ Recommended next layer after the base session works:
 
 ```sh
 sudo pkg install \
+  hyprpaper \
   waybar \
   xdg-desktop-portal \
   xdg-desktop-portal-hyprland \
@@ -91,6 +92,8 @@ To apply a corp theme during install:
 ```sh
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
+
+If `hyprpaper` is installed, themed wallpapers can be activated during install. The Jinteki theme currently ships four bundled wallpaper images and writes `~/.config/hypr/hyprpaper.conf` automatically.
 
 To return to the neutral baseline:
 

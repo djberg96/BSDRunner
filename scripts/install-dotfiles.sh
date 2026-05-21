@@ -54,6 +54,7 @@ fi
 
 rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
 
+mkdir -p "$HOME/.config/hypr"
 mkdir -p "$HOME/.config/rofi"
 mkdir -p "$HOME/.config/waybar"
 
@@ -71,6 +72,32 @@ cat \
     "$repo_root/dotfiles/.config/waybar/style.css" \
     "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar.css" \
     > "$HOME/.config/waybar/style.css"
+
+theme_wallpaper_dir="$repo_root/dotfiles/.config/bsdrunner/themes/$theme/wallpapers"
+active_wallpaper_dir="$HOME/.config/bsdrunner/themes/$theme/wallpapers"
+
+if [[ -d "$theme_wallpaper_dir" ]] && find "$theme_wallpaper_dir" -maxdepth 1 -type f | read -r _; then
+    first_wallpaper=""
+
+    {
+        printf 'splash = false\n'
+        while IFS= read -r repo_wallpaper; do
+            wallpaper_name="$(basename "$repo_wallpaper")"
+            active_wallpaper="$active_wallpaper_dir/$wallpaper_name"
+            if [[ -z "$first_wallpaper" ]]; then
+                first_wallpaper="$active_wallpaper"
+            fi
+        done < <(find "$theme_wallpaper_dir" -maxdepth 1 -type f | sort)
+
+        printf 'wallpaper {\n'
+        printf '    monitor =\n'
+        printf '    path = %s\n' "$first_wallpaper"
+        printf '    fit_mode = cover\n'
+        printf '}\n'
+    } > "$HOME/.config/hypr/hyprpaper.conf"
+else
+    rm -f "$HOME/.config/hypr/hyprpaper.conf"
+fi
 
 echo ":: Installed BSDRunner dotfiles into $HOME"
 echo ":: Applied BSDRunner theme: $theme"

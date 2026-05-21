@@ -33,6 +33,8 @@ Install and apply a corp theme:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
+If `hyprpaper` is installed, the Jinteki theme will also install a wallpaper config using the bundled Jinteki wallpaper assets.
+
 Return to the neutral baseline:
 
 ```sh
