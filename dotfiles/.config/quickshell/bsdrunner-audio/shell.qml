@@ -1,7 +1,6 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
-import QtQuick.Controls
 
 ShellRoot {
     id: root
@@ -108,12 +107,20 @@ ShellRoot {
     }
 
     function setVolume(value) {
-        currentVolume = Math.round(value)
+        var rounded = Math.max(0, Math.min(100, Math.round(value)))
+        currentVolume = rounded
         Quickshell.execDetached([
             "sh",
             homeDir + "/.config/bsdrunner/scripts/bsdrunner-audio-set.sh",
-            String(currentVolume)
+            String(rounded)
         ])
+    }
+
+    function setVolumeFromPosition(mouseX, width) {
+        if (width <= 0) return
+        var ratio = mouseX / width
+        ratio = Math.max(0, Math.min(1, ratio))
+        root.setVolume(ratio * 100)
     }
 
     function toggleMute() {
@@ -203,43 +210,53 @@ ShellRoot {
                         font.bold: true
                     }
 
-                    Slider {
-                        id: volumeSlider
-                        from: 0
-                        to: 100
-                        stepSize: 1
-                        value: root.currentVolume
+                    Item {
+                        width: parent.width
+                        height: 34
 
-                        background: Rectangle {
-                            x: volumeSlider.leftPadding
-                            y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                            width: volumeSlider.availableWidth
-                            height: 8
-                            radius: 4
+                        Rectangle {
+                            id: sliderTrack
+
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            height: 10
+                            radius: 5
                             color: root.palette.cardBackground
                             border.width: 1
                             border.color: root.palette.frameBorder
 
                             Rectangle {
-                                width: volumeSlider.visualPosition * parent.width
+                                width: Math.max(10, (root.currentVolume / 100) * parent.width)
                                 height: parent.height
-                                radius: 4
+                                radius: 5
                                 color: root.palette.accent
                             }
-                        }
 
-                        handle: Rectangle {
-                            x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
-                            y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                            implicitWidth: 20
-                            implicitHeight: 20
-                            radius: 10
-                            color: root.palette.accentStrong
-                            border.width: 2
-                            border.color: root.palette.accent
-                        }
+                            Rectangle {
+                                width: 22
+                                height: 22
+                                radius: 11
+                                color: root.palette.accentStrong
+                                border.width: 2
+                                border.color: root.palette.accent
+                                x: Math.max(0, Math.min(parent.width - width, (root.currentVolume / 100) * parent.width - width / 2))
+                                y: (parent.height - height) / 2
+                            }
 
-                        onMoved: root.setVolume(value)
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+
+                                onPressed: root.setVolumeFromPosition(mouse.x, width)
+                                onPositionChanged: {
+                                    if (pressed) {
+                                        root.setVolumeFromPosition(mouse.x, width)
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Row {
