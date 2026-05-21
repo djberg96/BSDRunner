@@ -53,7 +53,8 @@ Themes live under:
     │   ├── rofi.rasi
     │   ├── waybar.css
     │   ├── dolphin.colors
-    │   └── qt6ct.conf
+    │   ├── qt6ct.conf
+    │   └── wallpapers/
     ├── nbn/
     │   ├── palette.conf
     │   ├── kitty.conf
@@ -83,6 +84,7 @@ Each theme folder should be responsible for:
 - `waybar.css`: bar-specific color and panel overrides
 - `dolphin.colors`: KDE/Qt color scheme for Dolphin and related Qt apps
 - `qt6ct.conf`: qt6ct palette file for Qt application theming outside Plasma
+- `wallpapers/`: optional wallpaper assets for the theme
 
 Later additions may include:
 
@@ -107,6 +109,7 @@ Current implementation:
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
+- wallpapers are bundled as theme assets, but not applied automatically
 
 Important:
 
@@ -303,3 +306,4 @@ Current implementation status:
 - `waybar.css`: first-pass theme fragment defined
 - `dolphin.colors`: first-pass KDE color scheme defined
 - `qt6ct.conf`: first-pass qt6ct palette defined
+- `wallpapers/`: four bundled Jinteki wallpaper images
