@@ -44,10 +44,15 @@ apply_workspace_wallpaper() {
     wallpaper_path="$(wallpaper_for_workspace "$workspace_id")"
     [ -n "$wallpaper_path" ] || return 0
 
-    hyprctl hyprpaper wallpaper ",$wallpaper_path,cover" >/dev/null 2>&1 || true
+    hyprctl hyprpaper wallpaper ",$wallpaper_path" >/dev/null 2>&1 || true
 }
 
 sleep 1
+
+printf '%s\n' "$wallpapers" | while IFS= read -r wallpaper_path; do
+    [ -n "$wallpaper_path" ] || continue
+    hyprctl hyprpaper preload "$wallpaper_path" >/dev/null 2>&1 || true
+done
 
 last_workspace_id=""
 

@@ -84,16 +84,13 @@ if [[ -d "$theme_wallpaper_dir" ]] && find "$theme_wallpaper_dir" -maxdepth 1 -t
         while IFS= read -r repo_wallpaper; do
             wallpaper_name="$(basename "$repo_wallpaper")"
             active_wallpaper="$active_wallpaper_dir/$wallpaper_name"
+            printf 'preload = %s\n' "$active_wallpaper"
             if [[ -z "$first_wallpaper" ]]; then
                 first_wallpaper="$active_wallpaper"
             fi
         done < <(find "$theme_wallpaper_dir" -maxdepth 1 -type f | sort)
 
-        printf 'wallpaper {\n'
-        printf '    monitor =\n'
-        printf '    path = %s\n' "$first_wallpaper"
-        printf '    fit_mode = cover\n'
-        printf '}\n'
+        printf 'wallpaper = ,%s\n' "$first_wallpaper"
     } > "$HOME/.config/hypr/hyprpaper.conf"
 else
     rm -f "$HOME/.config/hypr/hyprpaper.conf"
