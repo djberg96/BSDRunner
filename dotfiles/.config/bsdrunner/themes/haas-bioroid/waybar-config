@@ -30,8 +30,8 @@
     },
 
     "hyprland/window": {
-      "format": "ACTIVE {class}: {title}",
-      "max-length": 64,
+      "format": "{class}: {title}",
+      "max-length": 40,
       "separate-outputs": true
     },
 

@@ -90,12 +90,11 @@ tooltip {
 }
 
 #window {
-    min-width: 420px;
+    min-width: 280px;
     background: rgba(20, 28, 34, 0.97);
     border-color: rgba(143, 211, 255, 0.34);
     color: #f2fbff;
     font-weight: 700;
-    letter-spacing: 0.04em;
 }
 
 #cpu,
