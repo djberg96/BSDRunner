@@ -15,6 +15,12 @@ case "$action" in
     theme:haas-bioroid)
         exec sh "$home_config/bsdrunner/scripts/bsdrunner-apply-theme.sh" haas-bioroid
         ;;
+    theme:nbn)
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-apply-theme.sh" nbn
+        ;;
+    theme:weyland)
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-apply-theme.sh" weyland
+        ;;
     terminal)
         exec kitty
         ;;
