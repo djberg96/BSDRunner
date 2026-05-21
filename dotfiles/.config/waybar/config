@@ -9,7 +9,7 @@
     "margin-right": 10,
     "modules-left": ["hyprland/workspaces", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "memory", "pulseaudio", "custom/network", "custom/battery", "clock", "tray"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -95,6 +95,13 @@
     "tray": {
       "icon-size": 16,
       "spacing": 8
+    },
+
+    "custom/power": {
+      "format": "PWR",
+      "tooltip": true,
+      "tooltip-format": "Open power menu",
+      "on-click": "wlogout"
     }
   }
 ]

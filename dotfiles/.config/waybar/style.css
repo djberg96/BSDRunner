@@ -26,7 +26,8 @@ tooltip {
 #custom-network,
 #custom-battery,
 #clock,
-#tray {
+#tray,
+#custom-power {
     margin: 6px 0;
     padding: 6px 12px;
     background: rgba(28, 28, 32, 0.92);
@@ -73,6 +74,15 @@ tooltip {
 #custom-battery.charging,
 #custom-battery.full {
     color: #a3be8c;
+}
+
+#custom-power {
+    color: #eceff4;
+    font-weight: 700;
+}
+
+#custom-power:hover {
+    background: rgba(80, 84, 92, 0.95);
 }
 
 #tray {

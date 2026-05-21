@@ -23,6 +23,7 @@ Recommended next layer after the base session works:
 ```sh
 sudo pkg install \
   waybar \
+  wlogout \
   xdg-desktop-portal \
   xdg-desktop-portal-hyprland \
   xdg-desktop-portal-gtk \
