@@ -7,9 +7,8 @@
 #cpu,
 #memory,
 #pulseaudio,
-#network,
 #custom-network,
-#battery,
+#custom-battery,
 #clock,
 #tray {
     background: rgba(28, 15, 18, 0.94);
@@ -21,16 +20,25 @@
     color: #ffb36b;
 }
 
-#network {
-    color: #ff8795;
-}
-
 #custom-network {
     color: #ff8795;
 }
 
-#battery {
+#custom-battery {
     color: #f3d7da;
+}
+
+#custom-battery.warning {
+    color: #ffb36b;
+}
+
+#custom-battery.critical {
+    color: #ff6b7d;
+}
+
+#custom-battery.charging,
+#custom-battery.full {
+    color: #ffc7cf;
 }
 
 #clock {

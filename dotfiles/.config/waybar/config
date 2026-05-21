@@ -9,7 +9,7 @@
     "margin-right": 10,
     "modules-left": ["hyprland/workspaces", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "memory", "pulseaudio", "custom/network", "battery", "clock", "tray"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "custom/network", "custom/battery", "clock", "tray"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -71,16 +71,12 @@
       "tooltip": true
     },
 
-    "battery": {
-      "states": {
-        "warning": 30,
-        "critical": 15
-      },
-      "format": "BAT {capacity}%",
-      "format-charging": "CHR {capacity}%",
-      "format-plugged": "AC",
-      "tooltip-format": "Battery: {capacity}%",
-      "tooltip-format-charging": "Charging: {capacity}%"
+    "custom/battery": {
+      "exec": "sh ~/.config/waybar/scripts/bsdrunner-battery.sh",
+      "return-type": "json",
+      "interval": 30,
+      "format": "{}",
+      "tooltip": true
     },
 
     "clock": {

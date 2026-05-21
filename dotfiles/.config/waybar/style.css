@@ -24,7 +24,7 @@ tooltip {
 #memory,
 #pulseaudio,
 #custom-network,
-#battery,
+#custom-battery,
 #clock,
 #tray {
     margin: 6px 0;
@@ -61,8 +61,18 @@ tooltip {
     min-width: 260px;
 }
 
-#custom-network.disconnected {
+#custom-network.disconnected,
+#custom-battery.critical {
     color: #d08770;
+}
+
+#custom-battery.warning {
+    color: #ebcb8b;
+}
+
+#custom-battery.charging,
+#custom-battery.full {
+    color: #a3be8c;
 }
 
 #tray {
