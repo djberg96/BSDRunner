@@ -3,13 +3,13 @@
     "layer": "top",
     "position": "top",
     "spacing": 8,
-    "height": 34,
+    "height": 44,
     "margin-top": 8,
     "margin-left": 10,
     "margin-right": 10,
     "modules-left": ["hyprland/workspaces", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "memory", "pulseaudio", "network", "battery", "clock", "tray"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "custom/network", "battery", "clock", "tray"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -63,14 +63,12 @@
       "on-click": "pavucontrol"
     },
 
-    "network": {
-      "format-wifi": "NET {essid}",
-      "format-ethernet": "NET wired",
-      "format-linked": "NET link",
-      "format-disconnected": "NET down",
-      "tooltip-format-wifi": "{essid} via {ifname}",
-      "tooltip-format-ethernet": "{ifname}",
-      "tooltip-format-disconnected": "No active network connection"
+    "custom/network": {
+      "exec": "sh ~/.config/waybar/scripts/bsdrunner-network.sh",
+      "return-type": "json",
+      "interval": 5,
+      "format": "{}",
+      "tooltip": true
     },
 
     "battery": {

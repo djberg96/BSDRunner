@@ -8,6 +8,7 @@
 #memory,
 #pulseaudio,
 #network,
+#custom-network,
 #battery,
 #clock,
 #tray {
@@ -21,6 +22,10 @@
 }
 
 #network {
+    color: #ff8795;
+}
+
+#custom-network {
     color: #ff8795;
 }
 

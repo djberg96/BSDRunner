@@ -23,7 +23,7 @@ tooltip {
 #cpu,
 #memory,
 #pulseaudio,
-#network,
+#custom-network,
 #battery,
 #clock,
 #tray {
@@ -59,6 +59,10 @@ tooltip {
 
 #window {
     min-width: 260px;
+}
+
+#custom-network.disconnected {
+    color: #d08770;
 }
 
 #tray {
