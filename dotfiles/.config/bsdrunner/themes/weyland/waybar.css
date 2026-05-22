@@ -14,6 +14,7 @@
 #cpu,
 #memory,
 #pulseaudio,
+#custom-audio,
 #custom-network,
 #custom-battery,
 #clock,
@@ -28,7 +29,8 @@
     color: #edf3e3;
 }
 
-#pulseaudio {
+#pulseaudio,
+#custom-audio {
     color: #d9a15d;
 }
 

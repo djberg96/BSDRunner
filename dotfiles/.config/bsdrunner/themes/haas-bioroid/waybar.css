@@ -9,6 +9,7 @@
 #cpu,
 #memory,
 #pulseaudio,
+#custom-audio,
 #custom-network,
 #custom-battery,
 #clock,
@@ -19,7 +20,8 @@
     border: 1px solid rgba(143, 211, 255, 0.22);
 }
 
-#pulseaudio {
+#pulseaudio,
+#custom-audio {
     color: #ffb86b;
 }
 
@@ -100,6 +102,7 @@ tooltip {
 #cpu,
 #memory,
 #pulseaudio,
+#custom-audio,
 #custom-network,
 #custom-battery,
 #clock,

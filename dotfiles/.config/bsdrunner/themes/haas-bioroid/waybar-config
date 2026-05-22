@@ -9,7 +9,7 @@
     "margin-right": 10,
     "modules-left": ["custom/theme", "hyprland/workspaces", "custom/network"],
     "modules-center": ["hyprland/window"],
-    "modules-right": ["pulseaudio", "cpu", "memory", "custom/battery", "clock", "tray", "custom/power"],
+    "modules-right": ["custom/audio", "cpu", "memory", "custom/battery", "clock", "tray", "custom/power"],
 
     "custom/theme": {
       "exec": "sh ~/.config/waybar/scripts/bsdrunner-theme-status.sh",
@@ -43,11 +43,12 @@
       "tooltip": true
     },
 
-    "pulseaudio": {
-      "format": "AUD {volume}%",
-      "format-muted": "AUD MUTE",
-      "tooltip-format": "Volume: {volume}%",
-      "tooltip-format-muted": "Audio muted",
+    "custom/audio": {
+      "exec": "sh ~/.config/waybar/scripts/bsdrunner-audio.sh",
+      "return-type": "json",
+      "interval": 2,
+      "format": "AUD {}",
+      "tooltip": true,
       "on-click": "pavucontrol"
     },
 
