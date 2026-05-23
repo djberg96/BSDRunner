@@ -74,15 +74,24 @@ wallpaper_for_workspace() {
 
 apply_workspace_wallpaper() {
     workspace_id="$1"
-    [ "$workspace_id" -gt 0 ] 2>/dev/null || return 0
+    if ! [ "$workspace_id" -gt 0 ] 2>/dev/null; then
+        swww img "$wallpaper_path" >/dev/null 2>&1 || true
+        return 0
+    fi
 
     target_wallpaper="$(wallpaper_for_workspace "$workspace_id" || true)"
-    [ -n "$target_wallpaper" ] || return 0
+    if [ -z "$target_wallpaper" ]; then
+        target_wallpaper="$wallpaper_path"
+    fi
 
     swww img "$target_wallpaper" >/dev/null 2>&1 || true
 }
 
 last_workspace_id=""
+
+# Paint something immediately so a slow/empty hyprctl response does not leave
+# the desktop blank after restarting swww-daemon.
+apply_workspace_wallpaper "$(active_workspace_id || true)"
 
 while :; do
     workspace_id="$(active_workspace_id || true)"
