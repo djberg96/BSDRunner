@@ -13,9 +13,11 @@
 #window,
 #cpu,
 #memory,
+#disk,
 #pulseaudio,
 #custom-network,
 #custom-battery,
+#custom-keybinds,
 #clock,
 #tray,
 #custom-power {
@@ -63,6 +65,11 @@
 }
 
 #custom-power:hover {
+    background: rgba(106, 74, 13, 0.98);
+    border-color: rgba(255, 179, 71, 0.56);
+}
+
+#custom-keybinds:hover {
     background: rgba(106, 74, 13, 0.98);
     border-color: rgba(255, 179, 71, 0.56);
 }

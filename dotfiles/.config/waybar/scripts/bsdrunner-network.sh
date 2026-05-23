@@ -3,7 +3,17 @@
 set -eu
 
 escape_json() {
-    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+    printf '%s' "$1" | awk '
+        BEGIN { ORS = "" }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            if (NR > 1) {
+                printf "\\n"
+            }
+            printf "%s", $0
+        }
+    '
 }
 
 default_iface() {
@@ -25,7 +35,7 @@ iface="${1:-}"
 [ -n "$iface" ] || iface="$(first_up_iface || true)"
 
 if [ -z "$iface" ]; then
-    printf '{"text":"NET down","tooltip":"No active network interface","class":"disconnected"}\n'
+    printf '{"text":"󰤮","tooltip":"No active network interface","class":"disconnected"}\n'
     exit 0
 fi
 
@@ -35,21 +45,25 @@ status="$(printf '%s\n' "$ifconfig_output" | awk '/status:/{print $2; exit}')"
 ssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
 
 if [ -n "$ssid" ]; then
-    text="WIFI $ssid"
+    text=""
     tooltip="Wireless: $ssid ($iface)"
-    [ -n "$ipv4" ] && tooltip="$tooltip\\nIPv4: $ipv4"
+    [ -n "$ipv4" ] && tooltip="$tooltip
+IPv4: $ipv4"
     class="wifi"
 elif [ -n "$ipv4" ]; then
-    text="NET $iface"
-    tooltip="Interface: $iface\\nIPv4: $ipv4"
+    text="󰈀"
+    tooltip="Interface: $iface
+IPv4: $ipv4"
     class="ethernet"
 elif [ "$status" = "active" ]; then
-    text="NET link"
-    tooltip="Interface: $iface\\nLink detected, no IPv4 address"
+    text="󰈁"
+    tooltip="Interface: $iface
+Link detected, no IPv4 address"
     class="linked"
 else
-    text="NET down"
-    tooltip="Interface: $iface\\nNo active connection"
+    text="󰤮"
+    tooltip="Interface: $iface
+No active connection"
     class="disconnected"
 fi
 

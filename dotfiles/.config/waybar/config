@@ -7,9 +7,9 @@
     "margin-top": 8,
     "margin-left": 10,
     "margin-right": 10,
-    "modules-left": ["custom/theme", "hyprland/workspaces", "hyprland/window"],
+    "modules-left": ["custom/theme", "custom/keybinds", "hyprland/workspaces", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "memory", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
+    "modules-right": ["cpu", "memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -49,26 +49,44 @@
       "on-click": "sh ~/.config/waybar/scripts/bsdrunner-theme-menu.sh"
     },
 
+    "custom/keybinds": {
+      "format": "KEYS",
+      "tooltip": true,
+      "tooltip-format": "Open the BSDRunner keybinding cheat sheet",
+      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-keybindings-menu.sh"
+    },
+
     "cpu": {
       "interval": 3,
-      "format": "CPU {usage}%",
+      "format": " {usage}%",
       "tooltip-format": "CPU usage: {usage}%"
     },
 
     "memory": {
       "interval": 5,
-      "format": "MEM {percentage}%",
+      "format": "󰍛 {percentage}%",
       "tooltip-format": "Memory in use: {used:0.1f}G / {total:0.1f}G"
+    },
+
+    "disk": {
+      "path": "/",
+      "interval": 30,
+      "format": " {percentage_used}%",
+      "tooltip-format": "{used} out of {total} used on {path}"
     },
 
     "pulseaudio": {
       "format": "{icon} {volume}%",
-      "format-muted": "MUTE",
+      "format-muted": " 0%",
+      "format-source": "Mic {volume}%",
+      "format-source-muted": "Mic muted",
+      "tooltip-format": "Output: {volume}%\nInput: {format_source}",
       "format-icons": {
-        "default": ["VOL", "VOL", "VOL"]
+        "headphone": "",
+        "headset": "",
+        "default": ["", "", ""]
       },
-      "tooltip-format": "Volume: {volume}%",
-      "tooltip-format-muted": "Audio muted",
+      "tooltip-format-muted": "Output: muted\nInput: {format_source}",
       "on-click": "pavucontrol"
     },
 
@@ -107,7 +125,7 @@
     },
 
     "custom/power": {
-      "format": "PWR",
+      "format": "",
       "tooltip": true,
       "tooltip-format": "Open power menu",
       "on-click": "wlogout -l ~/.config/wlogout/layout -C ~/.config/wlogout/style.css --buttons-per-row 3 --column-spacing 18 --row-spacing 18 --margin 40"

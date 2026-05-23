@@ -1,7 +1,7 @@
 * {
     border: none;
     border-radius: 0;
-    font-family: "JetBrains Mono", monospace;
+    font-family: "JetBrainsMono Nerd Font", "JetBrainsMono NFM", "Symbols Nerd Font Mono", "JetBrains Mono", monospace;
     font-size: 13px;
     min-height: 0;
 }
@@ -20,9 +20,11 @@ tooltip {
 
 #workspaces,
 #custom-theme,
+#custom-keybinds,
 #window,
 #cpu,
 #memory,
+#disk,
 #pulseaudio,
 #custom-network,
 #custom-battery,
@@ -46,6 +48,12 @@ tooltip {
     letter-spacing: 0.08em;
 }
 
+#custom-keybinds {
+    color: #d8dee9;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+}
+
 #custom-theme.default {
     color: #d7e3ea;
 }
@@ -67,6 +75,10 @@ tooltip {
 }
 
 #custom-theme:hover {
+    background: rgba(236, 239, 244, 0.10);
+}
+
+#custom-keybinds:hover {
     background: rgba(236, 239, 244, 0.10);
 }
 
