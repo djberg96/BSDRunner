@@ -102,7 +102,6 @@ Both paths call the same theme apply script and update:
 Waybar also includes a few lightweight control-surface actions:
 
 - theme switcher
-- wallpaper picker for the active theme
 - keybinding cheat sheet
 - power menu
 
