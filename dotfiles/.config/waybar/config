@@ -77,12 +77,16 @@
 
     "pulseaudio": {
       "format": "{icon} {volume}%",
-      "format-muted": "MUTE",
+      "format-muted": " 0%",
+      "format-source": "Mic {volume}%",
+      "format-source-muted": "Mic muted",
+      "tooltip-format": "Output: {volume}%\nInput: {format_source}",
       "format-icons": {
-        "default": ["VOL", "VOL", "VOL"]
+        "headphone": "",
+        "headset": "",
+        "default": ["", "", ""]
       },
-      "tooltip-format": "Volume: {volume}%",
-      "tooltip-format-muted": "Audio muted",
+      "tooltip-format-muted": "Output: muted\nInput: {format_source}",
       "on-click": "pavucontrol"
     },
 
