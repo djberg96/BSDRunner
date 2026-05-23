@@ -9,7 +9,7 @@
     "margin-right": 10,
     "modules-left": ["custom/theme", "custom/wallpaper", "custom/keybinds", "hyprland/workspaces", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["group/system", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
+    "modules-right": ["cpu", "memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -61,11 +61,6 @@
       "tooltip": true,
       "tooltip-format": "Open the BSDRunner keybinding cheat sheet",
       "on-click": "sh ~/.config/waybar/scripts/bsdrunner-keybindings-menu.sh"
-    },
-
-    "group/system": {
-      "orientation": "orthogonal",
-      "modules": ["cpu", "memory", "disk"]
     },
 
     "cpu": {
