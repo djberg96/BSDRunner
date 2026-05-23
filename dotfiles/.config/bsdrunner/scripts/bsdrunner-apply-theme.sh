@@ -128,6 +128,8 @@ if [ -d "$theme_wallpaper_dir" ] && find "$theme_wallpaper_dir" -maxdepth 1 -typ
         wallpaper_name="$(basename "$active_wallpaper")"
         if [ "$theme" = "jinteki" ] && [ "$wallpaper_name" = "jinteki_wallpaper4.jpg" ]; then
             selected_wallpaper="$active_wallpaper"
+        elif [ "$theme" = "haas-bioroid" ] && [ "$wallpaper_name" = "haas_bioroid_wallpaper2.gif" ]; then
+            selected_wallpaper="$active_wallpaper"
         elif [ -z "$selected_wallpaper" ]; then
             selected_wallpaper="$active_wallpaper"
         fi
