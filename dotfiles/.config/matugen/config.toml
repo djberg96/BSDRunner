@@ -1,5 +1,8 @@
 [config]
 
+[config.wallpaper]
+set = false
+
 [templates.hyprland]
 input_path = '~/.config/matugen/templates/hypr-colors.conf'
 output_path = '~/.config/hypr/bsdrunner-matugen.conf'
