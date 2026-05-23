@@ -2,6 +2,8 @@
 
 [config.wallpaper]
 set = false
+command = "true"
+arguments = []
 
 [templates.hyprland]
 input_path = '~/.config/matugen/templates/hypr-colors.conf'
