@@ -4,7 +4,7 @@ Minimal Hyprland config for FreeBSD 15 on a ThinkPad X1 Gen 9.
 
 This repo is intentionally small:
 
-- one Hyprland config file
+- a modular Hyprland config with a thin top-level loader
 - Waybar in the default startup path
 - `swww` in the themed startup path
 - no lockscreen, notification daemon, or idle daemon by default
@@ -16,6 +16,7 @@ The goal is a boring, bootable base session for Hyprland `0.54.x` on FreeBSD.
 ## Files
 
 - `dotfiles/.config/hypr/hyprland.conf`
+- `dotfiles/.config/hypr/conf/`
 - `dotfiles/.config/kitty/kitty.conf`
 - `dotfiles/.config/quickshell/`
 - `dotfiles/.config/waybar/`
