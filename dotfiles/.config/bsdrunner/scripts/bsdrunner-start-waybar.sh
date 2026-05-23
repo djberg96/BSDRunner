@@ -5,16 +5,29 @@ set -eu
 config_home="$HOME/.config"
 waybar_config="$config_home/waybar/config"
 waybar_style="$config_home/waybar/style.css"
+waybar_log="${TMPDIR:-/tmp}/bsdrunner-waybar.log"
+startup_wait_loops=50
 
-command -v dbus-launch >/dev/null 2>&1 || exit 0
 command -v waybar >/dev/null 2>&1 || exit 0
 
 launch_waybar_direct() {
-    waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
+    waybar -c "$waybar_config" -s "$waybar_style" >"$waybar_log" 2>&1 &
 }
 
 launch_waybar_dbus() {
-    dbus-launch waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
+    dbus-launch waybar -c "$waybar_config" -s "$waybar_style" >"$waybar_log" 2>&1 &
+}
+
+wait_for_waybar() {
+    wait_loops=0
+    while [ "$wait_loops" -lt "$startup_wait_loops" ]; do
+        if pgrep -x waybar >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.1
+        wait_loops=$((wait_loops + 1))
+    done
+    return 1
 }
 
 pkill -x waybar 2>/dev/null || true
@@ -30,26 +43,23 @@ while pgrep -x waybar >/dev/null 2>&1; do
     fi
 done
 
-if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-    launch_waybar_direct
-    first_mode="direct"
-else
-    launch_waybar_dbus
-    first_mode="dbus"
-fi
+launch_waybar_direct
+first_mode="direct"
 
-sleep 0.7
-
-if ! pgrep -x waybar >/dev/null 2>&1; then
-    if [ "$first_mode" = "direct" ]; then
-        launch_waybar_dbus
-    else
-        launch_waybar_direct
+if ! wait_for_waybar; then
+    if command -v dbus-launch >/dev/null 2>&1; then
+        if [ "$first_mode" = "direct" ]; then
+            launch_waybar_dbus
+        else
+            launch_waybar_direct
+        fi
+        if wait_for_waybar; then
+            exit 0
+        fi
     fi
-    sleep 0.7
 fi
 
 if ! pgrep -x waybar >/dev/null 2>&1; then
-    echo ":: Failed to start waybar" >&2
+    echo ":: Failed to start waybar; see $waybar_log" >&2
     exit 1
 fi
