@@ -9,7 +9,7 @@
     "margin-right": 10,
     "modules-left": ["custom/theme", "custom/wallpaper", "custom/keybinds", "hyprland/workspaces", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "memory", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
+    "modules-right": ["group/system", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -63,6 +63,11 @@
       "on-click": "sh ~/.config/waybar/scripts/bsdrunner-keybindings-menu.sh"
     },
 
+    "group/system": {
+      "orientation": "orthogonal",
+      "modules": ["cpu", "memory", "disk"]
+    },
+
     "cpu": {
       "interval": 3,
       "format": "CPU {usage}%",
@@ -73,6 +78,13 @@
       "interval": 5,
       "format": "MEM {percentage}%",
       "tooltip-format": "Memory in use: {used:0.1f}G / {total:0.1f}G"
+    },
+
+    "disk": {
+      "path": "/",
+      "interval": 30,
+      "format": "DSK {percentage_used}%",
+      "tooltip-format": "{used} out of {total} used on {path}"
     },
 
     "pulseaudio": {

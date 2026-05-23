@@ -49,7 +49,7 @@ case "$state" in
         class="charging"
         ;;
     high|full)
-        text="FULL"
+        text="BAT FULL"
         class="full"
         ;;
     discharging)
