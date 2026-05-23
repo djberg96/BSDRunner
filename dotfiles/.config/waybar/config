@@ -58,20 +58,20 @@
 
     "cpu": {
       "interval": 3,
-      "format": "CPU {usage}%",
+      "format": " {usage}%",
       "tooltip-format": "CPU usage: {usage}%"
     },
 
     "memory": {
       "interval": 5,
-      "format": "MEM {percentage}%",
+      "format": " {percentage}%",
       "tooltip-format": "Memory in use: {used:0.1f}G / {total:0.1f}G"
     },
 
     "disk": {
       "path": "/",
       "interval": 30,
-      "format": "DSK {percentage_used}%",
+      "format": " {percentage_used}%",
       "tooltip-format": "{used} out of {total} used on {path}"
     },
 
@@ -125,7 +125,7 @@
     },
 
     "custom/power": {
-      "format": "PWR",
+      "format": "",
       "tooltip": true,
       "tooltip-format": "Open power menu",
       "on-click": "wlogout -l ~/.config/wlogout/layout -C ~/.config/wlogout/style.css --buttons-per-row 3 --column-spacing 18 --row-spacing 18 --margin 40"
