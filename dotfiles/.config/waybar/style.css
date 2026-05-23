@@ -20,6 +20,8 @@ tooltip {
 
 #workspaces,
 #custom-theme,
+#custom-wallpaper,
+#custom-keybinds,
 #window,
 #cpu,
 #memory,
@@ -46,6 +48,13 @@ tooltip {
     letter-spacing: 0.08em;
 }
 
+#custom-wallpaper,
+#custom-keybinds {
+    color: #d8dee9;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+}
+
 #custom-theme.default {
     color: #d7e3ea;
 }
@@ -67,6 +76,11 @@ tooltip {
 }
 
 #custom-theme:hover {
+    background: rgba(236, 239, 244, 0.10);
+}
+
+#custom-wallpaper:hover,
+#custom-keybinds:hover {
     background: rgba(236, 239, 244, 0.10);
 }
 

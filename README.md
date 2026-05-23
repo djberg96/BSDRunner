@@ -99,6 +99,13 @@ Both paths call the same theme apply script and update:
 - wallpaper selection and `swww` rotation
 - Hyprland border colors
 
+Waybar also includes a few lightweight control-surface actions:
+
+- theme switcher
+- wallpaper picker for the active theme
+- keybinding cheat sheet
+- power menu
+
 Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.
 
 ## Scope
