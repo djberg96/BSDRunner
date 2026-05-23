@@ -88,7 +88,7 @@ if [ -z "$capacity" ]; then
 fi
 
 text="$(battery_icon "$capacity" "$state")"
-tooltip="Battery: $capacity%\\nState: $state"
+tooltip="Battery: $capacity%"
 
 case "$state" in
     charging)
@@ -119,7 +119,7 @@ case "$capacity" in
 esac
 
 if [ -n "$time_left" ] && [ "$time_left" != "unknown" ]; then
-    tooltip="$tooltip\\nRemaining: $time_left"
+    tooltip="$tooltip | Remaining: $time_left"
 fi
 
 printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' \
