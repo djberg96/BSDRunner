@@ -2,6 +2,7 @@
 
 set -eu
 
+mode="${1:-toggle}"
 runner_home="$HOME/.config/bsdrunner"
 wallpaper_file="$runner_home/current-wallpaper"
 theme_file="$runner_home/current-theme"
@@ -79,6 +80,34 @@ find_static_for_stem() {
     return 1
 }
 
+print_status() {
+    state="$1"
+
+    case "$state" in
+        active)
+            text=""
+            tooltip="Pause animated wallpaper for this workspace"
+            class="active"
+            ;;
+        paused)
+            text=""
+            tooltip="Resume animated wallpaper for this workspace"
+            class="paused"
+            ;;
+        *)
+            text=""
+            tooltip="No animated wallpaper on this workspace"
+            class="unavailable"
+            ;;
+    esac
+
+    printf '{'
+    printf '"text":"%s",' "$text"
+    printf '"tooltip":"%s",' "$tooltip"
+    printf '"class":"%s"' "$class"
+    printf '}\n'
+}
+
 workspace_id="$(active_workspace_id || true)"
 [ -n "$workspace_id" ] || exit 0
 [ "$workspace_id" -gt 0 ] 2>/dev/null || exit 0
@@ -106,8 +135,22 @@ if [ -z "$gif_wallpaper" ] || [ -z "$static_wallpaper" ]; then
     static_wallpaper="$(find_static_for_stem "$effective_stem" || true)"
 fi
 
-[ -n "$gif_wallpaper" ] || exit 0
-[ -n "$static_wallpaper" ] || exit 0
+if [ -z "$gif_wallpaper" ] || [ -z "$static_wallpaper" ]; then
+    if [ "$mode" = "status" ]; then
+        print_status "unavailable"
+        exit 0
+    fi
+    exit 0
+fi
+
+if [ "$mode" = "status" ]; then
+    if [ "$effective_wallpaper" = "$gif_wallpaper" ]; then
+        print_status "active"
+    else
+        print_status "paused"
+    fi
+    exit 0
+fi
 
 override_dir="$(dirname "$override_file")"
 mkdir -p "$override_dir"
