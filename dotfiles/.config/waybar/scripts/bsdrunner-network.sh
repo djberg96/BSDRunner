@@ -45,7 +45,7 @@ status="$(printf '%s\n' "$ifconfig_output" | awk '/status:/{print $2; exit}')"
 ssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
 
 if [ -n "$ssid" ]; then
-    text="󰤨"
+    text=""
     tooltip="Wireless: $ssid ($iface)"
     [ -n "$ipv4" ] && tooltip="$tooltip
 IPv4: $ipv4"
