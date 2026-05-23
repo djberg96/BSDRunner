@@ -7,6 +7,7 @@ This repo is intentionally small:
 - one Hyprland config file
 - Waybar in the default startup path
 - `swww` in the themed startup path
+- optional `matugen` generation layered on top of theme assets
 - no lockscreen, notification daemon, or idle daemon by default
 - no generated monitor config
 - a neutral base with optional corp theme layers
@@ -95,10 +96,13 @@ Both paths call the same theme apply script and update:
 - Kitty config for new windows
 - Rofi theme
 - Waybar config and style
+- optional `matugen`-generated colors for Hyprland, Kitty, Waybar, and `wlogout`
 - wallpaper selection and `swww` rotation
 - Hyprland border colors
 
 Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.
+
+If `matugen` is not installed, BSDRunner falls back to each theme's static palette data instead of failing the switch.
 
 ## Scope
 

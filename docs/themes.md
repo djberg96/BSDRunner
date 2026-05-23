@@ -109,9 +109,11 @@ Current implementation:
 
 - `install-dotfiles.sh --theme <name>` writes `current-theme`
 - `bsdrunner-apply-theme.sh <name>` applies a theme in-session without rerunning the full installer
+- `bsdrunner-render-matugen.sh` optionally generates runtime colors from the selected wallpaper
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
+- when `matugen` is available, generated color overrides are appended for Hyprland, Kitty, Waybar, and `wlogout`
 - Waybar can also use a theme-specific `waybar-config` override when a theme wants a different layout instead of only different colors
 - if a theme ships `wallpapers/`, install writes a matching `~/.config/bsdrunner/current-wallpaper`
 - when a theme ships multiple wallpapers, the `swww` helper rotates them by workspace number
@@ -128,6 +130,7 @@ Important:
 - `swww` is treated as part of the expected themed runtime
 - themes may ship multiple wallpaper assets even if only one is selected by default
 - the welcome window and Waybar theme button are convenience layers over the same theme-apply path
+- if `matugen` is missing or generation fails, theme switching falls back to `palette.conf`
 
 ## Manual Qt/Dolphin Test
 

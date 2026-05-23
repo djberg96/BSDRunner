@@ -1,0 +1,35 @@
+window {
+    background-color: #{{colors.shadow.dark.hex_stripped}}ea;
+}
+
+button {
+    border: 2px solid #{{colors.primary.dark.hex_stripped}}aa;
+    background-color: #{{colors.surface_container.dark.hex_stripped}}fd;
+    color: {{colors.on_surface.dark.hex}};
+}
+
+button:hover {
+    background-color: #{{colors.primary_container.dark.hex_stripped}}ff;
+    border-color: #{{colors.primary.dark.hex_stripped}}ee;
+}
+
+button:focus {
+    background-color: #{{colors.primary_container.dark.hex_stripped}}ff;
+    border-color: #{{colors.primary.dark.hex_stripped}}ff;
+    color: {{colors.on_primary_container.dark.hex}};
+}
+
+#lock,
+#logout,
+#cancel {
+    color: {{colors.on_surface.dark.hex}};
+}
+
+#suspend {
+    color: {{colors.secondary.dark.hex}};
+}
+
+#reboot,
+#shutdown {
+    color: {{colors.error.dark.hex}};
+}

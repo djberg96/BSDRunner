@@ -1,0 +1,68 @@
+window#waybar {
+    background: #{{colors.surface.dark.hex_stripped}}e0;
+    color: {{colors.on_surface.dark.hex}};
+}
+
+tooltip {
+    background: #{{colors.surface_container.dark.hex_stripped}}f5;
+    color: {{colors.on_surface.dark.hex}};
+    border: 1px solid #{{colors.outline.dark.hex_stripped}}88;
+}
+
+#workspaces,
+#custom-theme,
+#window,
+#cpu,
+#memory,
+#pulseaudio,
+#custom-network,
+#custom-battery,
+#clock,
+#tray,
+#custom-power {
+    background: #{{colors.surface_container.dark.hex_stripped}}eb;
+    color: {{colors.on_surface.dark.hex}};
+    border: 1px solid #{{colors.outline_variant.dark.hex_stripped}}55;
+}
+
+#custom-theme {
+    color: {{colors.primary.dark.hex}};
+}
+
+#custom-theme:hover,
+#workspaces button:hover {
+    background: #{{colors.primary_container.dark.hex_stripped}}44;
+}
+
+#workspaces button {
+    color: {{colors.on_surface.dark.hex}};
+}
+
+#workspaces button.active {
+    background: #{{colors.primary_container.dark.hex_stripped}}88;
+    color: {{colors.on_primary_container.dark.hex}};
+}
+
+#custom-network.disconnected,
+#custom-battery.critical {
+    color: {{colors.error.dark.hex}};
+}
+
+#custom-battery.warning {
+    color: {{colors.secondary.dark.hex}};
+}
+
+#custom-battery.charging,
+#custom-battery.full,
+#clock {
+    color: {{colors.primary.dark.hex}};
+}
+
+#custom-power {
+    color: {{colors.on_surface.dark.hex}};
+}
+
+#custom-power:hover {
+    background: #{{colors.primary_container.dark.hex_stripped}}f2;
+    border-color: #{{colors.primary.dark.hex_stripped}}99;
+}

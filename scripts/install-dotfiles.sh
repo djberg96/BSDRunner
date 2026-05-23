@@ -93,6 +93,7 @@ mkdir -p "$HOME/.config/bsdrunner/base"
 mkdir -p "$HOME/.config/hypr"
 mkdir -p "$HOME/.config/rofi"
 mkdir -p "$HOME/.config/waybar"
+mkdir -p "$HOME/.config/wlogout"
 
 printf '%s\n' "$theme" > "$HOME/.config/bsdrunner/current-theme"
 
@@ -105,28 +106,8 @@ cp "$repo_root/dotfiles/.config/waybar/style.css" \
 cp "$repo_root/dotfiles/.config/waybar/config" \
    "$HOME/.config/bsdrunner/base/waybar-config"
 
-write_hypr_theme "$HOME/.config/hypr/bsdrunner-theme.conf" "$theme"
-
-cat \
-    "$HOME/.config/bsdrunner/base/kitty.conf" \
-    "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/kitty.conf" \
-    > "$HOME/.config/kitty/kitty.conf"
-
-cp "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/rofi.rasi" \
-   "$HOME/.config/rofi/config.rasi"
-
-cat \
-    "$HOME/.config/bsdrunner/base/waybar.css" \
-    "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar.css" \
-    > "$HOME/.config/waybar/style.css"
-
-theme_waybar_config="$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar-config"
-
-if [[ -f "$theme_waybar_config" ]]; then
-    cp "$theme_waybar_config" "$HOME/.config/waybar/config"
-else
-    cp "$HOME/.config/bsdrunner/base/waybar-config" "$HOME/.config/waybar/config"
-fi
+cp "$repo_root/dotfiles/.config/wlogout/style.css" \
+   "$HOME/.config/bsdrunner/base/wlogout.css"
 
 theme_wallpaper_dir="$repo_root/dotfiles/.config/bsdrunner/themes/$theme/wallpapers"
 active_wallpaper_dir="$HOME/.config/bsdrunner/themes/$theme/wallpapers"
@@ -148,6 +129,37 @@ if [[ -d "$theme_wallpaper_dir" ]] && find "$theme_wallpaper_dir" -maxdepth 1 -t
 else
     rm -f "$HOME/.config/bsdrunner/current-wallpaper"
 fi
+
+write_hypr_theme "$HOME/.config/hypr/bsdrunner-theme.conf" "$theme"
+sh "$HOME/.config/bsdrunner/scripts/bsdrunner-render-matugen.sh" "$theme" "${selected_wallpaper:-}"
+
+cat \
+    "$HOME/.config/bsdrunner/base/kitty.conf" \
+    "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/kitty.conf" \
+    > "$HOME/.config/kitty/kitty.conf"
+printf '\ninclude ~/.config/kitty/colors-matugen.conf\n' >> "$HOME/.config/kitty/kitty.conf"
+
+cp "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/rofi.rasi" \
+   "$HOME/.config/rofi/config.rasi"
+
+cat \
+    "$HOME/.config/bsdrunner/base/waybar.css" \
+    "$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar.css" \
+    "$HOME/.config/waybar/colors-matugen.css" \
+    > "$HOME/.config/waybar/style.css"
+
+theme_waybar_config="$repo_root/dotfiles/.config/bsdrunner/themes/$theme/waybar-config"
+
+if [[ -f "$theme_waybar_config" ]]; then
+    cp "$theme_waybar_config" "$HOME/.config/waybar/config"
+else
+    cp "$HOME/.config/bsdrunner/base/waybar-config" "$HOME/.config/waybar/config"
+fi
+
+cat \
+    "$HOME/.config/bsdrunner/base/wlogout.css" \
+    "$HOME/.config/wlogout/colors-matugen.css" \
+    > "$HOME/.config/wlogout/style.css"
 
 echo ":: Installed BSDRunner dotfiles into $HOME"
 echo ":: Applied BSDRunner theme: $theme"
