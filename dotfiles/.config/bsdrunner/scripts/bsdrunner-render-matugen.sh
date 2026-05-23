@@ -40,6 +40,14 @@ load_palette() {
     : "${warning:?}"
 }
 
+run_matugen_image() {
+    matugen image "$wallpaper_path" -c "$matugen_config" >/tmp/bsdrunner-matugen.log 2>&1
+}
+
+run_matugen_color() {
+    matugen color hex "$accent" -c "$matugen_config" >/tmp/bsdrunner-matugen.log 2>&1
+}
+
 write_fallback_hypr() {
     cat > "$hypr_output" <<EOF
 \$bsdrunner_active_border = rgba(${accent#\#}ee) rgba(${accent_strong#\#}dd) 45deg
@@ -206,13 +214,24 @@ write_fallback_outputs() {
 }
 
 if command -v matugen >/dev/null 2>&1 &&
-   [ -f "$wallpaper_path" ] &&
    [ -f "$matugen_config" ]; then
-    if matugen image "$wallpaper_path" -c "$matugen_config" >/tmp/bsdrunner-matugen.log 2>&1; then
+    load_palette
+
+    if [ -f "$wallpaper_path" ] && run_matugen_image; then
         echo ":: Generated matugen colors from $(basename "$wallpaper_path")"
         exit 0
     fi
-    echo ":: Matugen generation failed; using palette fallback" >&2
+
+    if run_matugen_color; then
+        echo ":: Generated matugen colors from theme accent $accent"
+        exit 0
+    fi
+
+    if [ -f "$wallpaper_path" ]; then
+        echo ":: Matugen image generation failed; color fallback also failed" >&2
+    else
+        echo ":: Matugen wallpaper source missing; color fallback also failed" >&2
+    fi
 fi
 
 write_fallback_outputs
