@@ -10,6 +10,53 @@ trim() {
     printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
+battery_icon() {
+    level="$1"
+    state="$2"
+
+    if [ "$state" = "charging" ]; then
+        case "$level" in
+            ''|*[!0-9]*)
+                printf ' '
+                ;;
+            [0-1][0-9]|[0-9])
+                printf ' '
+                ;;
+            [2-4][0-9]|5[0-9])
+                printf ' '
+                ;;
+            [6-8][0-9])
+                printf ' '
+                ;;
+            *)
+                printf ' '
+                ;;
+        esac
+        return 0
+    fi
+
+    case "$level" in
+        ''|*[!0-9]*)
+            printf ''
+            ;;
+        [0-1][0-5]|[0-9])
+            printf ''
+            ;;
+        1[6-9]|[2-3][0-9])
+            printf ''
+            ;;
+        [4-6][0-9])
+            printf ''
+            ;;
+        [7-8][0-9])
+            printf ''
+            ;;
+        *)
+            printf ''
+            ;;
+    esac
+}
+
 battery_info="$(acpiconf -i 0 2>/dev/null || true)"
 
 if [ -z "$battery_info" ]; then
@@ -40,16 +87,14 @@ if [ -z "$capacity" ]; then
     capacity="?"
 fi
 
-text="BAT $capacity%"
-tooltip="State: $state"
+text="$(battery_icon "$capacity" "$state")"
+tooltip="Battery: $capacity%\\nState: $state"
 
 case "$state" in
     charging)
-        text="CHR $capacity%"
         class="charging"
         ;;
     high|full)
-        text="BAT FULL"
         class="full"
         ;;
     discharging)
