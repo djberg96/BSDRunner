@@ -3,6 +3,7 @@
 set -eu
 
 wallpaper_file="$HOME/.config/bsdrunner/current-wallpaper"
+theme_file="$HOME/.config/bsdrunner/current-theme"
 [ -f "$wallpaper_file" ] || exit 0
 command -v swww-daemon >/dev/null 2>&1 || exit 0
 command -v swww >/dev/null 2>&1 || exit 0
@@ -20,6 +21,20 @@ sleep 1
 
 theme_wallpapers() {
     find "$wallpaper_dir" -maxdepth 1 -type f | sort
+}
+
+current_theme() {
+    if [ -f "$theme_file" ]; then
+        tr -d '\n' < "$theme_file"
+    else
+        printf '%s' "default"
+    fi
+}
+
+workspace_override_file() {
+    workspace_id="$1"
+    theme_name="$(current_theme)"
+    printf '%s\n' "$HOME/.config/bsdrunner/wallpaper-overrides/$theme_name/workspace-$workspace_id"
 }
 
 active_workspace_id() {
@@ -43,7 +58,18 @@ wallpaper_for_workspace() {
     wallpaper_count="$(ordered_wallpapers | sed '/^$/d' | wc -l | tr -d ' ')"
     [ "${wallpaper_count:-0}" -gt 0 ] || return 1
     index=$(( (workspace_id - 1) % wallpaper_count + 1 ))
-    ordered_wallpapers | sed -n "${index}p"
+    default_wallpaper="$(ordered_wallpapers | sed -n "${index}p")"
+    override_file="$(workspace_override_file "$workspace_id")"
+
+    if [ -f "$override_file" ]; then
+        override_wallpaper="$(tr -d '\n' < "$override_file")"
+        if [ -n "$override_wallpaper" ] && [ -f "$override_wallpaper" ]; then
+            printf '%s\n' "$override_wallpaper"
+            return 0
+        fi
+    fi
+
+    printf '%s\n' "$default_wallpaper"
 }
 
 apply_workspace_wallpaper() {
