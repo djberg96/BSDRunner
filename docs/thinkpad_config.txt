@@ -74,6 +74,17 @@ hw.snd.feeder_rate_quality=4
 # I think this is the default for the realtek audio, but just in case.
 dev.pcm.0.play.vchanrate=48000
 
+### ~/.config/pulse/daemon.conf
+
+# Force the exact hardware sample clock used by Intel/Realtek HDA
+default-sample-format = s16le
+default-sample-rate = 48000
+alternate-sample-rate = 48000
+
+# Force stable, non-dynamic resampling parameters
+resample-method = speex-float-3
+avoid-resampling = yes
+
 # Firefox
 
 Go into about:config and set:
