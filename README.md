@@ -122,3 +122,9 @@ This starter is targeted at:
 - ThinkPad X1 Gen 9
 
 The current repo already includes a working Waybar autostart and `swww` wallpaper path. The next risky layers are things like lockscreen, idle, extra desktop daemons, or deeper Qt/KDE theming.
+
+# Creator
+Daniel J. Berger
+
+# License
+MIT
