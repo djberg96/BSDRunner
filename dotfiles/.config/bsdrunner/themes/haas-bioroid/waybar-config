@@ -2,14 +2,53 @@
   {
     "layer": "top",
     "position": "top",
-    "spacing": 6,
+    "spacing": 8,
     "height": 44,
     "margin-top": 8,
     "margin-left": 10,
     "margin-right": 10,
-    "modules-left": ["custom/theme", "hyprland/workspaces", "custom/network"],
-    "modules-center": ["hyprland/window"],
-    "modules-right": ["pulseaudio", "cpu", "memory", "custom/battery", "clock", "tray", "custom/power"],
+    "modules-left": ["custom/theme", "custom/keybinds", "hyprland/workspaces", "custom/wallpaper-animation", "hyprland/window"],
+    "modules-center": [],
+    "modules-right": ["cpu", "memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
+
+    "hyprland/workspaces": {
+      "disable-scroll": true,
+      "all-outputs": true,
+      "on-click-right": "sh ~/.config/bsdrunner/scripts/bsdrunner-toggle-workspace-animation.sh",
+      "format": "{icon}",
+      "format-icons": {
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "6": "6",
+        "7": "7",
+        "8": "8",
+        "9": "9",
+        "10": "10",
+        "active": "*",
+        "default": "-"
+      },
+      "persistent-workspaces": {
+        "*": 4
+      }
+    },
+
+    "hyprland/window": {
+      "format": "{}",
+      "max-length": 56,
+      "separate-outputs": true
+    },
+
+    "custom/wallpaper-animation": {
+      "exec": "sh ~/.config/bsdrunner/scripts/bsdrunner-toggle-workspace-animation.sh status",
+      "return-type": "json",
+      "interval": 2,
+      "format": "{}",
+      "tooltip": true,
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-toggle-workspace-animation.sh"
+    },
 
     "custom/theme": {
       "exec": "sh ~/.config/waybar/scripts/bsdrunner-theme-status.sh",
@@ -20,19 +59,45 @@
       "on-click": "sh ~/.config/waybar/scripts/bsdrunner-theme-menu.sh"
     },
 
-    "hyprland/workspaces": {
-      "disable-scroll": true,
-      "all-outputs": true,
-      "format": "[{name}]",
-      "persistent-workspaces": {
-        "*": 4
-      }
+    "custom/keybinds": {
+      "format": "KEYS",
+      "tooltip": true,
+      "tooltip-format": "Open the BSDRunner keybinding cheat sheet",
+      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-keybindings-menu.sh"
     },
 
-    "hyprland/window": {
-      "format": "{class}: {title}",
-      "max-length": 40,
-      "separate-outputs": true
+    "cpu": {
+      "interval": 3,
+      "format": " {usage}%",
+      "tooltip-format": "CPU usage: {usage}%"
+    },
+
+    "memory": {
+      "interval": 5,
+      "format": "󰍛 {percentage}%",
+      "tooltip-format": "Memory in use: {used:0.1f}G / {total:0.1f}G"
+    },
+
+    "disk": {
+      "path": "/",
+      "interval": 30,
+      "format": " {percentage_used}%",
+      "tooltip-format": "{used} out of {total} used on {path}"
+    },
+
+    "pulseaudio": {
+      "format": "{icon} {volume}%",
+      "format-muted": " 0%",
+      "format-source": "Mic {volume}%",
+      "format-source-muted": "Mic muted",
+      "tooltip-format": "Output: {volume}%\nInput: {format_source}",
+      "format-icons": {
+        "headphone": "",
+        "headset": "",
+        "default": ["", "", ""]
+      },
+      "tooltip-format-muted": "Output: muted\nInput: {format_source}",
+      "on-click": "pavucontrol"
     },
 
     "custom/network": {
@@ -41,26 +106,6 @@
       "interval": 5,
       "format": "{}",
       "tooltip": true
-    },
-
-    "pulseaudio": {
-      "format": "AUD {volume}%",
-      "format-muted": "AUD MUTE",
-      "tooltip-format": "Volume: {volume}%",
-      "tooltip-format-muted": "Audio muted",
-      "on-click": "pavucontrol"
-    },
-
-    "cpu": {
-      "interval": 3,
-      "format": "CPU {usage}%",
-      "tooltip-format": "CPU usage: {usage}%"
-    },
-
-    "memory": {
-      "interval": 5,
-      "format": "MEM {percentage}%",
-      "tooltip-format": "Memory in use: {used:0.1f}G / {total:0.1f}G"
     },
 
     "custom/battery": {
@@ -73,7 +118,7 @@
 
     "clock": {
       "interval": 1,
-      "format": "{:%H:%M  %a %d %b}",
+      "format": "{:%a %Y-%m-%d %H:%M}",
       "format-alt": "{:%A %B %d  %I:%M %p}",
       "tooltip-format": "<tt>{calendar}</tt>",
       "calendar": {
@@ -90,7 +135,7 @@
     },
 
     "custom/power": {
-      "format": "SYS",
+      "format": "",
       "tooltip": true,
       "tooltip-format": "Open power menu",
       "on-click": "wlogout -l ~/.config/wlogout/layout -C ~/.config/wlogout/style.css --buttons-per-row 3 --column-spacing 18 --row-spacing 18 --margin 40"

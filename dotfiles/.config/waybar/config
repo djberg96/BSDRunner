@@ -7,13 +7,14 @@
     "margin-top": 8,
     "margin-left": 10,
     "margin-right": 10,
-    "modules-left": ["custom/theme", "custom/keybinds", "hyprland/workspaces", "hyprland/window"],
+    "modules-left": ["custom/theme", "custom/keybinds", "hyprland/workspaces", "custom/wallpaper-animation", "hyprland/window"],
     "modules-center": [],
     "modules-right": ["cpu", "memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
       "all-outputs": true,
+      "on-click-right": "sh ~/.config/bsdrunner/scripts/bsdrunner-toggle-workspace-animation.sh",
       "format": "{icon}",
       "format-icons": {
         "1": "1",
@@ -38,6 +39,15 @@
       "format": "{}",
       "max-length": 56,
       "separate-outputs": true
+    },
+
+    "custom/wallpaper-animation": {
+      "exec": "sh ~/.config/bsdrunner/scripts/bsdrunner-toggle-workspace-animation.sh status",
+      "return-type": "json",
+      "interval": 2,
+      "format": "{}",
+      "tooltip": true,
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-toggle-workspace-animation.sh"
     },
 
     "custom/theme": {

@@ -6,6 +6,7 @@
 #workspaces,
 #custom-theme,
 #custom-keybinds,
+#custom-wallpaper-animation,
 #window,
 #cpu,
 #memory,
@@ -120,4 +121,26 @@ tooltip {
 #custom-keybinds:hover {
     background: rgba(49, 65, 75, 0.98);
     border-color: rgba(143, 211, 255, 0.48);
+}
+
+#custom-wallpaper-animation {
+    background: rgba(31, 41, 48, 0.97);
+    color: #b9e9db;
+    border-color: rgba(143, 211, 255, 0.34);
+    font-weight: 800;
+    min-width: 18px;
+    padding: 6px 10px;
+}
+
+#custom-wallpaper-animation:hover {
+    background: rgba(49, 65, 75, 0.98);
+    border-color: rgba(143, 211, 255, 0.48);
+}
+
+#custom-wallpaper-animation.paused {
+    color: #ffb86b;
+}
+
+#custom-wallpaper-animation.unavailable {
+    color: #8aa0ae;
 }

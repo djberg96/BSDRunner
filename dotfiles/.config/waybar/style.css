@@ -21,6 +21,7 @@ tooltip {
 #workspaces,
 #custom-theme,
 #custom-keybinds,
+#custom-wallpaper-animation,
 #window,
 #cpu,
 #memory,
@@ -54,6 +55,13 @@ tooltip {
     letter-spacing: 0.06em;
 }
 
+#custom-wallpaper-animation {
+    color: #d8dee9;
+    font-weight: 800;
+    min-width: 18px;
+    padding: 6px 10px;
+}
+
 #custom-theme.default {
     color: #d7e3ea;
 }
@@ -82,6 +90,10 @@ tooltip {
     background: rgba(236, 239, 244, 0.10);
 }
 
+#custom-wallpaper-animation:hover {
+    background: rgba(236, 239, 244, 0.10);
+}
+
 #workspaces button {
     padding: 0 8px;
     margin: 0 2px;
@@ -106,10 +118,16 @@ tooltip {
 }
 
 #custom-network.disconnected,
+#custom-wallpaper-animation.unavailable,
 #custom-battery.critical {
     color: #d08770;
 }
 
+#custom-wallpaper-animation.paused {
+    color: #ebcb8b;
+}
+
+#custom-wallpaper-animation.active,
 #custom-battery.warning {
     color: #ebcb8b;
 }
