@@ -1,6 +1,8 @@
 This is FreeBSD 15 configuration information for my IBM Thinkpad X1 Gen 9 laptop.
 
-I don't really have a good place to put this, so I'm putting it here because I don't want it lost in case I ever need to reinstall FreeBSD. Maybe this will help someone else running on a Thinkpad.
+I don't really have a good place to put this, so I'm putting it here because I
+don't want it lost in case I ever need to reinstall FreeBSD. Maybe this will help
+someone else running on a Thinkpad. Or maybe you have some suggestions for me.
 
 ## Packages
 
@@ -15,6 +17,10 @@ xdg-desktop-portal-hyprland
 hyprpaper
 hyprpicker
 
+### Misc
+git
+vim
+
 ### Various Setup Bits
 pw groupmod video -m YOUR_USERNAME
 pw groupmod wheel -m YOUR_USERNAME
@@ -25,6 +31,12 @@ sysrc kld_list+="i915kms"
 This was a super bitch to get into a working state without pops, clicks and scratching. I don't think it's perfect yet, but it's Good Enough (TM).
 
 ### /boot/loader.conf
+
+# Avoid UEFI boot stuff
+tpm_load="NO" 
+
+# Enable extra support for hotkeys and other bits on Thinkpads
+acpi_ibm_load="YES"
 
 # Prevent the audio hardware from sleeping/throttling
 hw.pci.do_power_nodriver=3
@@ -108,7 +120,7 @@ load-module module-oss device="/dev/dsp0" sink_name=output source_name=input fra
 Go into about:config and set:
 
 # Force Firefox to use your sound instead of creating its own channel. The
-# problem I couldn't solve was that it kept setting the volumeto 100%, and
+# problem I couldn't solve was that it kept setting the volume to 100%, and
 # resetting it back to 100% every time there was a commercial in youtube or wherever.
 media.cubeb.backend = "oss"
 
