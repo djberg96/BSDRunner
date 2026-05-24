@@ -1,7 +1,13 @@
 # BSDRunner
 
-Minimal Hyprland config for FreeBSD 15 on a ThinkPad X1 Gen 9.
+Hyprland config for FreeBSD 15. Primarly designed for my IBM ThinkPad X1 Gen 9
+but maybe it will work for you, too.
 
+# Netrunner
+The themes are based on the four corporations from the card game Android: Netrunner.
+Note that while based on that game, the artwork here is all AI generated.
+
+# Overview
 This repo is intentionally small:
 
 - a modular Hyprland config with a thin top-level loader
@@ -11,7 +17,7 @@ This repo is intentionally small:
 - no generated monitor config
 - a neutral base with optional corp theme layers
 
-The goal is a boring, bootable base session for Hyprland `0.54.x` on FreeBSD.
+The goal is a nice, bootable base session for Hyprland `0.54.x` on FreeBSD.
 
 ## Files
 
