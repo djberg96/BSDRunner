@@ -48,7 +48,6 @@ Themes live under:
     │   ├── kitty.conf
     │   ├── rofi.rasi
     │   ├── waybar.css
-    │   ├── waybar-config
     │   └── wallpapers/
     ├── jinteki/
     │   ├── palette.conf
@@ -112,7 +111,7 @@ Current implementation:
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
-- Waybar can also use a theme-specific `waybar-config` override when a theme wants a different layout instead of only different colors
+- Waybar can also use a theme-specific `waybar-config` override when a theme genuinely needs a different layout instead of only different colors
 - if a theme ships `wallpapers/`, install writes a matching `~/.config/bsdrunner/current-wallpaper`
 - when a theme ships multiple wallpapers, the `swww` helper rotates them by workspace number
 - Hyprland border colors are generated into `~/.config/hypr/bsdrunner-theme.conf`
@@ -305,7 +304,6 @@ All four corp themes now have first-pass implementations:
   - `kitty.conf`
   - `rofi.rasi`
   - `waybar.css`
-  - theme-specific `waybar-config`
   - bundled wallpapers
   - Kitty watermark asset
 - `nbn`
