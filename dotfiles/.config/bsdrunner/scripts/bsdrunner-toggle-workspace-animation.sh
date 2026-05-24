@@ -148,7 +148,9 @@ effective_wallpaper="$default_wallpaper"
 
 if [ -f "$override_file" ]; then
     override_wallpaper="$(tr -d '\n' < "$override_file")"
-    if [ -n "$override_wallpaper" ] && [ -f "$override_wallpaper" ]; then
+    if [ -n "$override_wallpaper" ] &&
+       [ -f "$override_wallpaper" ] &&
+       [ "${override_wallpaper%.*}" = "${default_wallpaper%.*}" ]; then
         effective_wallpaper="$override_wallpaper"
     fi
 fi

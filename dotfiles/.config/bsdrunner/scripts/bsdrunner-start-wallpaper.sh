@@ -91,7 +91,9 @@ wallpaper_for_workspace() {
 
     if [ -f "$override_file" ]; then
         override_wallpaper="$(tr -d '\n' < "$override_file")"
-        if [ -n "$override_wallpaper" ] && [ -f "$override_wallpaper" ]; then
+        if [ -n "$override_wallpaper" ] &&
+           [ -f "$override_wallpaper" ] &&
+           [ "${override_wallpaper%.*}" = "${default_wallpaper%.*}" ]; then
             printf '%s\n' "$override_wallpaper"
             return 0
         fi
