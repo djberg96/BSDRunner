@@ -85,6 +85,24 @@ alternate-sample-rate = 48000
 resample-method = speex-float-3
 avoid-resampling = yes
 
+### ~/.config/pulse/default.pa
+
+This was the relevant section if I recall.
+
+### Automatically load driver modules depending on the hardware available
+#.ifexists module-udev-detect.so
+#load-module module-udev-detect
+#.else
+### Use the static hardware detection module (for systems that lack udev support)
+#load-module module-detect
+#.endif
+### FreeBSD devd is used in addition to static detection (only handles hotplug)
+#.ifexists module-devd-detect.so
+#load-module module-devd-detect
+#.endif
+### Static clean hardware definition to prevent mixer panel dropouts
+load-module module-oss device="/dev/dsp0" sink_name=output source_name=input fragments=8 fragment_size=1024
+
 # Firefox
 
 Go into about:config and set:
