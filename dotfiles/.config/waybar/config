@@ -127,7 +127,7 @@
         "weeks-pos": "right",
         "on-scroll": 1,
         "format": {
-          "today": "<span color='#8fd3ff'><b><u>{}</u></b></span>"
+          "today": "<span background='#d7e3ea' foreground='#0f1418'><b> {} </b></span>"
         }
       }
     },
