@@ -38,7 +38,7 @@ workspace_override_file() {
 active_workspace_id() {
     hyprctl activeworkspace -j 2>/dev/null |
         tr '\n' ' ' |
-        sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\(-\{0,1\}[0-9][0-9]*\).*/\1/p' |
+        sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\{0,1\}\(-\{0,1\}[0-9][0-9]*\)"\{0,1\}.*/\1/p' |
         head -n 1
 }
 

@@ -16,7 +16,11 @@ wallpaper_dir="$(dirname "$wallpaper_path")"
 
 pkill swww-daemon >/dev/null 2>&1 || true
 
-swww-daemon >/dev/null 2>&1 &
+if swww-daemon --help 2>/dev/null | grep -q -- '--no-cache'; then
+    swww-daemon --no-cache >/dev/null 2>&1 &
+else
+    swww-daemon >/dev/null 2>&1 &
+fi
 sleep 1
 
 theme_wallpapers() {
@@ -64,7 +68,7 @@ workspace_override_file() {
 active_workspace_id() {
     hyprctl activeworkspace -j 2>/dev/null |
         tr '\n' ' ' |
-        sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\(-\{0,1\}[0-9][0-9]*\).*/\1/p' |
+        sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\{0,1\}\(-\{0,1\}[0-9][0-9]*\)"\{0,1\}.*/\1/p' |
         head -n 1
 }
 
