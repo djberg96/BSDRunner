@@ -125,7 +125,10 @@
         "mode": "month",
         "mode-mon-col": 3,
         "weeks-pos": "right",
-        "on-scroll": 1
+        "on-scroll": 1,
+        "format": {
+          "today": "<span background='#d7e3ea' foreground='#0f1418'><b> {} </b></span>"
+        }
       }
     },
 
