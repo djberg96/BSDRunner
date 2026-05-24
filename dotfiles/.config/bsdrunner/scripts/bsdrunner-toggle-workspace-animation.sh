@@ -21,15 +21,6 @@ theme_wallpapers() {
     find "$wallpaper_dir" -maxdepth 1 -type f | sort
 }
 
-ordered_wallpapers() {
-    printf '%s\n' "$wallpaper_path"
-    theme_wallpapers | while IFS= read -r candidate; do
-        [ -n "$candidate" ] || continue
-        [ "$candidate" = "$wallpaper_path" ] && continue
-        printf '%s\n' "$candidate"
-    done
-}
-
 current_theme() {
     if [ -f "$theme_file" ]; then
         tr -d '\n' < "$theme_file"
@@ -49,6 +40,43 @@ active_workspace_id() {
         tr '\n' ' ' |
         sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\(-\{0,1\}[0-9][0-9]*\).*/\1/p' |
         head -n 1
+}
+
+preferred_wallpaper_for_stem() {
+    stem="$1"
+
+    if [ "${wallpaper_path%.*}" = "$stem" ] && [ -f "$wallpaper_path" ]; then
+        printf '%s\n' "$wallpaper_path"
+        return 0
+    fi
+
+    if [ -f "${stem}.gif" ]; then
+        printf '%s\n' "${stem}.gif"
+        return 0
+    fi
+
+    for ext in jpg jpeg png webp; do
+        candidate="${stem}.${ext}"
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+ordered_wallpapers() {
+    {
+        printf '%s\n' "${wallpaper_path%.*}"
+        theme_wallpapers | while IFS= read -r candidate; do
+            [ -n "$candidate" ] || continue
+            printf '%s\n' "${candidate%.*}"
+        done
+    } | awk '!seen[$0]++' | while IFS= read -r stem; do
+        [ -n "$stem" ] || continue
+        preferred_wallpaper_for_stem "$stem"
+    done
 }
 
 default_wallpaper_for_workspace() {
