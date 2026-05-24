@@ -37,7 +37,7 @@
 
     "hyprland/window": {
       "format": "{}",
-      "max-length": 56,
+      "max-length": 38,
       "separate-outputs": true
     },
 
@@ -120,12 +120,15 @@
       "interval": 1,
       "format": "{:%a %Y-%m-%d %H:%M}",
       "format-alt": "{:%A %B %d  %I:%M %p}",
-      "tooltip-format": "<tt>{calendar}</tt>",
+      "tooltip-format": "<span>{calendar}</span>",
       "calendar": {
         "mode": "month",
         "mode-mon-col": 3,
         "weeks-pos": "right",
-        "on-scroll": 1
+        "on-scroll": 1,
+        "format": {
+          "today": "<span background='#d7e3ea' foreground='#0f1418'><b> {} </b></span>"
+        }
       }
     },
 
