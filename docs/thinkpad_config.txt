@@ -2,10 +2,25 @@ This is FreeBSD 15 configuration information for my IBM Thinkpad X1 Gen 9 laptop
 
 I don't really have a good place to put this, so I'm putting it here because I don't want it lost in case I ever need to reinstall FreeBSD. Maybe this will help someone else running on a Thinkpad.
 
-# Packages
+## Packages
+
+### Core Necessities
+drm-kmod
 acpi_ibm
 
-# Sound
+### Hyprland, YMMV
+hyprland
+seatd
+xdg-desktop-portal-hyprland
+hyprpaper
+hyprpicker
+
+### Various Setup Bits
+pw groupmod video -m YOUR_USERNAME
+pw groupmod wheel -m YOUR_USERNAME
+sysrc kld_list+="i915kms"
+
+## Sound
 
 This was a super bitch to get into a working state without pops, clicks and scratching. I don't think it's perfect yet, but it's Good Enough (TM).
 
@@ -35,11 +50,13 @@ hint.hdaa.0.nid30.config="as=1 seq=1"
 # Disable real-time channel state notifications to mixers
 hw.snd.verbose=0
 
-# Lock the mixer to standard hardware limits (stops volume over-amplification) - Various tinkering with this.
+# Lock the mixer to standard hardware limits (stops volume over-amplification).
+# I did various tinkering with this, not sure what's best.
 #hw.snd.vpc_0db=1
 hw.snd.vpc_0db=75
 
-# Raise the latency slightly to prevent the control panel from causing an underrun. Tried various values from 2 to 8 here.
+# Raise the latency slightly to prevent the control panel from causing an underrun.
+# I tried various values from 2 to 8 here, not sure what's best.
 hw.snd.latency=2
 
 # Stop polling the hardware. 
@@ -49,19 +66,25 @@ dev.hdac.0.polling=0
 hw.snd.feeder_buffersize=4096
 hw.snd.feeder_rate_quality=4
 
-# Allow multiple applications to share the hardware channels natively. In theory, these didn't seem to help, but leaving them here just in case.
+# Allow multiple applications to share the hardware channels natively. In theory,
+# these didn't seem to help, but leaving them here just in case.
 #hw.snd.maxautovchans=8
 #dev.pcm.0.play.vchans=8
+
+# I think this is the default for the realtek audio, but just in case.
 dev.pcm.0.play.vchanrate=48000
 
 # Firefox
 
 Go into about:config and set:
 
-# Force Firefox to use your sound instead of creating its own channel. The problem I couldn't solve was that it kept setting the volumeto 100%, and resetting it back to 100% every time there was a commercial in youtube or wherever.
+# Force Firefox to use your sound instead of creating its own channel. The
+# problem I couldn't solve was that it kept setting the volumeto 100%, and
+# resetting it back to 100% every time there was a commercial in youtube or wherever.
 media.cubeb.backend = "oss"
 
-# This was my original attempt to control the max volume issue above, but I'm not strictly sure it's necessary. But, I've left it for now.
+# This was my original attempt to control the max volume issue above, but
+# I'm not strictly sure it's necessary or working. But, I've left it for now.
 media.volume_scale = 0.3
 
 ### Misc
@@ -69,13 +92,30 @@ media.volume_scale = 0.3
 # Generally did this any time I was fiddling with the audio settings before a reboot.
 sudo rm /var/db/mixer*-state
 
-# Tinkered with this to basically set the base volume level. Note the syntax, the intertubes will sometimes give you old syntax which doesn't work.
-
+# I originally tinkered with this to basically set the base volume level. Note
+# the syntax, the intertubes will sometimes give you old syntax which doesn't work.
 mixer pcm=0.75
 mixer vol=1.00
 
 ### Things That Failed
 
-cpu_microcode caused a freeze during startup. I had to learn what gpi was and how to get out of that mess.
+cpu_microcode caused a freeze during startup. I had to learn what gpi
+was and how to get out of that mess. Ugly.
 
-hint.hdac.0.config="ovref100" - This was originally an attempt to solve quiet headphones, but it just caused scratchy sound. And the headphone issue was mainly solved by adjustable volume on the headphones themselves.
+hint.hdac.0.config="ovref100" - This was originally an attempt to solve
+quiet headphones, but it just caused scratchy sound. And the headphone
+issue was mainly solved by adjustable volume on the headphones themselves.
+
+### General Weirdness
+
+During installation when it asks for regdomain, do not accept the default.
+Instead, explicitly set the values, even if the default is correct.
+
+What I was experiencing was that it could connect from the USB stick, but as
+soon as I booted normally it could no longer connect. I suspect that by not
+accepting the default, it explicitly writes some information to a config file
+somewhere, and that got it working for me.
+
+### Helpful Videos
+
+https://www.youtube.com/watch?v=LpMZXkD4vSo
