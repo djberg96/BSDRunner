@@ -459,7 +459,7 @@ ShellRoot {
                                 id: themeCard
 
                                 width: parent.width
-                                height: 212
+                                height: 248
                                 radius: 18
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -494,7 +494,11 @@ ShellRoot {
                                     Repeater {
                                         model: [
                                             {
-                                                "label": "Installed Packages",
+                                                "label": "Loaded",
+                                                "value": root.loadedCount
+                                            },
+                                            {
+                                                "label": "Installed",
                                                 "value": root.installedTotalCount
                                             },
                                             {
@@ -503,26 +507,27 @@ ShellRoot {
                                             }
                                         ]
 
-                                        delegate: Row {
+                                        delegate: Column {
                                             required property var modelData
 
                                             width: statusMetricRow.width
-                                            spacing: 8
+                                            spacing: 2
 
                                             Text {
-                                                width: 96
-                                                text: modelData.value
-                                                color: root.palette.accentStrong
-                                                font.pixelSize: String(modelData.value).length > 8 ? 16 : 20
+                                                width: parent.width
+                                                text: modelData.label
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
                                                 font.bold: true
                                             }
 
                                             Text {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                width: parent.width - 104
-                                                text: modelData.label
-                                                color: root.palette.secondaryText
-                                                font.pixelSize: 12
+                                                width: parent.width
+                                                text: modelData.value
+                                                color: root.palette.accentStrong
+                                                font.pixelSize: String(modelData.value).length > 8 ? 15 : 18
+                                                font.bold: true
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }
