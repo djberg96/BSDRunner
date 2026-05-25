@@ -33,6 +33,7 @@ ShellRoot {
     property string installedCountLabel: "0"
     property string updatesCountLabel: "--"
     property bool pendingRefresh: false
+    property bool refreshButtonHovered: false
     property int snapshotExitCode: 0
     property string snapshotStderrText: ""
     property bool snapshotExited: false
@@ -525,15 +526,15 @@ ShellRoot {
                                     width: 144
                                     height: 34
                                     radius: 12
-                                    color: root.palette.accent
-                                    opacity: root.loadingPackages ? 0.10 : 0.18
-                                    border.width: 1
+                                    color: root.loadingPackages ? root.palette.panelBackground : root.palette.accent
+                                    opacity: root.loadingPackages ? 0.24 : 1.0
+                                    border.width: root.loadingPackages ? 1 : 2
                                     border.color: root.palette.accent
 
                                     Text {
                                         anchors.centerIn: parent
                                         text: root.loadingPackages ? "Refreshing" : "Refresh pkg"
-                                        color: root.palette.accentStrong
+                                        color: root.loadingPackages ? root.palette.accent : root.palette.frameBackground
                                         font.pixelSize: 12
                                         font.bold: true
                                     }
@@ -544,9 +545,31 @@ ShellRoot {
                                         hoverEnabled: true
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
-                                        onEntered: parent.opacity = 0.26
-                                        onExited: parent.opacity = root.loadingPackages ? 0.10 : 0.18
+                                        onEntered: root.refreshButtonHovered = true
+                                        onExited: root.refreshButtonHovered = false
                                         onClicked: root.refreshPackages()
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: root.refreshButtonHovered && !root.loadingPackages
+                                    anchors.left: themeRefreshButton.left
+                                    anchors.bottom: themeRefreshButton.top
+                                    anchors.bottomMargin: 8
+                                    width: 176
+                                    height: 42
+                                    radius: 12
+                                    color: root.palette.cardBackground
+                                    border.width: 1
+                                    border.color: root.palette.panelBorder
+
+                                    Text {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        wrapMode: Text.WordWrap
+                                        text: "Refreshes this view with the latest pkg data."
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
                                     }
                                 }
 
@@ -1123,7 +1146,38 @@ ShellRoot {
                                 Rectangle {
                                     visible: root.selectedPackage !== null
                                     width: parent.width
-                                    height: 112
+                                    height: 88
+                                    radius: 18
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        spacing: 8
+
+                                        Text {
+                                            text: "Homepage"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            wrapMode: Text.WrapAnywhere
+                                            text: root.selectedPackage ? root.selectedPackage.website : ""
+                                            color: root.palette.accentStrong
+                                            font.pixelSize: 13
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: root.selectedPackage !== null
+                                    width: parent.width
+                                    height: 184
                                     radius: 18
                                     color: root.palette.panelBackground
                                     border.width: 1
@@ -1141,7 +1195,8 @@ ShellRoot {
                                             font.bold: true
                                         }
 
-                                        Row {
+                                        Column {
+                                            width: parent.width
                                             spacing: 10
 
                                             Repeater {
@@ -1170,12 +1225,12 @@ ShellRoot {
                                                             ? root.palette.warning
                                                             : root.palette.accent
 
-                                                    width: 96
+                                                    width: parent.width
                                                     height: 36
                                                     radius: 12
                                                     color: toneColor
-                                                    opacity: 0.16
-                                                    border.width: 1
+                                                    opacity: 0.34
+                                                    border.width: 2
                                                     border.color: toneColor
 
                                                     Text {
@@ -1191,23 +1246,14 @@ ShellRoot {
                                                         hoverEnabled: true
                                                         cursorShape: Qt.PointingHandCursor
 
-                                                        onEntered: parent.opacity = 0.24
-                                                        onExited: parent.opacity = 0.16
+                                                        onEntered: parent.opacity = 0.48
+                                                        onExited: parent.opacity = 0.34
                                                         onClicked: root.triggerMockAction(actionButton.modelData.label.toLowerCase(), root.selectedPackage.name)
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                }
-
-                                Text {
-                                    visible: root.selectedPackage !== null
-                                    width: parent.width
-                                    wrapMode: Text.WordWrap
-                                    text: root.selectedPackage ? root.selectedPackage.website : ""
-                                    color: root.palette.accentStrong
-                                    font.pixelSize: 13
                                 }
                         }
                     }
