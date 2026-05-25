@@ -548,21 +548,24 @@ ShellRoot {
                             Column {
                                 id: centerHeader
 
+                                width: parent.width
                                 spacing: 10
 
-                            Text {
-                                text: root.viewTitle()
-                                color: root.palette.primaryText
-                                font.pixelSize: 34
-                                font.bold: true
-                            }
+                                Text {
+                                    width: parent.width
+                                    text: root.viewTitle()
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 34
+                                    font.bold: true
+                                }
 
-                            Text {
-                                width: parent.width
-                                wrapMode: Text.WordWrap
-                                text: root.viewSubtitle()
-                                color: root.palette.secondaryText
-                                font.pixelSize: 15
+                                Text {
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                    text: root.viewSubtitle()
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 15
+                                }
                             }
                         }
 
