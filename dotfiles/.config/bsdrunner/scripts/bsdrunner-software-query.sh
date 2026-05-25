@@ -90,6 +90,18 @@ human_size_value() {
     '
 }
 
+local_pkg_disk_used_label() {
+    stats_output="$(pkg stats -l 2>/dev/null || true)"
+    stats_label="$(printf '%s\n' "$stats_output" | awk -F ': *' '/Disk space occupied/ { print $2; exit }')"
+
+    if [ -n "$stats_label" ]; then
+        printf '%s\n' "$stats_label"
+        return
+    fi
+
+    human_size_value "$1"
+}
+
 collect_page_from_stdin() {
     meta_file="$1"
     needle="$2"
@@ -537,7 +549,7 @@ snapshot() {
 
     installed_total="$(count_lines "$installed_tsv")"
     installed_size_bytes="$(awk -F '	' '{ if ($6 ~ /^[0-9]+$/) total += $6 } END { print total + 0 }' "$installed_tsv")"
-    installed_size_label="$(human_size_value "$installed_size_bytes")"
+    installed_size_label="$(local_pkg_disk_used_label "$installed_size_bytes")"
 
     case "$view" in
         browse)
