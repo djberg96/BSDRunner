@@ -432,7 +432,8 @@ emit_json() {
         -v has_next="$has_next" \
         -v browse_label="$browse_label" \
         -v installed_label="$installed_label" \
-        -v updates_label="$updates_label" '
+        -v updates_label="$updates_label" \
+        -v installed_size_label="$installed_size_label" '
         function escape_json(value) {
             gsub(/\\/, "\\\\", value)
             gsub(/"/, "\\\"", value)
