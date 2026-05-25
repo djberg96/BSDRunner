@@ -50,7 +50,7 @@ snapshot() {
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
     field_sep="$(printf '\t')"
-    query_format="$(printf '%%n%s%%v%s%%c%s%%o%s%%w%s%%s' \
+    query_format="$(printf '%%n%s%%v%s%%c%s%%o%s%%w%s%%sb' \
         "$field_sep" \
         "$field_sep" \
         "$field_sep" \
