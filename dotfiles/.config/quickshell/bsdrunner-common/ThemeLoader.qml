@@ -17,8 +17,7 @@ QtObject {
         return themePalette.actionAccent(action)
     }
 
-    FileView {
-        id: themeFile
+    property var themeFile: FileView {
         path: root.homeDir + "/.config/bsdrunner/current-theme"
         blockLoading: true
         watchChanges: true
@@ -26,8 +25,7 @@ QtObject {
         onFileChanged: this.reload()
     }
 
-    FileView {
-        id: paletteFile
+    property var paletteFile: FileView {
         path: root.palettePath
         blockLoading: true
         watchChanges: true
@@ -36,8 +34,7 @@ QtObject {
         onPathChanged: this.reload()
     }
 
-    ThemePalette {
-        id: themePalette
+    property var themePalette: ThemePalette {
         themeName: root.activeTheme
         paletteText: paletteFile.text()
     }
