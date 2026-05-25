@@ -16,12 +16,10 @@ error_json() {
 
 normalize_records() {
     field_sep="$1"
-    record_sep="$2"
 
-    awk -v RS="$record_sep" -v FS="$field_sep" '
+    awk -v FS="$field_sep" '
         function clean(value) {
             gsub(/\r/, "", value)
-            gsub(/\n+/, " ", value)
             gsub(/\t+/, " ", value)
             sub(/^[[:space:]]+/, "", value)
             sub(/[[:space:]]+$/, "", value)
@@ -30,10 +28,10 @@ normalize_records() {
         }
 
         NF {
-            for (i = 1; i <= 7; i += 1)
+            for (i = 1; i <= 6; i += 1)
                 $i = clean($i)
 
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5, $6, $7
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5, $6, $3
         }
     '
 }
@@ -51,21 +49,20 @@ snapshot() {
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-software.XXXXXX")"
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
-    field_sep="$(printf '\037')"
-    record_sep="$(printf '\036')"
-    query_format="%n${field_sep}%v${field_sep}%c${field_sep}%o${field_sep}%w${field_sep}%s${field_sep}%e${record_sep}"
+    field_sep="$(printf '\t')"
+    query_format="%n${field_sep}%v${field_sep}%c${field_sep}%o${field_sep}%w${field_sep}%s\n"
 
     remote_tsv="$tmp_dir/remote.tsv"
     installed_tsv="$tmp_dir/installed.tsv"
     updates_txt="$tmp_dir/updates.txt"
 
-    if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" "$record_sep" >"$remote_tsv"; then
+    if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" >"$remote_tsv"; then
         remote_error="$(tr '\n' ' ' <"$tmp_dir/remote.err" | trim_file)"
         error_json "Unable to query remote pkg metadata. ${remote_error}"
         exit 1
     fi
 
-    if ! pkg query -a "$query_format" 2>"$tmp_dir/installed.err" | normalize_records "$field_sep" "$record_sep" >"$installed_tsv"; then
+    if ! pkg query -a "$query_format" 2>"$tmp_dir/installed.err" | normalize_records "$field_sep" >"$installed_tsv"; then
         installed_error="$(tr '\n' ' ' <"$tmp_dir/installed.err" | trim_file)"
         error_json "Unable to query installed pkg metadata. ${installed_error}"
         exit 1
