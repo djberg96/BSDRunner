@@ -260,7 +260,7 @@ ShellRoot {
 
         Rectangle {
             anchors.fill: parent
-            radius: 24
+            radius: 0
             color: root.palette.panelBackground
             border.width: 0
             border.color: root.palette.frameBorder
