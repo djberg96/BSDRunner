@@ -76,15 +76,18 @@ preferred_wallpaper_for_stem() {
 }
 
 ordered_wallpapers() {
-    {
-        printf '%s\n' "${wallpaper_path%.*}"
-        theme_wallpapers | while IFS= read -r candidate; do
-            [ -n "$candidate" ] || continue
-            printf '%s\n' "${candidate%.*}"
-        done
-    } | awk '!seen[$0]++' | while IFS= read -r stem; do
-        [ -n "$stem" ] || continue
-        preferred_wallpaper_for_stem "$stem"
+    current_stem="${wallpaper_path%.*}"
+    last_stem="$current_stem"
+
+    preferred_wallpaper_for_stem "$current_stem" || true
+
+    theme_wallpapers | while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        stem="${candidate%.*}"
+        [ "$stem" = "$last_stem" ] && continue
+        last_stem="$stem"
+        [ "$stem" = "$current_stem" ] && continue
+        preferred_wallpaper_for_stem "$stem" || true
     done
 }
 
