@@ -5,7 +5,7 @@
 
 #workspaces,
 #custom-theme,
-#custom-keybinds,
+#custom-apps,
 #custom-wallpaper-animation,
 #window,
 #cpu,
@@ -112,13 +112,13 @@ tooltip {
     background: rgba(31, 41, 48, 0.97);
 }
 
-#custom-keybinds {
+#custom-apps {
     background: rgba(31, 41, 48, 0.97);
     color: #dff6ff;
     border-color: rgba(143, 211, 255, 0.34);
 }
 
-#custom-keybinds:hover {
+#custom-apps:hover {
     background: rgba(49, 65, 75, 0.98);
     border-color: rgba(143, 211, 255, 0.48);
 }

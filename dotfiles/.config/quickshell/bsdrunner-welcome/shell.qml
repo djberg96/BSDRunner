@@ -1,133 +1,19 @@
+pragma ComponentBehavior: Bound
+
 import Quickshell
-import Quickshell.Io
 import QtQuick
+import "../bsdrunner-common" as BSDRunnerCommon
 
 ShellRoot {
     id: root
 
-    readonly property string homeDir: Quickshell.env("HOME") || ""
-    readonly property var themeDefinitions: ({
-        "default": {
-            "name": "BSDRunner",
-            "eyebrow": "BSDRunner",
-            "frameBackground": "#111216",
-            "panelBackground": "#181b21",
-            "cardBackground": "#20242b",
-            "cardHover": "#2a3038",
-            "frameBorder": "#5b6470",
-            "panelBorder": "#7f8794",
-            "primaryText": "#eef2f7",
-            "secondaryText": "#cfd6df",
-            "mutedText": "#a8b1bd",
-            "accent": "#d7e3ea",
-            "accentStrong": "#f5fbff",
-            "actionAccents": {
-                "terminal": "#d7e3ea",
-                "files": "#c4d4e2",
-                "browser": "#ffb86b",
-                "reload": "#8eb6d6",
-                "power": "#f5fbff",
-                "close": "#ffffff"
-            }
-        },
-        "jinteki": {
-            "name": "Jinteki",
-            "eyebrow": "BSDRunner",
-            "frameBackground": "#12090b",
-            "panelBackground": "#1c0f12",
-            "cardBackground": "#251013",
-            "cardHover": "#341417",
-            "frameBorder": "#8f1f34",
-            "panelBorder": "#c61f3a",
-            "primaryText": "#fff1f3",
-            "secondaryText": "#f2cfd5",
-            "mutedText": "#cda9b0",
-            "accent": "#ff6f83",
-            "accentStrong": "#ffd7dd",
-            "actionAccents": {
-                "terminal": "#ff6f83",
-                "files": "#f0c0b7",
-                "browser": "#ffb36b",
-                "reload": "#ff8795",
-                "power": "#ffd7dd",
-                "close": "#ffffff"
-            }
-        },
-        "haas-bioroid": {
-            "name": "Haas-Bioroid",
-            "eyebrow": "BSDRunner",
-            "frameBackground": "#0f1418",
-            "panelBackground": "#172026",
-            "cardBackground": "#1d2830",
-            "cardHover": "#283741",
-            "frameBorder": "#5f7280",
-            "panelBorder": "#8fd3ff",
-            "primaryText": "#eef7fc",
-            "secondaryText": "#d7e3ea",
-            "mutedText": "#aebec9",
-            "accent": "#8fd3ff",
-            "accentStrong": "#dff6ff",
-            "actionAccents": {
-                "terminal": "#8fd3ff",
-                "files": "#dff6ff",
-                "browser": "#ffb86b",
-                "reload": "#9fcfe8",
-                "power": "#bde9ff",
-                "close": "#f5fbff"
-            }
-        },
-        "nbn": {
-            "name": "NBN",
-            "eyebrow": "BSDRunner",
-            "frameBackground": "#171108",
-            "panelBackground": "#22180a",
-            "cardBackground": "#2a1d0a",
-            "cardHover": "#3a280b",
-            "frameBorder": "#8d6513",
-            "panelBorder": "#f3c316",
-            "primaryText": "#fff6dd",
-            "secondaryText": "#fff0c7",
-            "mutedText": "#d8c18a",
-            "accent": "#f3c316",
-            "accentStrong": "#ffb347",
-            "actionAccents": {
-                "terminal": "#f3c316",
-                "files": "#ffd76a",
-                "browser": "#ffb347",
-                "reload": "#ffcf5a",
-                "power": "#fff0c7",
-                "close": "#fffaf0"
-            }
-        },
-        "weyland": {
-            "name": "Weyland",
-            "eyebrow": "BSDRunner",
-            "frameBackground": "#10140f",
-            "panelBackground": "#182017",
-            "cardBackground": "#212a1d",
-            "cardHover": "#2d3827",
-            "frameBorder": "#5d8c45",
-            "panelBorder": "#b4a14d",
-            "primaryText": "#edf3e3",
-            "secondaryText": "#dce4d3",
-            "mutedText": "#b9c4af",
-            "accent": "#5d8c45",
-            "accentStrong": "#b4a14d",
-            "actionAccents": {
-                "terminal": "#5d8c45",
-                "files": "#b4a14d",
-                "browser": "#d9a15d",
-                "reload": "#88a16c",
-                "power": "#dce4d3",
-                "close": "#f1f4eb"
-            }
-        }
-    })
-    readonly property string activeTheme: {
-        var text = themeFile.text().trim()
-        return text.length > 0 ? text : "default"
+    BSDRunnerCommon.ThemeLoader {
+        id: themeLoader
     }
-    readonly property var palette: themeDefinitions[activeTheme] || themeDefinitions["default"]
+
+    readonly property string homeDir: Quickshell.env("HOME") || ""
+    readonly property string activeTheme: themeLoader.activeTheme
+    readonly property var palette: themeLoader.palette
 
     function actionThemeName(action) {
         if (action.indexOf("theme:") !== 0) return ""
@@ -135,8 +21,7 @@ ShellRoot {
     }
 
     function actionAccent(action) {
-        var accents = root.palette.actionAccents || {}
-        return accents[action] || root.palette.accent
+        return themeLoader.actionAccent(action)
     }
 
     function runAction(action) {
@@ -159,15 +44,6 @@ ShellRoot {
         function onLastWindowClosed() {
             Qt.quit()
         }
-    }
-
-    FileView {
-        id: themeFile
-        path: root.homeDir + "/.config/bsdrunner/current-theme"
-        blockLoading: true
-        watchChanges: true
-
-        onFileChanged: this.reload()
     }
 
     FloatingWindow {
@@ -197,9 +73,9 @@ ShellRoot {
                 "action": "browser"
             },
             {
-                "title": "Reload Hyprland",
-                "subtitle": "Reload the live config",
-                "action": "reload"
+                "title": "Open Apps",
+                "subtitle": "Launch BSDRunner Software",
+                "action": "apps"
             },
             {
                 "title": "Power Menu",
@@ -306,6 +182,8 @@ ShellRoot {
                                 model: window.themeCards
 
                                 delegate: Column {
+                                    id: themeCard
+
                                     required property var modelData
 
                                     property bool isSelected: root.activeTheme === root.actionThemeName(modelData.action)
@@ -319,14 +197,14 @@ ShellRoot {
                                         width: 88
                                         height: 88
                                         radius: 44
-                                        color: parent.isSelected ? root.palette.cardHover : root.palette.cardBackground
+                                        color: themeCard.isSelected ? root.palette.cardHover : root.palette.cardBackground
                                         border.width: 3
-                                        border.color: parent.isSelected ? root.palette.accentStrong : parent.modelData.accent
+                                        border.color: themeCard.isSelected ? root.palette.accentStrong : themeCard.modelData.accent
 
                                         Text {
                                             anchors.centerIn: parent
-                                            text: parent.parent.modelData.short
-                                            color: parent.parent.modelData.accent
+                                            text: themeCard.modelData.short
+                                            color: themeCard.modelData.accent
                                             font.pixelSize: 22
                                             font.bold: true
                                         }
@@ -337,8 +215,8 @@ ShellRoot {
                                             cursorShape: Qt.PointingHandCursor
 
                                             onEntered: themeCircle.color = root.palette.cardHover
-                                            onExited: themeCircle.color = parent.parent.isSelected ? root.palette.cardHover : root.palette.cardBackground
-                                            onClicked: root.runAction(parent.parent.modelData.action)
+                                            onExited: themeCircle.color = themeCard.isSelected ? root.palette.cardHover : root.palette.cardBackground
+                                            onClicked: root.runAction(themeCard.modelData.action)
                                         }
                                     }
 
@@ -346,10 +224,10 @@ ShellRoot {
                                         width: parent.width
                                         horizontalAlignment: Text.AlignHCenter
                                         wrapMode: Text.WordWrap
-                                        text: modelData.title
+                                        text: themeCard.modelData.title
                                         color: root.palette.primaryText
                                         font.pixelSize: 13
-                                        font.bold: parent.isSelected
+                                        font.bold: themeCard.isSelected
                                     }
                                 }
                             }
@@ -365,6 +243,8 @@ ShellRoot {
                             model: window.cards
 
                             delegate: Rectangle {
+                                id: actionCard
+
                                 required property var modelData
                                 readonly property color accentColor: root.actionAccent(modelData.action)
 
@@ -381,8 +261,8 @@ ShellRoot {
                                     spacing: 4
 
                                     Text {
-                                        text: parent.parent.modelData.title
-                                        color: parent.parent.accentColor
+                                        text: actionCard.modelData.title
+                                        color: actionCard.accentColor
                                         font.pixelSize: 19
                                         font.bold: true
                                     }
@@ -390,7 +270,7 @@ ShellRoot {
                                     Text {
                                         width: 220
                                         wrapMode: Text.WordWrap
-                                        text: parent.parent.modelData.subtitle
+                                        text: actionCard.modelData.subtitle
                                         color: root.palette.primaryText
                                         font.pixelSize: 14
                                     }
@@ -403,7 +283,7 @@ ShellRoot {
 
                                     onEntered: parent.color = root.palette.cardHover
                                     onExited: parent.color = root.palette.cardBackground
-                                    onClicked: root.runAction(parent.modelData.action)
+                                    onClicked: root.runAction(actionCard.modelData.action)
                                 }
                             }
                         }
