@@ -260,70 +260,67 @@ ShellRoot {
 
         Rectangle {
             anchors.fill: parent
-            radius: 28
-            color: root.palette.frameBackground
-            border.width: 2
+            radius: 24
+            color: root.palette.panelBackground
+            border.width: 1
             border.color: root.palette.frameBorder
 
             Rectangle {
-                anchors.fill: parent
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
                 anchors.margins: 18
-                radius: 22
-                color: root.palette.panelBackground
-                border.width: 1
-                border.color: root.palette.panelBorder
+                height: 118
+                radius: 20
+                color: root.palette.cardBackground
+                opacity: 0.82
 
                 Rectangle {
-                    anchors.top: parent.top
                     anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: 126
-                    radius: 22
-                    color: root.palette.cardBackground
-                    opacity: 0.82
-
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: 220
-                        radius: 22
-                        color: root.palette.accent
-                        opacity: 0.12
-                    }
-                }
-
-                Rectangle {
                     anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: 4
-                    radius: 2
+                    anchors.bottom: parent.bottom
+                    width: 212
+                    radius: 20
                     color: root.palette.accent
-                    opacity: 0.95
+                    opacity: 0.10
                 }
+            }
 
-                Row {
-                    anchors.fill: parent
-                    anchors.margins: 26
-                    spacing: 18
+            Rectangle {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 4
+                radius: 2
+                color: root.palette.accent
+                opacity: 0.92
+            }
 
-                    Rectangle {
-                        width: 216
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        radius: 20
-                        color: root.palette.cardBackground
-                        border.width: 1
-                        border.color: root.palette.panelBorder
+            Row {
+                id: contentRow
+
+                anchors.fill: parent
+                anchors.margins: 22
+                spacing: 18
+
+                Rectangle {
+                    id: leftRail
+
+                    width: 216
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    radius: 20
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.palette.panelBorder
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 20
+                        spacing: 16
 
                         Column {
-                            anchors.fill: parent
-                            anchors.margins: 20
-                            spacing: 16
-
-                            Column {
-                                spacing: 8
+                            spacing: 8
 
                                 Text {
                                     text: root.palette.eyebrow
@@ -540,7 +537,7 @@ ShellRoot {
                         Column {
                             id: centerColumn
 
-                            width: 520
+                            width: contentRow.width - leftRail.width - detailPane.width - (contentRow.spacing * 2)
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                             spacing: 16
@@ -799,29 +796,31 @@ ShellRoot {
                                 }
                             }
                         }
-                    }
+                }
 
-                    Rectangle {
-                        width: 336
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        radius: 20
-                        color: root.palette.cardBackground
-                        border.width: 1
-                        border.color: root.palette.panelBorder
+                Rectangle {
+                    id: detailPane
 
-                        Flickable {
-                            anchors.fill: parent
-                            anchors.margins: 20
-                            contentWidth: width
-                            contentHeight: detailColumn.height
-                            clip: true
+                    width: 300
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    radius: 20
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.palette.panelBorder
 
-                            Column {
-                                id: detailColumn
+                    Flickable {
+                        anchors.fill: parent
+                        anchors.margins: 20
+                        contentWidth: width
+                        contentHeight: detailColumn.height
+                        clip: true
 
-                                width: parent.width
-                                spacing: 16
+                        Column {
+                            id: detailColumn
+
+                            width: parent.width
+                            spacing: 16
 
                                 Text {
                                     text: root.selectedPackage ? root.selectedPackage.name : "No package selected"
@@ -1037,7 +1036,6 @@ ShellRoot {
                                     color: root.palette.accentStrong
                                     font.pixelSize: 13
                                 }
-                            }
                         }
                     }
                 }
