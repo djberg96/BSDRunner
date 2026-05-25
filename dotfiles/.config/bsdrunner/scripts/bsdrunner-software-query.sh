@@ -106,40 +106,58 @@ snapshot() {
         }
 
         function repo_name(origin) {
-            return origin ~ /^base\// ? "FreeBSD-base" : "FreeBSD"
+            if (origin ~ /^base\//)
+                return "FreeBSD-base"
+            return "FreeBSD"
         }
 
-        function category_name(origin, parts, count) {
-            count = split(origin, parts, "/")
-            return count > 1 ? parts[1] : origin
+        function category_name(origin) {
+            category_count = split(origin, category_parts, "/")
+            if (category_count > 1)
+                return category_parts[1]
+            return origin
         }
 
-        function human_size(bytes, units, size, idx) {
+        function human_size(bytes) {
             if (bytes == "" || bytes !~ /^[0-9]+$/)
                 return ""
 
-            split("B KB MB GB TB", units, " ")
-            size = bytes + 0
-            idx = 1
+            split("B KB MB GB TB", human_units, " ")
+            human_size_value = bytes + 0
+            human_unit_index = 1
 
-            while (size >= 1024 && idx < 5) {
-                size /= 1024
-                idx += 1
+            while (human_size_value >= 1024 && human_unit_index < 5) {
+                human_size_value /= 1024
+                human_unit_index += 1
             }
 
-            if (idx == 1)
-                return sprintf("%d %s", size, units[idx])
+            if (human_unit_index == 1)
+                return sprintf("%d %s", human_size_value, human_units[human_unit_index])
 
-            return sprintf("%.1f %s", size, units[idx])
+            return sprintf("%.1f %s", human_size_value, human_units[human_unit_index])
         }
 
-        function emit_package(name, version, comment, origin, website, size_bytes, description, installed, update_available, installed_version, first_record, size_text, display_comment, display_description, installed_text, update_text, safe_size_bytes) {
-            size_text = human_size(size_bytes)
-            display_comment = comment != "" ? comment : "No package summary available."
-            display_description = description != "" ? description : display_comment
-            installed_text = installed ? "true" : "false"
-            update_text = update_available ? "true" : "false"
-            safe_size_bytes = size_bytes == "" ? "0" : size_bytes
+        function emit_package(name, version, comment, origin, website, size_bytes, description, installed, update_available, installed_version, first_record) {
+            package_size_text = human_size(size_bytes)
+            package_comment = comment
+            if (package_comment == "")
+                package_comment = "No package summary available."
+
+            package_description = description
+            if (package_description == "")
+                package_description = package_comment
+
+            package_installed_text = "false"
+            if (installed)
+                package_installed_text = "true"
+
+            package_update_text = "false"
+            if (update_available)
+                package_update_text = "true"
+
+            package_size_bytes_text = size_bytes
+            if (package_size_bytes_text == "")
+                package_size_bytes_text = "0"
 
             if (!first_record)
                 printf ","
@@ -148,17 +166,17 @@ snapshot() {
             printf "\"name\":%s,", quote(name)
             printf "\"version\":%s,", quote(version)
             printf "\"installed_version\":%s,", quote(installed_version)
-            printf "\"installed\":%s,", installed_text
-            printf "\"update_available\":%s,", update_text
+            printf "\"installed\":%s,", package_installed_text
+            printf "\"update_available\":%s,", package_update_text
             printf "\"repo\":%s,", quote(repo_name(origin))
             printf "\"origin\":%s,", quote(origin)
             printf "\"category\":%s,", quote(category_name(origin))
-            printf "\"comment\":%s,", quote(display_comment)
-            printf "\"description\":%s,", quote(display_description)
+            printf "\"comment\":%s,", quote(package_comment)
+            printf "\"description\":%s,", quote(package_description)
             printf "\"website\":%s,", quote(website)
             printf "\"license\":\"\","
-            printf "\"size\":%s,", quote(size_text)
-            printf "\"size_bytes\":%s,", safe_size_bytes
+            printf "\"size\":%s,", quote(package_size_text)
+            printf "\"size_bytes\":%s,", package_size_bytes_text
             printf "\"dependencies\":[]"
             printf "}"
         }
@@ -211,27 +229,24 @@ snapshot() {
 
             for (i = 1; i <= remote_count; i += 1) {
                 name = remote_order[i]
-                installed = name in installed_seen
-                update_available = name in updates
+                installed = 0
+                if (name in installed_seen)
+                    installed = 1
+
+                update_available = 0
+                if (name in updates)
+                    update_available = 1
+
+                current_installed_version = ""
+                if (installed)
+                    current_installed_version = installed_version[name]
 
                 if (installed)
                     installed_total += 1
                 if (update_available)
                     updates_total += 1
 
-                emit_package(
-                    name,
-                    remote_version[name],
-                    remote_comment[name],
-                    remote_origin[name],
-                    remote_website[name],
-                    remote_size[name],
-                    remote_description[name],
-                    installed,
-                    update_available,
-                    installed ? installed_version[name] : "",
-                    first_record
-                )
+                emit_package(name, remote_version[name], remote_comment[name], remote_origin[name], remote_website[name], remote_size[name], remote_description[name], installed, update_available, current_installed_version, first_record)
 
                 first_record = 0
                 total += 1
@@ -241,19 +256,7 @@ snapshot() {
                 name = installed_only_order[i]
                 installed_total += 1
 
-                emit_package(
-                    name,
-                    installed_version[name],
-                    installed_comment[name],
-                    installed_origin[name],
-                    installed_website[name],
-                    installed_size[name],
-                    installed_description[name],
-                    1,
-                    0,
-                    installed_version[name],
-                    first_record
-                )
+                emit_package(name, installed_version[name], installed_comment[name], installed_origin[name], installed_website[name], installed_size[name], installed_description[name], 1, 0, installed_version[name], first_record)
 
                 first_record = 0
                 total += 1

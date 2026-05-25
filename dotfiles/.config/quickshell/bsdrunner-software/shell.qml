@@ -320,7 +320,7 @@ ShellRoot {
                         Column {
                             anchors.fill: parent
                             anchors.margins: 20
-                            spacing: 20
+                            spacing: 16
 
                             Column {
                                 spacing: 8
@@ -440,72 +440,98 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                id: themeCard
+
                                 width: parent.width
-                                height: 156
+                                height: 148
                                 radius: 18
                                 color: root.palette.panelBackground
                                 border.width: 1
                                 border.color: root.palette.frameBorder
 
-                                Column {
-                                    anchors.fill: parent
-                                    anchors.margins: 16
-                                    spacing: 8
+                                Text {
+                                    id: themeCardLabel
+
+                                    anchors.top: parent.top
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.topMargin: 16
+                                    anchors.leftMargin: 16
+                                    anchors.rightMargin: 16
+                                    text: "Current Theme"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    id: themeCardName
+
+                                    anchors.top: themeCardLabel.bottom
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.topMargin: 8
+                                    anchors.leftMargin: 16
+                                    anchors.rightMargin: 16
+                                    text: root.palette.name
+                                    color: root.palette.accentStrong
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                }
+
+                                Rectangle {
+                                    id: themeRefreshButton
+
+                                    anchors.left: parent.left
+                                    anchors.bottom: parent.bottom
+                                    anchors.leftMargin: 16
+                                    anchors.bottomMargin: 16
+                                    width: 144
+                                    height: 34
+                                    radius: 12
+                                    color: root.palette.accent
+                                    opacity: root.loadingPackages ? 0.10 : 0.18
+                                    border.width: 1
+                                    border.color: root.palette.accent
 
                                     Text {
-                                        text: "Current Theme"
-                                        color: root.palette.mutedText
+                                        anchors.centerIn: parent
+                                        text: root.loadingPackages ? "Refreshing" : "Refresh pkg"
+                                        color: root.palette.accentStrong
                                         font.pixelSize: 12
                                         font.bold: true
                                     }
 
-                                    Text {
-                                        text: root.palette.name
-                                        color: root.palette.accentStrong
-                                        font.pixelSize: 24
-                                        font.bold: true
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: !root.loadingPackages
+                                        hoverEnabled: true
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+                                        onEntered: parent.opacity = 0.26
+                                        onExited: parent.opacity = root.loadingPackages ? 0.10 : 0.18
+                                        onClicked: root.refreshPackages()
                                     }
+                                }
 
-                                    Text {
-                                        width: parent.width
-                                        wrapMode: Text.WordWrap
-                                        text: root.loadingPackages
-                                            ? "Refreshing package metadata from pkg right now."
-                                            : root.generatedAt.length > 0
-                                                ? "Last pkg snapshot: " + root.generatedAt
-                                                : "Package data will appear here after the first successful pkg snapshot."
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: 13
-                                    }
-
-                                    Rectangle {
-                                        width: 144
-                                        height: 34
-                                        radius: 12
-                                        color: root.palette.accent
-                                        opacity: root.loadingPackages ? 0.10 : 0.18
-                                        border.width: 1
-                                        border.color: root.palette.accent
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: root.loadingPackages ? "Refreshing" : "Refresh pkg"
-                                            color: root.palette.accentStrong
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            enabled: !root.loadingPackages
-                                            hoverEnabled: true
-                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-
-                                            onEntered: parent.opacity = 0.26
-                                            onExited: parent.opacity = root.loadingPackages ? 0.10 : 0.18
-                                            onClicked: root.refreshPackages()
-                                        }
-                                    }
+                                Text {
+                                    anchors.top: themeCardName.bottom
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.bottom: themeRefreshButton.top
+                                    anchors.topMargin: 8
+                                    anchors.leftMargin: 16
+                                    anchors.rightMargin: 16
+                                    anchors.bottomMargin: 12
+                                    wrapMode: Text.WordWrap
+                                    clip: true
+                                    text: root.loadingPackages
+                                        ? "Refreshing package metadata from pkg right now."
+                                        : root.generatedAt.length > 0
+                                            ? "Last pkg snapshot: " + root.generatedAt
+                                            : "Package data will appear here after the first successful pkg snapshot."
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 13
                                 }
                             }
                         }
