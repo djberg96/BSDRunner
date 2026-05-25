@@ -28,6 +28,7 @@ ShellRoot {
     property bool hasNextPage: false
     property int loadedCount: 0
     property int installedTotalCount: 0
+    property string installedSizeLabel: "0 B"
     property string browseCountLabel: "0"
     property string installedCountLabel: "0"
     property string updatesCountLabel: "--"
@@ -169,6 +170,7 @@ ShellRoot {
                 : "The pkg backend returned no data."
             packageData = []
             loadedCount = 0
+            installedSizeLabel = "0 B"
             hasPreviousPage = pageIndex > 0
             hasNextPage = false
             generatedAt = ""
@@ -185,6 +187,7 @@ ShellRoot {
             statusMessage = "The pkg backend returned invalid JSON."
             packageData = []
             loadedCount = 0
+            installedSizeLabel = "0 B"
             hasPreviousPage = pageIndex > 0
             hasNextPage = false
             generatedAt = ""
@@ -199,6 +202,7 @@ ShellRoot {
             statusMessage = payload.message || stderrText || "Unable to load pkg metadata."
             packageData = []
             loadedCount = 0
+            installedSizeLabel = "0 B"
             hasPreviousPage = pageIndex > 0
             hasNextPage = false
             generatedAt = ""
@@ -220,6 +224,9 @@ ShellRoot {
         installedCountLabel = payload.summary && payload.summary.installed_count_label
             ? payload.summary.installed_count_label
             : String(installedTotalCount)
+        installedSizeLabel = payload.summary && payload.summary.installed_size_label
+            ? payload.summary.installed_size_label
+            : "0 B"
         updatesCountLabel = payload.summary && payload.summary.updates_count_label
             ? payload.summary.updates_count_label
             : "--"
@@ -467,7 +474,7 @@ ShellRoot {
                                     anchors.topMargin: 16
                                     anchors.leftMargin: 16
                                     anchors.rightMargin: 16
-                                    text: "Package Status"
+                                    text: "Local Package Status"
                                     color: root.palette.mutedText
                                     font.pixelSize: 12
                                     font.bold: true
@@ -487,16 +494,12 @@ ShellRoot {
                                     Repeater {
                                         model: [
                                             {
-                                                "label": "Loaded",
-                                                "value": root.loadedCount
-                                            },
-                                            {
-                                                "label": "Installed",
+                                                "label": "Installed Packages",
                                                 "value": root.installedTotalCount
                                             },
                                             {
-                                                "label": "Page",
-                                                "value": root.pageIndex + 1
+                                                "label": "Disk Used",
+                                                "value": root.installedSizeLabel
                                             }
                                         ]
 
@@ -507,16 +510,16 @@ ShellRoot {
                                             spacing: 8
 
                                             Text {
-                                                width: 72
+                                                width: 96
                                                 text: modelData.value
                                                 color: root.palette.accentStrong
-                                                font.pixelSize: 20
+                                                font.pixelSize: String(modelData.value).length > 8 ? 16 : 20
                                                 font.bold: true
                                             }
 
                                             Text {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                width: parent.width - 80
+                                                width: parent.width - 104
                                                 text: modelData.label
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: 12

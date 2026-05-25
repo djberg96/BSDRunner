@@ -14,7 +14,7 @@ json_escape() {
 
 error_json() {
     message="$1"
-    printf '{"ok":false,"message":"%s","packages":[],"summary":{"loaded":0,"installed":0,"page":1,"page_size":40,"has_prev":false,"has_next":false,"browse_count_label":"0","installed_count_label":"0","updates_count_label":"0"}}\n' \
+    printf '{"ok":false,"message":"%s","packages":[],"summary":{"loaded":0,"installed":0,"page":1,"page_size":40,"has_prev":false,"has_next":false,"browse_count_label":"0","installed_count_label":"0","updates_count_label":"0","installed_size_label":"0 B"}}\n' \
         "$(json_escape "$message")"
 }
 
@@ -61,6 +61,33 @@ safe_number() {
 count_lines() {
     file_path="$1"
     awk 'END { print NR + 0 }' "$file_path"
+}
+
+human_size_value() {
+    bytes="$1"
+
+    awk -v bytes="$bytes" '
+        BEGIN {
+            if (bytes == "" || bytes !~ /^[0-9]+$/) {
+                print "0 B"
+                exit
+            }
+
+            split("B KB MB GB TB", units, " ")
+            value = bytes + 0
+            idx = 1
+
+            while (value >= 1024 && idx < 5) {
+                value /= 1024
+                idx += 1
+            }
+
+            if (idx == 1)
+                printf "%d %s\n", value, units[idx]
+            else
+                printf "%.1f %s\n", value, units[idx]
+        }
+    '
 }
 
 collect_page_from_stdin() {
@@ -356,6 +383,7 @@ emit_json() {
     browse_label="${10}"
     installed_label="${11}"
     updates_label="${12}"
+    installed_size_label="${13}"
 
     awk -F '	' \
         -v message="$message" \
@@ -448,7 +476,8 @@ emit_json() {
             printf "\"has_next\":%s,", (has_next == "true" ? "true" : "false")
             printf "\"browse_count_label\":%s,", quote(browse_label)
             printf "\"installed_count_label\":%s,", quote(installed_label)
-            printf "\"updates_count_label\":%s", quote(updates_label)
+            printf "\"updates_count_label\":%s,", quote(updates_label)
+            printf "\"installed_size_label\":%s", quote(installed_size_label)
             printf "}"
             printf "}\n"
         }
@@ -507,6 +536,8 @@ snapshot() {
     fi
 
     installed_total="$(count_lines "$installed_tsv")"
+    installed_size_bytes="$(awk -F '	' '{ if ($6 ~ /^[0-9]+$/) total += $6 } END { print total + 0 }' "$installed_tsv")"
+    installed_size_label="$(human_size_value "$installed_size_bytes")"
 
     case "$view" in
         browse)
@@ -574,7 +605,8 @@ snapshot() {
         "$has_next_flag" \
         "$browse_count_label" \
         "$installed_count_label" \
-        "$updates_count_label"
+        "$updates_count_label" \
+        "$installed_size_label"
 }
 
 case "$action" in
