@@ -452,7 +452,7 @@ ShellRoot {
                                 id: themeCard
 
                                 width: parent.width
-                                height: 176
+                                height: 212
                                 radius: 18
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -531,7 +531,7 @@ ShellRoot {
                                     anchors.left: parent.left
                                     anchors.bottom: parent.bottom
                                     anchors.leftMargin: 16
-                                    anchors.bottomMargin: 16
+                                    anchors.bottomMargin: 18
                                     width: 144
                                     height: 34
                                     radius: 12
@@ -568,7 +568,7 @@ ShellRoot {
                                     anchors.topMargin: 8
                                     anchors.leftMargin: 16
                                     anchors.rightMargin: 16
-                                    anchors.bottomMargin: 12
+                                    anchors.bottomMargin: 18
                                     wrapMode: Text.WordWrap
                                     clip: true
                                     text: root.loadingPackages
@@ -654,133 +654,148 @@ ShellRoot {
                             id: paginationBar
 
                             width: parent.width
-                            height: 48
+                            height: root.statusTone === "error" || root.statusTone === "warning" ? 78 : 48
                             radius: 16
                             color: root.palette.cardBackground
                             border.width: 1
                             border.color: root.palette.panelBorder
 
-                            Row {
+                            Column {
                                 anchors.fill: parent
                                 anchors.margins: 12
-                                spacing: 10
+                                spacing: 8
 
-                                Text {
-                                    width: 140
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.pageLabel()
-                                    color: root.palette.primaryText
-                                    font.pixelSize: 15
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    width: 180
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.loadingPackages ? "Loading..." : root.statusSearchText()
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 12
-                                    elide: Text.ElideRight
-                                }
-
-                                Item {
-                                    width: Math.max(0, parent.width - 140 - 180 - 220 - (parent.spacing * 3))
-                                    height: 1
-                                }
-
-                                Rectangle {
-                                    width: 96
-                                    height: 24
-                                    radius: 12
-                                    color: root.palette.panelBackground
-                                    border.width: 1
-                                    border.color: root.palette.frameBorder
-                                    opacity: root.hasPreviousPage && !root.loadingPackages ? 1.0 : 0.5
+                                Row {
+                                    width: parent.width
+                                    spacing: 10
 
                                     Text {
-                                        anchors.centerIn: parent
-                                        text: "Previous"
+                                        width: 92
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.pageLabel()
                                         color: root.palette.primaryText
-                                        font.pixelSize: 12
+                                        font.pixelSize: 15
                                         font.bold: true
                                     }
 
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        enabled: root.hasPreviousPage && !root.loadingPackages
-                                        hoverEnabled: true
-                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: {
-                                            root.pageIndex -= 1
-                                            root.refreshPackages()
+                                    Row {
+                                        width: 236
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 8
+
+                                        Rectangle {
+                                            width: 10
+                                            height: 10
+                                            radius: 5
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: root.statusTone === "error"
+                                                ? root.palette.danger
+                                                : root.statusTone === "warning"
+                                                    ? root.palette.warning
+                                                    : root.palette.accent
+                                            opacity: root.loadingPackages ? 0.95 : 0.65
+                                        }
+
+                                        Text {
+                                            width: 218
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root.loadingPackages ? "Loading..." : root.statusSearchText()
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 12
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Item {
+                                        width: Math.max(0, parent.width - 92 - 236 - 220 - (parent.spacing * 3))
+                                        height: 1
+                                    }
+
+                                    Rectangle {
+                                        width: 96
+                                        height: 24
+                                        radius: 12
+                                        color: root.hasPreviousPage && !root.loadingPackages
+                                            ? root.palette.panelBackground
+                                            : root.palette.panelBackground
+                                        border.width: root.hasPreviousPage && !root.loadingPackages ? 2 : 1
+                                        border.color: root.hasPreviousPage && !root.loadingPackages
+                                            ? root.palette.primaryText
+                                            : root.palette.frameBorder
+                                        opacity: root.hasPreviousPage && !root.loadingPackages ? 1.0 : 0.45
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Previous"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: root.hasPreviousPage && !root.loadingPackages
+                                            hoverEnabled: true
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: {
+                                                root.pageIndex -= 1
+                                                root.refreshPackages()
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 96
+                                        height: 24
+                                        radius: 12
+                                        color: root.hasNextPage && !root.loadingPackages
+                                            ? root.palette.accent
+                                            : root.palette.panelBackground
+                                        border.width: root.hasNextPage && !root.loadingPackages ? 2 : 1
+                                        border.color: root.hasNextPage && !root.loadingPackages
+                                            ? root.palette.accent
+                                            : root.palette.frameBorder
+                                        opacity: root.hasNextPage && !root.loadingPackages ? 1.0 : 0.10
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Next"
+                                            color: root.hasNextPage && !root.loadingPackages
+                                                ? root.palette.accentStrong
+                                                : root.palette.mutedText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: root.hasNextPage && !root.loadingPackages
+                                            hoverEnabled: true
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: {
+                                                root.pageIndex += 1
+                                                root.refreshPackages()
+                                            }
                                         }
                                     }
                                 }
 
-                                Rectangle {
-                                    width: 96
-                                    height: 24
-                                    radius: 12
-                                    color: root.palette.accent
-                                    border.width: 1
-                                    border.color: root.palette.accent
-                                    opacity: root.hasNextPage && !root.loadingPackages ? 0.18 : 0.08
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "Next"
-                                        color: root.palette.accentStrong
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        enabled: root.hasNextPage && !root.loadingPackages
-                                        hoverEnabled: true
-                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: {
-                                            root.pageIndex += 1
-                                            root.refreshPackages()
-                                        }
-                                    }
+                                Text {
+                                    visible: root.statusTone === "error" || root.statusTone === "warning"
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                    text: root.statusMessage
+                                    color: root.statusTone === "error"
+                                        ? root.palette.danger
+                                        : root.palette.warning
+                                    font.pixelSize: 12
                                 }
                             }
                         }
 
                         Rectangle {
-                            id: statusBanner
-
                             width: parent.width
-                            height: 68
-                            radius: 16
-                            color: root.statusTone === "warning"
-                                ? root.palette.warning
-                                : root.statusTone === "error"
-                                    ? root.palette.danger
-                                    : root.palette.accent
-                            opacity: 0.18
-                            border.width: 1
-                            border.color: root.statusTone === "warning"
-                                ? root.palette.warning
-                                : root.statusTone === "error"
-                                    ? root.palette.danger
-                                    : root.palette.accent
-
-                            Text {
-                                anchors.fill: parent
-                                anchors.margins: 16
-                                verticalAlignment: Text.AlignVCenter
-                                wrapMode: Text.WordWrap
-                                text: root.statusMessage
-                                color: root.palette.primaryText
-                                font.pixelSize: 14
-                            }
-                        }
-
-                        Rectangle {
-                            width: parent.width
-                            height: centerColumn.height - centerHeader.height - searchBarFrame.height - paginationBar.height - statusBanner.height - (centerColumn.spacing * 4)
+                            height: centerColumn.height - centerHeader.height - searchBarFrame.height - paginationBar.height - (centerColumn.spacing * 3)
                             radius: 20
                             color: root.palette.cardBackground
                             border.width: 1
