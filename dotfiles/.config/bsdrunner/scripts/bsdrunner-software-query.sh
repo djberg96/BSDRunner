@@ -50,7 +50,12 @@ snapshot() {
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
     field_sep="$(printf '\t')"
-    query_format="%n${field_sep}%v${field_sep}%c${field_sep}%o${field_sep}%w${field_sep}%s\n"
+    query_format="$(printf '%%n%s%%v%s%%c%s%%o%s%%w%s%%s' \
+        "$field_sep" \
+        "$field_sep" \
+        "$field_sep" \
+        "$field_sep" \
+        "$field_sep")"
 
     remote_tsv="$tmp_dir/remote.tsv"
     installed_tsv="$tmp_dir/installed.tsv"
