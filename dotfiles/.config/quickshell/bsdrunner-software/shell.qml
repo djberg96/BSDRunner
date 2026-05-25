@@ -21,6 +21,11 @@ ShellRoot {
     property string generatedAt: ""
     property bool loadingPackages: false
     property var packageData: []
+    property int snapshotExitCode: 0
+    property string snapshotStderrText: ""
+    property bool snapshotExited: false
+    property bool snapshotStdoutFinished: false
+    property bool snapshotStderrFinished: false
     readonly property var visiblePackages: filterPackages(currentView, searchQuery)
     readonly property var selectedPackage: findPackage(selectedPackageName)
 
@@ -138,11 +143,34 @@ ShellRoot {
         loadingPackages = true
         statusTone = "info"
         statusMessage = "Loading package metadata from pkg..."
+        snapshotExitCode = 0
+        snapshotStderrText = ""
+        snapshotExited = false
+        snapshotStdoutFinished = false
+        snapshotStderrFinished = false
         snapshotProcess.running = true
+    }
+
+    function maybeFinalizeSnapshot() {
+        if (!snapshotExited || !snapshotStdoutFinished || !snapshotStderrFinished)
+            return
+
+        root.applySnapshot(snapshotStdout.text, snapshotExitCode, snapshotStderrText)
     }
 
     function applySnapshot(text, exitCode, stderrText) {
         var payload = null
+
+        if (!text || text.trim().length === 0) {
+            statusTone = "error"
+            statusMessage = stderrText && stderrText.trim().length > 0
+                ? stderrText.trim()
+                : "The pkg backend returned no data."
+            packageData = []
+            generatedAt = ""
+            loadingPackages = false
+            return
+        }
 
         try {
             payload = JSON.parse(text)
@@ -150,6 +178,7 @@ ShellRoot {
             statusTone = "error"
             statusMessage = "The pkg backend returned invalid JSON."
             packageData = []
+            generatedAt = ""
             loadingPackages = false
             return
         }
@@ -186,13 +215,29 @@ ShellRoot {
         command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-software-backend.sh", "snapshot"]
         stdout: StdioCollector {
             id: snapshotStdout
+            waitForEnd: true
+
+            onStreamFinished: {
+                root.snapshotStdoutFinished = true
+                root.maybeFinalizeSnapshot()
+            }
         }
         stderr: StdioCollector {
             id: snapshotStderr
+            waitForEnd: true
+
+            onStreamFinished: {
+                root.snapshotStderrFinished = true
+                root.snapshotStderrText = snapshotStderr.text
+                root.maybeFinalizeSnapshot()
+            }
         }
 
         onExited: function(exitCode, exitStatus) {
-            root.applySnapshot(snapshotStdout.text, exitCode, snapshotStderr.text)
+            root.snapshotExitCode = exitCode
+            root.snapshotStderrText = snapshotStderr.text
+            root.snapshotExited = true
+            root.maybeFinalizeSnapshot()
         }
     }
 
@@ -209,8 +254,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Software"
-        minimumSize: Qt.size(1260, 780)
-        maximumSize: Qt.size(1260, 780)
+        minimumSize: Qt.size(1180, 760)
+        maximumSize: Qt.size(1180, 760)
         color: "transparent"
 
         Rectangle {
@@ -264,7 +309,7 @@ ShellRoot {
                     spacing: 18
 
                     Rectangle {
-                        width: 244
+                        width: 216
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         radius: 20
@@ -334,7 +379,7 @@ ShellRoot {
                                         required property var modelData
                                         readonly property bool active: root.currentView === modelData.id
 
-                                        width: 204
+                                        width: 176
                                         height: 66
                                         radius: 16
                                         color: navCard.active ? root.palette.cardHover : root.palette.panelBackground
@@ -467,7 +512,7 @@ ShellRoot {
                     }
 
                     Column {
-                        width: 566
+                        width: 520
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         spacing: 16
@@ -719,7 +764,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: 364
+                        width: 336
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         radius: 20
