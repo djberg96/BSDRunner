@@ -262,16 +262,18 @@ ShellRoot {
             anchors.fill: parent
             radius: 24
             color: root.palette.panelBackground
-            border.width: 1
+            border.width: 0
             border.color: root.palette.frameBorder
 
             Rectangle {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.margins: 18
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                anchors.topMargin: 8
                 height: 118
-                radius: 20
+                radius: 22
                 color: root.palette.cardBackground
                 opacity: 0.82
 
@@ -280,7 +282,7 @@ ShellRoot {
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     width: 212
-                    radius: 20
+                    radius: 22
                     color: root.palette.accent
                     opacity: 0.10
                 }
@@ -300,7 +302,7 @@ ShellRoot {
                 id: contentRow
 
                 anchors.fill: parent
-                anchors.margins: 22
+                anchors.margins: 16
                 spacing: 18
 
                 Rectangle {
