@@ -291,28 +291,20 @@ ShellRoot {
                         Column {
                             spacing: 8
 
-                                Text {
-                                    text: root.palette.eyebrow
-                                    color: root.palette.accent
-                                    font.pixelSize: 17
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    text: "Software"
-                                    color: root.palette.primaryText
-                                    font.pixelSize: 34
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    width: parent.width
-                                    wrapMode: Text.WordWrap
-                                    text: "A themed FreeBSD package surface designed for BSDRunner."
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 14
-                                }
+                            Text {
+                                text: root.palette.eyebrow
+                                color: root.palette.accent
+                                font.pixelSize: 17
+                                font.bold: true
                             }
+
+                            Text {
+                                text: "Software"
+                                color: root.palette.primaryText
+                                font.pixelSize: 34
+                                font.bold: true
+                            }
+                        }
 
                             Column {
                                 spacing: 10
@@ -792,6 +784,8 @@ ShellRoot {
                             spacing: 16
 
                                 Text {
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
                                     text: root.selectedPackage ? root.selectedPackage.name : "No package selected"
                                     color: root.palette.primaryText
                                     font.pixelSize: 30
