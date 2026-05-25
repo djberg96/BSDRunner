@@ -567,7 +567,6 @@ ShellRoot {
                                     font.pixelSize: 15
                                 }
                             }
-                        }
 
                         Rectangle {
                             id: searchBarFrame
