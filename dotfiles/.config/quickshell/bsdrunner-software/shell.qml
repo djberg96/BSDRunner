@@ -98,7 +98,7 @@ ShellRoot {
         case "updates":
             return "Review the packages that would be refreshed in the next maintenance pass."
         default:
-            return "Browse live package metadata from pkg and inspect what is available for this BSDRunner machine."
+            return "Browse live package metadata and view it."
         }
     }
 
