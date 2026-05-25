@@ -2,12 +2,11 @@ pragma ComponentBehavior: Bound
 
 import Quickshell
 import QtQuick
-import "../bsdrunner-common" as BSDRunnerCommon
 
 ShellRoot {
     id: root
 
-    BSDRunnerCommon.ThemeLoader {
+    ThemeLoader {
         id: themeLoader
     }
 

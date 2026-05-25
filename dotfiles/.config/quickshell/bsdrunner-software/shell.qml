@@ -1,13 +1,13 @@
 pragma ComponentBehavior: Bound
 
 import Quickshell
+import Quickshell.Io
 import QtQuick
-import "../bsdrunner-common" as BSDRunnerCommon
 
 ShellRoot {
     id: root
 
-    BSDRunnerCommon.ThemeLoader {
+    ThemeLoader {
         id: themeLoader
     }
 
@@ -15,123 +15,12 @@ ShellRoot {
     readonly property string activeTheme: themeLoader.activeTheme
     property string currentView: "browse"
     property string searchQuery: ""
-    property string selectedPackageName: "firefox"
-    property string statusMessage: "Prototype mode: package actions are mocked while we wire up the real pkg backend."
+    property string selectedPackageName: ""
+    property string statusMessage: "Loading package metadata from pkg..."
     property string statusTone: "info"
-    readonly property var packageData: [
-        {
-            "name": "firefox",
-            "version": "138.0.4,1",
-            "installed": true,
-            "update_available": false,
-            "repo": "FreeBSD",
-            "category": "Web",
-            "comment": "Standards-focused desktop web browser",
-            "description": "Mozilla Firefox with Wayland support, privacy features, and a familiar desktop workflow.",
-            "website": "https://www.mozilla.org/firefox/",
-            "license": "MPL-2.0",
-            "size": "124 MB",
-            "dependencies": ["gtk3", "dbus", "mesa-dri"]
-        },
-        {
-            "name": "vscodium",
-            "version": "1.101.14021",
-            "installed": true,
-            "update_available": true,
-            "repo": "FreeBSD",
-            "category": "Development",
-            "comment": "Telemetry-free editor build based on VS Code",
-            "description": "A familiar code editor option for users who want a polished UI without the upstream marketplace defaults.",
-            "website": "https://vscodium.com/",
-            "license": "MIT",
-            "size": "331 MB",
-            "dependencies": ["libsecret", "nss", "sqlite3"]
-        },
-        {
-            "name": "wezterm",
-            "version": "20240203",
-            "installed": false,
-            "update_available": false,
-            "repo": "FreeBSD",
-            "category": "Terminal",
-            "comment": "GPU-accelerated terminal emulator and multiplexer",
-            "description": "A modern terminal with tabs, panes, and strong remote workflows.",
-            "website": "https://wezfurlong.org/wezterm/",
-            "license": "MIT",
-            "size": "18 MB",
-            "dependencies": ["fontconfig", "libxkbcommon", "wayland"]
-        },
-        {
-            "name": "obs-studio",
-            "version": "31.0.3",
-            "installed": false,
-            "update_available": false,
-            "repo": "FreeBSD",
-            "category": "Media",
-            "comment": "Live streaming and screen recording studio",
-            "description": "Recording and broadcast tooling with scenes, audio routing, and plugin support.",
-            "website": "https://obsproject.com/",
-            "license": "GPL-2.0",
-            "size": "59 MB",
-            "dependencies": ["ffmpeg", "qt6-base", "speexdsp"]
-        },
-        {
-            "name": "thunderbird",
-            "version": "128.10.2",
-            "installed": false,
-            "update_available": false,
-            "repo": "FreeBSD",
-            "category": "Communication",
-            "comment": "Email, calendar, and feed reader",
-            "description": "A full-featured desktop mail client with calendar integration and account profiles.",
-            "website": "https://www.thunderbird.net/",
-            "license": "MPL-2.0",
-            "size": "103 MB",
-            "dependencies": ["gtk3", "icu", "sqlite3"]
-        },
-        {
-            "name": "gitui",
-            "version": "0.26.3",
-            "installed": true,
-            "update_available": false,
-            "repo": "FreeBSD",
-            "category": "Development",
-            "comment": "Fast terminal UI for Git",
-            "description": "A keyboard-friendly Git interface that fits well with the BSDRunner workflow.",
-            "website": "https://github.com/extrawurst/gitui",
-            "license": "MIT",
-            "size": "4 MB",
-            "dependencies": ["git"]
-        },
-        {
-            "name": "kdenlive",
-            "version": "24.12.3",
-            "installed": false,
-            "update_available": false,
-            "repo": "FreeBSD",
-            "category": "Media",
-            "comment": "Non-linear video editor",
-            "description": "A feature-rich editing suite for projects that need more than simple trimming.",
-            "website": "https://kdenlive.org/",
-            "license": "GPL-3.0",
-            "size": "192 MB",
-            "dependencies": ["mlt7", "qt6-multimedia", "frei0r"]
-        },
-        {
-            "name": "neovim",
-            "version": "0.11.1",
-            "installed": true,
-            "update_available": true,
-            "repo": "FreeBSD",
-            "category": "Development",
-            "comment": "Extensible Vim-based text editor",
-            "description": "Fast terminal editor with Lua configuration, LSP support, and broad plugin ecosystem.",
-            "website": "https://neovim.io/",
-            "license": "Apache-2.0",
-            "size": "9 MB",
-            "dependencies": ["libtermkey", "tree-sitter", "unibilium"]
-        }
-    ]
+    property string generatedAt: ""
+    property bool loadingPackages: false
+    property var packageData: []
     readonly property var visiblePackages: filterPackages(currentView, searchQuery)
     readonly property var selectedPackage: findPackage(selectedPackageName)
 
@@ -204,7 +93,7 @@ ShellRoot {
         case "updates":
             return "Review the packages that would be refreshed in the next maintenance pass."
         default:
-            return "Explore curated package metadata before we wire in the live pkg backend."
+            return "Browse live package metadata from pkg and inspect what is available for this BSDRunner machine."
         }
     }
 
@@ -229,7 +118,56 @@ ShellRoot {
     function triggerMockAction(action, pkgName) {
         var suffix = pkgName ? " for " + pkgName : ""
         statusTone = "warning"
-        statusMessage = "Prototype only: " + action + suffix + " is not wired to pkg yet."
+        statusMessage = "Read-only mode: " + action + suffix + " is not wired to mdo-backed actions yet."
+    }
+
+    function versionText(pkg) {
+        if (!pkg)
+            return ""
+        if (pkg.update_available && pkg.installed_version && pkg.installed_version !== pkg.version)
+            return pkg.installed_version + " -> " + pkg.version
+        if (pkg.installed && pkg.installed_version)
+            return pkg.installed_version
+        return pkg.version || ""
+    }
+
+    function refreshPackages() {
+        if (snapshotProcess.running)
+            return
+
+        loadingPackages = true
+        statusTone = "info"
+        statusMessage = "Loading package metadata from pkg..."
+        snapshotProcess.running = true
+    }
+
+    function applySnapshot(text, exitCode, stderrText) {
+        var payload = null
+
+        try {
+            payload = JSON.parse(text)
+        } catch (error) {
+            statusTone = "error"
+            statusMessage = "The pkg backend returned invalid JSON."
+            packageData = []
+            loadingPackages = false
+            return
+        }
+
+        if (exitCode !== 0 || !payload.ok) {
+            statusTone = "error"
+            statusMessage = payload.message || stderrText || "Unable to load pkg metadata."
+            packageData = []
+            generatedAt = ""
+            loadingPackages = false
+            return
+        }
+
+        packageData = payload.packages || []
+        generatedAt = payload.generated_at || ""
+        statusTone = "info"
+        statusMessage = payload.message || "Loaded package metadata from pkg."
+        loadingPackages = false
     }
 
     onVisiblePackagesChanged: {
@@ -237,6 +175,24 @@ ShellRoot {
             selectedPackageName = ""
         } else if (!packageInList(selectedPackageName, visiblePackages)) {
             selectedPackageName = visiblePackages[0].name
+        }
+    }
+
+    Component.onCompleted: refreshPackages()
+
+    Process {
+        id: snapshotProcess
+
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-software-backend.sh", "snapshot"]
+        stdout: StdioCollector {
+            id: snapshotStdout
+        }
+        stderr: StdioCollector {
+            id: snapshotStderr
+        }
+
+        onExited: function(exitCode, exitStatus) {
+            root.applySnapshot(snapshotStdout.text, exitCode, snapshotStderr.text)
         }
     }
 
@@ -381,9 +337,9 @@ ShellRoot {
                                         width: 204
                                         height: 66
                                         radius: 16
-                                        color: active ? root.palette.cardHover : root.palette.panelBackground
+                                        color: navCard.active ? root.palette.cardHover : root.palette.panelBackground
                                         border.width: 2
-                                        border.color: active ? modelData.accent : root.palette.frameBorder
+                                        border.color: navCard.active ? navCard.modelData.accent : root.palette.frameBorder
 
                                         Row {
                                             anchors.fill: parent
@@ -394,13 +350,13 @@ ShellRoot {
                                                 width: 38
                                                 height: 38
                                                 radius: 12
-                                                color: modelData.accent
-                                                opacity: active ? 0.22 : 0.14
+                                                color: navCard.modelData.accent
+                                                opacity: navCard.active ? 0.22 : 0.14
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: modelData.count
-                                                    color: modelData.accent
+                                                    text: navCard.modelData.count
+                                                    color: navCard.modelData.accent
                                                     font.pixelSize: 14
                                                     font.bold: true
                                                 }
@@ -418,7 +374,7 @@ ShellRoot {
                                                 }
 
                                                 Text {
-                                                    text: active ? "Current view" : "Switch view"
+                                                    text: navCard.active ? "Current view" : "Switch view"
                                                     color: root.palette.mutedText
                                                     font.pixelSize: 12
                                                 }
@@ -468,9 +424,42 @@ ShellRoot {
                                     Text {
                                         width: parent.width
                                         wrapMode: Text.WordWrap
-                                        text: "The final build will read live pkg data, then hand installs and upgrades off to mdo-backed actions."
+                                        text: root.loadingPackages
+                                            ? "Refreshing package metadata from pkg right now."
+                                            : root.generatedAt.length > 0
+                                                ? "Last pkg snapshot: " + root.generatedAt
+                                                : "Package data will appear here after the first successful pkg snapshot."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 13
+                                    }
+
+                                    Rectangle {
+                                        width: 144
+                                        height: 34
+                                        radius: 12
+                                        color: root.palette.accent
+                                        opacity: root.loadingPackages ? 0.10 : 0.18
+                                        border.width: 1
+                                        border.color: root.palette.accent
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.loadingPackages ? "Refreshing" : "Refresh pkg"
+                                            color: root.palette.accentStrong
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: !root.loadingPackages
+                                            hoverEnabled: true
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+                                            onEntered: parent.opacity = 0.26
+                                            onExited: parent.opacity = root.loadingPackages ? 0.10 : 0.18
+                                            onClicked: root.refreshPackages()
+                                        }
                                     }
                                 }
                             }
@@ -537,10 +526,18 @@ ShellRoot {
                             width: parent.width
                             height: 68
                             radius: 16
-                            color: root.statusTone === "warning" ? root.palette.warning : root.palette.accent
+                            color: root.statusTone === "warning"
+                                ? root.palette.warning
+                                : root.statusTone === "error"
+                                    ? root.palette.danger
+                                    : root.palette.accent
                             opacity: 0.18
                             border.width: 1
-                            border.color: root.statusTone === "warning" ? root.palette.warning : root.palette.accent
+                            border.color: root.statusTone === "warning"
+                                ? root.palette.warning
+                                : root.statusTone === "error"
+                                    ? root.palette.danger
+                                    : root.palette.accent
 
                             Text {
                                 anchors.fill: parent
@@ -575,7 +572,9 @@ ShellRoot {
                                     Text {
                                         width: parent.width
                                         horizontalAlignment: Text.AlignHCenter
-                                        text: "No packages match this view."
+                                        text: root.statusTone === "error"
+                                            ? "pkg metadata is unavailable."
+                                            : "No packages match this view."
                                         color: root.palette.primaryText
                                         font.pixelSize: 22
                                         font.bold: true
@@ -585,7 +584,9 @@ ShellRoot {
                                         width: parent.width
                                         wrapMode: Text.WordWrap
                                         horizontalAlignment: Text.AlignHCenter
-                                        text: "Try clearing the search box or switch to another package view."
+                                        text: root.statusTone === "error"
+                                            ? "Check the status banner above, then refresh pkg when the backend is ready."
+                                            : "Try clearing the search box or switch to another package view."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 14
                                     }
@@ -608,7 +609,8 @@ ShellRoot {
 
                                             delegate: Rectangle {
                                                 required property var modelData
-                                                readonly property bool active: root.selectedPackageName === modelData.name
+                                                readonly property var pkg: modelData
+                                                readonly property bool active: root.selectedPackageName === pkg.name
 
                                                 width: packageColumn.width
                                                 height: 102
@@ -627,7 +629,7 @@ ShellRoot {
                                                         spacing: 10
 
                                                         Text {
-                                                            text: packageCard.modelData.name
+                                                            text: packageCard.pkg.name
                                                             color: root.palette.primaryText
                                                             font.pixelSize: 20
                                                             font.bold: true
@@ -637,20 +639,20 @@ ShellRoot {
                                                             width: 80
                                                             height: 24
                                                             radius: 12
-                                                            color: packageCard.modelData.installed ? root.palette.success : root.palette.accent
+                                                            color: packageCard.pkg.installed ? root.palette.success : root.palette.accent
                                                             opacity: 0.16
 
                                                             Text {
                                                                 anchors.centerIn: parent
-                                                                text: packageCard.modelData.installed ? "Installed" : "Available"
-                                                                color: packageCard.modelData.installed ? root.palette.success : root.palette.accentStrong
+                                                                text: packageCard.pkg.installed ? "Installed" : "Available"
+                                                                color: packageCard.pkg.installed ? root.palette.success : root.palette.accentStrong
                                                                 font.pixelSize: 12
                                                                 font.bold: true
                                                             }
                                                         }
 
                                                         Rectangle {
-                                                            visible: packageCard.modelData.update_available
+                                                            visible: packageCard.pkg.update_available
                                                             width: 72
                                                             height: 24
                                                             radius: 12
@@ -670,7 +672,7 @@ ShellRoot {
                                                     Text {
                                                         width: parent.width
                                                         wrapMode: Text.WordWrap
-                                                        text: packageCard.modelData.comment
+                                                        text: packageCard.pkg.comment
                                                         color: root.palette.secondaryText
                                                         font.pixelSize: 14
                                                     }
@@ -679,20 +681,20 @@ ShellRoot {
                                                         spacing: 14
 
                                                         Text {
-                                                            text: packageCard.modelData.category
+                                                            text: packageCard.pkg.category
                                                             color: root.palette.accent
                                                             font.pixelSize: 12
                                                             font.bold: true
                                                         }
 
                                                         Text {
-                                                            text: packageCard.modelData.version
+                                                            text: root.versionText(packageCard.pkg)
                                                             color: root.palette.mutedText
                                                             font.pixelSize: 12
                                                         }
 
                                                         Text {
-                                                            text: packageCard.modelData.repo
+                                                            text: packageCard.pkg.repo
                                                             color: root.palette.mutedText
                                                             font.pixelSize: 12
                                                         }
@@ -764,7 +766,7 @@ ShellRoot {
                                         model: root.selectedPackage ? [
                                             {
                                                 "label": "Version",
-                                                "value": root.selectedPackage.version
+                                                "value": root.versionText(root.selectedPackage)
                                             },
                                             {
                                                 "label": "Repository",
