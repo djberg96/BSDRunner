@@ -401,7 +401,7 @@ ShellRoot {
                                 id: themeCard
 
                                 width: parent.width
-                                height: 148
+                                height: 176
                                 radius: 18
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -416,14 +416,14 @@ ShellRoot {
                                     anchors.topMargin: 16
                                     anchors.leftMargin: 16
                                     anchors.rightMargin: 16
-                                    text: "Current Theme"
+                                    text: "Package Status"
                                     color: root.palette.mutedText
                                     font.pixelSize: 12
                                     font.bold: true
                                 }
 
-                                Text {
-                                    id: themeCardName
+                                Row {
+                                    id: statusMetricRow
 
                                     anchors.top: themeCardLabel.bottom
                                     anchors.left: parent.left
@@ -431,10 +431,45 @@ ShellRoot {
                                     anchors.topMargin: 8
                                     anchors.leftMargin: 16
                                     anchors.rightMargin: 16
-                                    text: root.palette.name
-                                    color: root.palette.accentStrong
-                                    font.pixelSize: 22
-                                    font.bold: true
+                                    spacing: 10
+
+                                    Repeater {
+                                        model: [
+                                            {
+                                                "label": "Catalog",
+                                                "value": root.packageData.length
+                                            },
+                                            {
+                                                "label": "Installed",
+                                                "value": root.installedCount()
+                                            },
+                                            {
+                                                "label": "Updates",
+                                                "value": root.updateCount()
+                                            }
+                                        ]
+
+                                        delegate: Column {
+                                            required property var modelData
+
+                                            width: Math.floor((statusMetricRow.width - (statusMetricRow.spacing * 2)) / 3)
+                                            spacing: 4
+
+                                            Text {
+                                                text: modelData.value
+                                                color: root.palette.accentStrong
+                                                font.pixelSize: 20
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: modelData.label
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                            }
+                                        }
+                                    }
                                 }
 
                                 Rectangle {
@@ -473,7 +508,7 @@ ShellRoot {
                                 }
 
                                 Text {
-                                    anchors.top: themeCardName.bottom
+                                    anchors.top: statusMetricRow.bottom
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.bottom: themeRefreshButton.top
