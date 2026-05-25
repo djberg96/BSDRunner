@@ -65,9 +65,18 @@ workspace_override_file() {
     printf '%s\n' "$HOME/.config/bsdrunner/wallpaper-overrides/$theme_name/workspace-$workspace_id"
 }
 
-active_workspace_id() {
-    hyprctl activeworkspace -j 2>/dev/null |
-        tr '\n' ' ' |
+active_workspace_slot() {
+    workspace_json="$(hyprctl activeworkspace -j 2>/dev/null | tr '\n' ' ')"
+
+    workspace_name="$(printf '%s\n' "$workspace_json" |
+        sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\(-\{0,1\}[0-9][0-9]*\)".*/\1/p' |
+        head -n 1)"
+    if [ -n "$workspace_name" ]; then
+        printf '%s\n' "$workspace_name"
+        return 0
+    fi
+
+    printf '%s\n' "$workspace_json" |
         sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\{0,1\}\(-\{0,1\}[0-9][0-9]*\)"\{0,1\}.*/\1/p' |
         head -n 1
 }
@@ -125,10 +134,10 @@ last_workspace_id=""
 
 # Paint something immediately so a slow/empty hyprctl response does not leave
 # the desktop blank after restarting swww-daemon.
-apply_workspace_wallpaper "$(active_workspace_id || true)"
+apply_workspace_wallpaper "$(active_workspace_slot || true)"
 
 while :; do
-    workspace_id="$(active_workspace_id || true)"
+    workspace_id="$(active_workspace_slot || true)"
     if [ -n "$workspace_id" ] && [ "$workspace_id" != "$last_workspace_id" ]; then
         apply_workspace_wallpaper "$workspace_id"
         last_workspace_id="$workspace_id"
