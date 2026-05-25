@@ -269,33 +269,13 @@ ShellRoot {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.leftMargin: 8
-                anchors.rightMargin: 8
-                anchors.topMargin: 8
-                height: 118
-                radius: 22
-                color: root.palette.cardBackground
-                opacity: 0.82
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: 212
-                    radius: 22
-                    color: root.palette.accent
-                    opacity: 0.10
-                }
-            }
-
-            Rectangle {
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 4
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.topMargin: 10
+                height: 3
                 radius: 2
                 color: root.palette.accent
-                opacity: 0.92
+                opacity: 0.82
             }
 
             Row {
