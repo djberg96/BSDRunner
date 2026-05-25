@@ -336,17 +336,10 @@ ShellRoot {
                         spacing: 16
 
                         Column {
-                            spacing: 8
+                            spacing: 0
 
                             Text {
-                                text: root.palette.eyebrow
-                                color: root.palette.accent
-                                font.pixelSize: 17
-                                font.bold: true
-                            }
-
-                            Text {
-                                text: "Software"
+                                text: "Actions"
                                 color: root.palette.primaryText
                                 font.pixelSize: 34
                                 font.bold: true
