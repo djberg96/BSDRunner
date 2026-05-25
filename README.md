@@ -3,6 +3,16 @@
 Hyprland config for FreeBSD 15. Primarly designed for my IBM ThinkPad X1 Gen 9
 but maybe it will work for you, too.
 
+## Screenshots
+
+### Welcome Screen
+
+![BSDRunner welcome screen](docs/screenshots/bsdrunner_welcome.png)
+
+### Sample Desktop
+
+![BSDRunner sample background](docs/screenshots/bsdrunner_sample_background1.png)
+
 # Netrunner
 The themes are based on the four corporations from the card game Android: Netrunner.
 Note that while based on that game, the artwork here is all AI generated.
@@ -122,6 +132,12 @@ This starter is targeted at:
 - ThinkPad X1 Gen 9
 
 The current repo already includes a working Waybar autostart and `swww` wallpaper path. The next risky layers are things like lockscreen, idle, extra desktop daemons, or deeper Qt/KDE theming.
+
+## Animated Wallpaper
+
+For the curious, Haas-Bioroid also supports an animated wallpaper setup with a per-workspace play/pause toggle on the bar:
+
+![Haas-Bioroid animated wallpaper](docs/screenshots/haas_bioroid_wallpaper2_take2.gif)
 
 # Creator
 Daniel J. Berger
