@@ -15,51 +15,33 @@ ShellRoot {
     readonly property string activeTheme: themeLoader.activeTheme
     property string currentView: "browse"
     property string searchQuery: ""
+    property string committedSearchQuery: ""
     property string selectedPackageName: ""
-    property string statusMessage: "Loading package metadata from pkg..."
+    property string statusMessage: "Loading a package page from pkg..."
     property string statusTone: "info"
     property string generatedAt: ""
     property bool loadingPackages: false
     property var packageData: []
+    property int pageIndex: 0
+    property int pageSize: 40
+    property bool hasPreviousPage: false
+    property bool hasNextPage: false
+    property int loadedCount: 0
+    property int installedTotalCount: 0
+    property string browseCountLabel: "0"
+    property string installedCountLabel: "0"
+    property string updatesCountLabel: "--"
+    property bool pendingRefresh: false
     property int snapshotExitCode: 0
     property string snapshotStderrText: ""
     property bool snapshotExited: false
     property bool snapshotStdoutFinished: false
     property bool snapshotStderrFinished: false
-    readonly property var visiblePackages: filterPackages(currentView, searchQuery)
+    readonly property var visiblePackages: packageData
     readonly property var selectedPackage: findPackage(selectedPackageName)
 
     function normalize(value) {
         return (value || "").toLowerCase()
-    }
-
-    function matchesView(pkg, view) {
-        if (view === "installed")
-            return pkg.installed
-        if (view === "updates")
-            return pkg.update_available
-        return true
-    }
-
-    function filterPackages(view, query) {
-        var results = []
-        var needle = normalize(query)
-
-        for (var i = 0; i < packageData.length; i += 1) {
-            var pkg = packageData[i]
-            if (!matchesView(pkg, view))
-                continue
-
-            if (needle.length > 0) {
-                var haystack = normalize(pkg.name + " " + pkg.comment + " " + pkg.category)
-                if (haystack.indexOf(needle) === -1)
-                    continue
-            }
-
-            results.push(pkg)
-        }
-
-        return results
     }
 
     function findPackage(name) {
@@ -112,12 +94,27 @@ ShellRoot {
     }
 
     function updateCount() {
-        var count = 0
-        for (var i = 0; i < packageData.length; i += 1) {
-            if (packageData[i].update_available)
-                count += 1
-        }
-        return count
+        return 0
+    }
+
+    function pageLabel() {
+        return "Page " + (pageIndex + 1)
+    }
+
+    function statusSearchText() {
+        if (!committedSearchQuery || committedSearchQuery.length === 0)
+            return "No filter"
+
+        return "Filter: " + committedSearchQuery
+    }
+
+    function setView(nextView) {
+        if (currentView === nextView)
+            return
+
+        currentView = nextView
+        pageIndex = 0
+        refreshPackages()
     }
 
     function triggerMockAction(action, pkgName) {
@@ -137,17 +134,21 @@ ShellRoot {
     }
 
     function refreshPackages() {
-        if (snapshotProcess.running)
+        if (snapshotProcess.running) {
+            pendingRefresh = true
             return
+        }
 
         loadingPackages = true
+        pendingRefresh = false
         statusTone = "info"
-        statusMessage = "Loading package metadata from pkg..."
+        statusMessage = "Loading a package page from pkg..."
         snapshotExitCode = 0
         snapshotStderrText = ""
         snapshotExited = false
         snapshotStdoutFinished = false
         snapshotStderrFinished = false
+        selectedPackageName = ""
         snapshotProcess.running = true
     }
 
@@ -167,8 +168,13 @@ ShellRoot {
                 ? stderrText.trim()
                 : "The pkg backend returned no data."
             packageData = []
+            loadedCount = 0
+            hasPreviousPage = pageIndex > 0
+            hasNextPage = false
             generatedAt = ""
             loadingPackages = false
+            if (pendingRefresh)
+                refreshPackages()
             return
         }
 
@@ -178,8 +184,13 @@ ShellRoot {
             statusTone = "error"
             statusMessage = "The pkg backend returned invalid JSON."
             packageData = []
+            loadedCount = 0
+            hasPreviousPage = pageIndex > 0
+            hasNextPage = false
             generatedAt = ""
             loadingPackages = false
+            if (pendingRefresh)
+                refreshPackages()
             return
         }
 
@@ -187,16 +198,36 @@ ShellRoot {
             statusTone = "error"
             statusMessage = payload.message || stderrText || "Unable to load pkg metadata."
             packageData = []
+            loadedCount = 0
+            hasPreviousPage = pageIndex > 0
+            hasNextPage = false
             generatedAt = ""
             loadingPackages = false
+            if (pendingRefresh)
+                refreshPackages()
             return
         }
 
         packageData = payload.packages || []
         generatedAt = payload.generated_at || ""
+        loadedCount = payload.summary && payload.summary.loaded ? payload.summary.loaded : packageData.length
+        installedTotalCount = payload.summary && payload.summary.installed ? payload.summary.installed : 0
+        hasPreviousPage = payload.summary ? !!payload.summary.has_prev : pageIndex > 0
+        hasNextPage = payload.summary ? !!payload.summary.has_next : false
+        browseCountLabel = payload.summary && payload.summary.browse_count_label
+            ? payload.summary.browse_count_label
+            : String(packageData.length)
+        installedCountLabel = payload.summary && payload.summary.installed_count_label
+            ? payload.summary.installed_count_label
+            : String(installedTotalCount)
+        updatesCountLabel = payload.summary && payload.summary.updates_count_label
+            ? payload.summary.updates_count_label
+            : "--"
         statusTone = "info"
         statusMessage = payload.message || "Loaded package metadata from pkg."
         loadingPackages = false
+        if (pendingRefresh)
+            refreshPackages()
     }
 
     onVisiblePackagesChanged: {
@@ -209,10 +240,30 @@ ShellRoot {
 
     Component.onCompleted: refreshPackages()
 
+    Timer {
+        id: searchDebounce
+
+        interval: 250
+        repeat: false
+        onTriggered: {
+            root.committedSearchQuery = root.searchQuery
+            root.pageIndex = 0
+            root.refreshPackages()
+        }
+    }
+
     Process {
         id: snapshotProcess
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-software-backend.sh", "snapshot"]
+        command: [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-software-backend.sh",
+            "snapshot",
+            root.currentView,
+            String(root.pageIndex),
+            String(root.pageSize),
+            root.committedSearchQuery
+        ]
         stdout: StdioCollector {
             id: snapshotStdout
             waitForEnd: true
@@ -314,19 +365,19 @@ ShellRoot {
                                         {
                                             "id": "browse",
                                             "label": "Browse",
-                                            "count": root.packageData.length,
+                                            "count": root.browseCountLabel,
                                             "accent": root.palette.accent
                                         },
                                         {
                                             "id": "installed",
                                             "label": "Installed",
-                                            "count": root.installedCount(),
+                                            "count": root.installedCountLabel,
                                             "accent": root.palette.success
                                         },
                                         {
                                             "id": "updates",
                                             "label": "Updates",
-                                            "count": root.updateCount(),
+                                            "count": root.updatesCountLabel,
                                             "accent": root.palette.warning
                                         }
                                     ]
@@ -360,7 +411,7 @@ ShellRoot {
                                                     anchors.centerIn: parent
                                                     text: navCard.modelData.count
                                                     color: navCard.modelData.accent
-                                                    font.pixelSize: 14
+                                                    font.pixelSize: String(navCard.modelData.count).length > 2 ? 12 : 14
                                                     font.bold: true
                                                 }
                                             }
@@ -391,7 +442,7 @@ ShellRoot {
 
                                             onEntered: parent.color = root.palette.cardHover
                                             onExited: parent.color = parent.active ? root.palette.cardHover : root.palette.panelBackground
-                                            onClicked: root.currentView = parent.modelData.id
+                                            onClicked: root.setView(parent.modelData.id)
                                         }
                                     }
                                 }
@@ -436,16 +487,16 @@ ShellRoot {
                                     Repeater {
                                         model: [
                                             {
-                                                "label": "Catalog",
-                                                "value": root.packageData.length
+                                                "label": "Loaded",
+                                                "value": root.loadedCount
                                             },
                                             {
                                                 "label": "Installed",
-                                                "value": root.installedCount()
+                                                "value": root.installedTotalCount
                                             },
                                             {
-                                                "label": "Updates",
-                                                "value": root.updateCount()
+                                                "label": "Page",
+                                                "value": root.pageIndex + 1
                                             }
                                         ]
 
@@ -519,10 +570,10 @@ ShellRoot {
                                     wrapMode: Text.WordWrap
                                     clip: true
                                     text: root.loadingPackages
-                                        ? "Refreshing package metadata from pkg right now."
+                                        ? "Loading a smaller package page from pkg right now."
                                         : root.generatedAt.length > 0
-                                            ? "Last pkg snapshot: " + root.generatedAt
-                                            : "Package data will appear here after the first successful pkg snapshot."
+                                            ? root.statusSearchText() + " • Last pkg page: " + root.generatedAt
+                                            : "Package data will appear here after the first successful page loads."
                                     color: root.palette.secondaryText
                                     font.pixelSize: 13
                                 }
@@ -582,7 +633,10 @@ ShellRoot {
                                 clip: true
                                 text: root.searchQuery
 
-                                onTextChanged: root.searchQuery = text
+                                onTextChanged: {
+                                    root.searchQuery = text
+                                    searchDebounce.restart()
+                                }
 
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
@@ -590,6 +644,104 @@ ShellRoot {
                                     text: "Search packages, comments, or categories"
                                     color: root.palette.mutedText
                                     font.pixelSize: 16
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            id: paginationBar
+
+                            width: parent.width
+                            height: 48
+                            radius: 16
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.panelBorder
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 10
+
+                                Text {
+                                    width: 140
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.pageLabel()
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: 180
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.loadingPackages ? "Loading..." : root.statusSearchText()
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    elide: Text.ElideRight
+                                }
+
+                                Item {
+                                    width: Math.max(0, parent.width - 140 - 180 - 220 - (parent.spacing * 3))
+                                    height: 1
+                                }
+
+                                Rectangle {
+                                    width: 96
+                                    height: 24
+                                    radius: 12
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+                                    opacity: root.hasPreviousPage && !root.loadingPackages ? 1.0 : 0.5
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Previous"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: root.hasPreviousPage && !root.loadingPackages
+                                        hoverEnabled: true
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: {
+                                            root.pageIndex -= 1
+                                            root.refreshPackages()
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: 96
+                                    height: 24
+                                    radius: 12
+                                    color: root.palette.accent
+                                    border.width: 1
+                                    border.color: root.palette.accent
+                                    opacity: root.hasNextPage && !root.loadingPackages ? 0.18 : 0.08
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Next"
+                                        color: root.palette.accentStrong
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: root.hasNextPage && !root.loadingPackages
+                                        hoverEnabled: true
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: {
+                                            root.pageIndex += 1
+                                            root.refreshPackages()
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -626,7 +778,7 @@ ShellRoot {
 
                         Rectangle {
                             width: parent.width
-                            height: centerColumn.height - centerHeader.height - searchBarFrame.height - statusBanner.height - (centerColumn.spacing * 3)
+                            height: centerColumn.height - centerHeader.height - searchBarFrame.height - paginationBar.height - statusBanner.height - (centerColumn.spacing * 4)
                             radius: 20
                             color: root.palette.cardBackground
                             border.width: 1
