@@ -265,19 +265,6 @@ ShellRoot {
             border.width: 0
             border.color: root.palette.frameBorder
 
-            Rectangle {
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                anchors.topMargin: 10
-                height: 3
-                radius: 2
-                color: root.palette.accent
-                opacity: 0.82
-            }
-
             Row {
                 id: contentRow
 
