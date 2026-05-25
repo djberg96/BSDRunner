@@ -70,18 +70,7 @@ ShellRoot {
         case "updates":
             return "Updates"
         default:
-            return "Browse"
-        }
-    }
-
-    function viewSubtitle() {
-        switch (currentView) {
-        case "installed":
-            return "Inspect the software that is already part of this BSDRunner machine."
-        case "updates":
-            return "Review the packages that would be refreshed in the next maintenance pass."
-        default:
-            return "Browse live package metadata and view it."
+            return "Browse Software Packages"
         }
     }
 
@@ -603,7 +592,7 @@ ShellRoot {
                                 id: centerHeader
 
                                 width: parent.width
-                                spacing: 10
+                                spacing: 0
 
                                 Text {
                                     width: parent.width
@@ -611,14 +600,6 @@ ShellRoot {
                                     color: root.palette.primaryText
                                     font.pixelSize: 34
                                     font.bold: true
-                                }
-
-                                Text {
-                                    width: parent.width
-                                    wrapMode: Text.WordWrap
-                                    text: root.viewSubtitle()
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 15
                                 }
                             }
 
