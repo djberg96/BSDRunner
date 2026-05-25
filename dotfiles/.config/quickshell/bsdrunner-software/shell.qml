@@ -72,8 +72,9 @@ ShellRoot {
             return "Updates"
         default:
             return "Browse Software Packages"
-        }
     }
+}
+}
 
     function installedCount() {
         var count = 0
@@ -122,6 +123,36 @@ ShellRoot {
         if (pkg.installed && pkg.installed_version)
             return pkg.installed_version
         return pkg.version || ""
+    }
+
+    function formatLicense(value) {
+        var raw = (value || "").trim()
+        if (raw.length === 0 || raw === "Unknown")
+            return "Unknown"
+
+        var replacements = {
+            "APACHE20": "Apache 2.0",
+            "APACHE11": "Apache 1.1",
+            "BSD2CLAUSE": "BSD 2-Clause",
+            "BSD3CLAUSE": "BSD 3-Clause",
+            "GPLV2": "GPL v2",
+            "GPLV3": "GPL v3",
+            "LGPL21": "LGPL 2.1",
+            "LGPL3": "LGPL 3.0",
+            "MIT": "MIT",
+            "MPL20": "MPL 2.0",
+            "ISCL": "ISC",
+            "PD": "Public Domain"
+        }
+
+        var display = raw
+        for (var key in replacements)
+            display = display.replace(new RegExp("\\b" + key + "\\b", "g"), replacements[key])
+
+        display = display.replace(/\|/g, " or ")
+        display = display.replace(/&/g, " and ")
+        display = display.replace(/,/g, ", ")
+        return display
     }
 
     function refreshPackages() {
@@ -1018,7 +1049,7 @@ ShellRoot {
                             id: detailColumn
 
                             width: parent.width
-                            spacing: 16
+                            spacing: 12
 
                                 Text {
                                     width: parent.width
@@ -1041,156 +1072,20 @@ ShellRoot {
                                 Rectangle {
                                     visible: root.selectedPackage !== null
                                     width: parent.width
-                                    height: 170
+                                    height: detailInfoColumn.implicitHeight + 32
                                     radius: 18
                                     color: root.palette.panelBackground
                                     border.width: 1
                                     border.color: root.palette.frameBorder
 
                                     Column {
-                                        anchors.fill: parent
+                                        id: detailInfoColumn
+
+                                        anchors.top: parent.top
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
                                         anchors.margins: 16
-                                        spacing: 10
-
-                                        Repeater {
-                                            model: root.selectedPackage ? [
-                                                {
-                                                    "label": "Version",
-                                                    "value": root.versionText(root.selectedPackage)
-                                                },
-                                                {
-                                                    "label": "Repository",
-                                                    "value": root.selectedPackage.repo
-                                                },
-                                                {
-                                                    "label": "License",
-                                                    "value": root.selectedPackage.license
-                                                },
-                                                {
-                                                    "label": "Installed Size",
-                                                    "value": root.selectedPackage.size
-                                                }
-                                            ] : []
-
-                                                delegate: Row {
-                                                    id: detailRow
-
-                                                    required property var modelData
-                                                    spacing: 12
-
-                                                    Text {
-                                                        width: 108
-                                                        text: detailRow.modelData.label
-                                                        color: root.palette.mutedText
-                                                        font.pixelSize: 12
-                                                        font.bold: true
-                                                }
-
-                                                    Text {
-                                                        width: 180
-                                                        wrapMode: Text.WordWrap
-                                                        text: detailRow.modelData.value
-                                                        color: root.palette.primaryText
-                                                        font.pixelSize: 13
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Column {
-                                    visible: root.selectedPackage !== null
-                                    spacing: 8
-
-                                    Text {
-                                        text: "Dependencies"
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: 14
-                                        font.bold: true
-                                    }
-
-                                    Flow {
-                                        width: parent.width
-                                        spacing: 8
-
-                                        Repeater {
-                                            model: root.selectedPackage ? root.selectedPackage.dependencies : []
-
-                                            delegate: Rectangle {
-                                                id: dependencyChip
-
-                                                required property string modelData
-
-                                                height: 28
-                                                radius: 14
-                                                color: root.palette.panelBackground
-                                                border.width: 1
-                                                border.color: root.palette.frameBorder
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: dependencyChip.modelData
-                                                    color: root.palette.primaryText
-                                                    font.pixelSize: 12
-                                                }
-
-                                                width: textMetrics.width + 24
-
-                                                TextMetrics {
-                                                    id: textMetrics
-                                                    text: dependencyChip.modelData
-                                                    font.pixelSize: 12
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Rectangle {
-                                    visible: root.selectedPackage !== null
-                                    width: parent.width
-                                    height: 88
-                                    radius: 18
-                                    color: root.palette.panelBackground
-                                    border.width: 1
-                                    border.color: root.palette.frameBorder
-
-                                    Column {
-                                        anchors.fill: parent
-                                        anchors.margins: 16
-                                        spacing: 8
-
-                                        Text {
-                                            text: "Homepage"
-                                            color: root.palette.secondaryText
-                                            font.pixelSize: 14
-                                            font.bold: true
-                                        }
-
-                                        Text {
-                                            width: parent.width
-                                            wrapMode: Text.WrapAnywhere
-                                            text: root.selectedPackage ? root.selectedPackage.website : ""
-                                            color: root.palette.accentStrong
-                                            font.pixelSize: 13
-                                        }
-                                    }
-                                }
-
-                                Rectangle {
-                                    visible: root.selectedPackage !== null
-                                    width: parent.width
-                                    height: 184
-                                    radius: 18
-                                    color: root.palette.panelBackground
-                                    border.width: 1
-                                    border.color: root.palette.frameBorder
-
-                                    Column {
-                                        anchors.fill: parent
-                                        anchors.margins: 16
-                                        spacing: 10
+                                        spacing: 14
 
                                         Text {
                                             text: "Actions"
@@ -1257,7 +1152,135 @@ ShellRoot {
                                                 }
                                             }
                                         }
+
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 1
+                                            color: root.palette.frameBorder
+                                            opacity: 0.55
+                                        }
+
+                                        Text {
+                                            text: "Package Info"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                        }
+
+                                        Repeater {
+                                            model: root.selectedPackage ? [
+                                                {
+                                                    "label": "Version",
+                                                    "value": root.versionText(root.selectedPackage)
+                                                },
+                                                {
+                                                    "label": "Repository",
+                                                    "value": root.selectedPackage.repo
+                                                },
+                                                {
+                                                    "label": "License",
+                                                    "value": root.formatLicense(root.selectedPackage.license)
+                                                },
+                                                {
+                                                    "label": "Installed Size",
+                                                    "value": root.selectedPackage.size
+                                                }
+                                            ] : []
+
+                                            delegate: Row {
+                                                id: detailRow
+
+                                                required property var modelData
+                                                width: parent.width
+                                                spacing: 12
+
+                                                Text {
+                                                    width: 108
+                                                    text: detailRow.modelData.label
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: detailInfoColumn.width - 120
+                                                    wrapMode: Text.WordWrap
+                                                    text: detailRow.modelData.value
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            text: "Homepage"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            wrapMode: Text.WrapAnywhere
+                                            text: root.selectedPackage ? root.selectedPackage.website : ""
+                                            color: root.palette.accentStrong
+                                            font.pixelSize: 13
+                                        }
+
+                                        Column {
+                                            spacing: 8
+                                            width: parent.width
+
+                                            Text {
+                                                text: "Dependencies"
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                            }
+
+                                            Flow {
+                                                width: parent.width
+                                                spacing: 8
+
+                                                Repeater {
+                                                    model: root.selectedPackage ? root.selectedPackage.dependencies : []
+
+                                                    delegate: Rectangle {
+                                                        id: dependencyChip
+
+                                                        required property string modelData
+
+                                                        height: 28
+                                                        radius: 14
+                                                        color: root.palette.cardBackground
+                                                        border.width: 1
+                                                        border.color: root.palette.frameBorder
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: dependencyChip.modelData
+                                                            color: root.palette.primaryText
+                                                            font.pixelSize: 12
+                                                        }
+
+                                                        width: textMetrics.width + 24
+
+                                                        TextMetrics {
+                                                            id: textMetrics
+                                                            text: dependencyChip.modelData
+                                                            font.pixelSize: 12
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
+                                }
+
+                                Item {
+                                    visible: root.selectedPackage !== null
+                                    width: parent.width
+                                    height: 16
                                 }
                         }
 
