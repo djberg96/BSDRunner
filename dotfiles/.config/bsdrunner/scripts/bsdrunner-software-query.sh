@@ -91,8 +91,32 @@ human_size_value() {
 }
 
 local_pkg_disk_used_label() {
+    stats_bytes_output="$(pkg stats -lb 2>/dev/null || true)"
+    stats_bytes="$(printf '%s\n' "$stats_bytes_output" | awk -F ': *' '
+        /Disk space occupied/ {
+            value = $2
+            gsub(/[^0-9]/, "", value)
+            if (value != "") {
+                print value
+                exit
+            }
+        }
+    ')"
+
+    if [ -n "$stats_bytes" ]; then
+        human_size_value "$stats_bytes"
+        return
+    fi
+
     stats_output="$(pkg stats -l 2>/dev/null || true)"
-    stats_label="$(printf '%s\n' "$stats_output" | awk -F ': *' '/Disk space occupied/ { print $2; exit }')"
+    stats_label="$(printf '%s\n' "$stats_output" | awk -F ': *' '
+        /Disk space occupied/ {
+            if ($2 != "") {
+                print $2
+                exit
+            }
+        }
+    ')"
 
     if [ -n "$stats_label" ]; then
         printf '%s\n' "$stats_label"
