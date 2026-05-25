@@ -133,10 +133,13 @@ snapshot() {
             return sprintf("%.1f %s", size, units[idx])
         }
 
-        function emit_package(name, version, comment, origin, website, size_bytes, description, installed, update_available, installed_version, first_record, size_text, display_comment, display_description) {
+        function emit_package(name, version, comment, origin, website, size_bytes, description, installed, update_available, installed_version, first_record, size_text, display_comment, display_description, installed_text, update_text, safe_size_bytes) {
             size_text = human_size(size_bytes)
             display_comment = comment != "" ? comment : "No package summary available."
             display_description = description != "" ? description : display_comment
+            installed_text = installed ? "true" : "false"
+            update_text = update_available ? "true" : "false"
+            safe_size_bytes = size_bytes == "" ? "0" : size_bytes
 
             if (!first_record)
                 printf ","
@@ -145,8 +148,8 @@ snapshot() {
             printf "\"name\":%s,", quote(name)
             printf "\"version\":%s,", quote(version)
             printf "\"installed_version\":%s,", quote(installed_version)
-            printf "\"installed\":%s,", installed ? "true" : "false"
-            printf "\"update_available\":%s,", update_available ? "true" : "false"
+            printf "\"installed\":%s,", installed_text
+            printf "\"update_available\":%s,", update_text
             printf "\"repo\":%s,", quote(repo_name(origin))
             printf "\"origin\":%s,", quote(origin)
             printf "\"category\":%s,", quote(category_name(origin))
@@ -155,7 +158,7 @@ snapshot() {
             printf "\"website\":%s,", quote(website)
             printf "\"license\":\"\","
             printf "\"size\":%s,", quote(size_text)
-            printf "\"size_bytes\":%s,", size_bytes == "" ? "0" : size_bytes
+            printf "\"size_bytes\":%s,", safe_size_bytes
             printf "\"dependencies\":[]"
             printf "}"
         }

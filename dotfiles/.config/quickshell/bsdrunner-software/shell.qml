@@ -254,8 +254,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Software"
-        minimumSize: Qt.size(1180, 760)
-        maximumSize: Qt.size(1180, 760)
+        minimumSize: Qt.size(1160, 680)
+        maximumSize: Qt.size(1160, 680)
         color: "transparent"
 
         Rectangle {
@@ -511,14 +511,18 @@ ShellRoot {
                         }
                     }
 
-                    Column {
-                        width: 520
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        spacing: 16
-
                         Column {
-                            spacing: 10
+                            id: centerColumn
+
+                            width: 520
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            spacing: 16
+
+                            Column {
+                                id: centerHeader
+
+                                spacing: 10
 
                             Text {
                                 text: root.viewTitle()
@@ -537,6 +541,8 @@ ShellRoot {
                         }
 
                         Rectangle {
+                            id: searchBarFrame
+
                             width: parent.width
                             height: 60
                             radius: 18
@@ -568,6 +574,8 @@ ShellRoot {
                         }
 
                         Rectangle {
+                            id: statusBanner
+
                             width: parent.width
                             height: 68
                             radius: 16
@@ -597,7 +605,7 @@ ShellRoot {
 
                         Rectangle {
                             width: parent.width
-                            height: parent.parent.height - 188
+                            height: centerColumn.height - centerHeader.height - searchBarFrame.height - statusBanner.height - (centerColumn.spacing * 3)
                             radius: 20
                             color: root.palette.cardBackground
                             border.width: 1
@@ -653,6 +661,8 @@ ShellRoot {
                                             model: root.visiblePackages
 
                                             delegate: Rectangle {
+                                                id: packageCard
+
                                                 required property var modelData
                                                 readonly property var pkg: modelData
                                                 readonly property bool active: root.selectedPackageName === pkg.name
@@ -772,223 +782,233 @@ ShellRoot {
                         border.width: 1
                         border.color: root.palette.panelBorder
 
-                        Column {
+                        Flickable {
                             anchors.fill: parent
                             anchors.margins: 20
-                            spacing: 16
-
-                            Text {
-                                text: root.selectedPackage ? root.selectedPackage.name : "No package selected"
-                                color: root.palette.primaryText
-                                font.pixelSize: 30
-                                font.bold: true
-                            }
-
-                            Text {
-                                visible: root.selectedPackage !== null
-                                width: parent.width
-                                wrapMode: Text.WordWrap
-                                text: root.selectedPackage ? root.selectedPackage.description : ""
-                                color: root.palette.secondaryText
-                                font.pixelSize: 14
-                            }
-
-                            Rectangle {
-                                visible: root.selectedPackage !== null
-                                width: parent.width
-                                height: 170
-                                radius: 18
-                                color: root.palette.panelBackground
-                                border.width: 1
-                                border.color: root.palette.frameBorder
-
-                                Column {
-                                    anchors.fill: parent
-                                    anchors.margins: 16
-                                    spacing: 10
-
-                                    Repeater {
-                                        model: root.selectedPackage ? [
-                                            {
-                                                "label": "Version",
-                                                "value": root.versionText(root.selectedPackage)
-                                            },
-                                            {
-                                                "label": "Repository",
-                                                "value": root.selectedPackage.repo
-                                            },
-                                            {
-                                                "label": "License",
-                                                "value": root.selectedPackage.license
-                                            },
-                                            {
-                                                "label": "Installed Size",
-                                                "value": root.selectedPackage.size
-                                            }
-                                        ] : []
-
-                                            delegate: Row {
-                                                id: detailRow
-
-                                                required property var modelData
-                                                spacing: 12
-
-                                                Text {
-                                                    width: 108
-                                                    text: detailRow.modelData.label
-                                                    color: root.palette.mutedText
-                                                    font.pixelSize: 12
-                                                    font.bold: true
-                                            }
-
-                                                Text {
-                                                    width: 180
-                                                    wrapMode: Text.WordWrap
-                                                    text: detailRow.modelData.value
-                                                    color: root.palette.primaryText
-                                                    font.pixelSize: 13
-                                                }
-                                        }
-                                    }
-                                }
-                            }
+                            contentWidth: width
+                            contentHeight: detailColumn.height
+                            clip: true
 
                             Column {
-                                visible: root.selectedPackage !== null
-                                spacing: 8
+                                id: detailColumn
+
+                                width: parent.width
+                                spacing: 16
 
                                 Text {
-                                    text: "Dependencies"
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 14
+                                    text: root.selectedPackage ? root.selectedPackage.name : "No package selected"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 30
                                     font.bold: true
                                 }
 
-                                Flow {
+                                Text {
+                                    visible: root.selectedPackage !== null
                                     width: parent.width
-                                    spacing: 8
-
-                                    Repeater {
-                                        model: root.selectedPackage ? root.selectedPackage.dependencies : []
-
-                                        delegate: Rectangle {
-                                            id: dependencyChip
-
-                                            required property string modelData
-
-                                            height: 28
-                                            radius: 14
-                                            color: root.palette.panelBackground
-                                            border.width: 1
-                                            border.color: root.palette.frameBorder
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: dependencyChip.modelData
-                                                color: root.palette.primaryText
-                                                font.pixelSize: 12
-                                            }
-
-                                            width: textMetrics.width + 24
-
-                                            TextMetrics {
-                                                id: textMetrics
-                                                text: dependencyChip.modelData
-                                                font.pixelSize: 12
-                                            }
-                                        }
-                                    }
+                                    wrapMode: Text.WordWrap
+                                    text: root.selectedPackage ? root.selectedPackage.description : ""
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 14
                                 }
-                            }
 
-                            Rectangle {
-                                visible: root.selectedPackage !== null
-                                width: parent.width
-                                height: 112
-                                radius: 18
-                                color: root.palette.panelBackground
-                                border.width: 1
-                                border.color: root.palette.frameBorder
+                                Rectangle {
+                                    visible: root.selectedPackage !== null
+                                    width: parent.width
+                                    height: 170
+                                    radius: 18
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
 
-                                Column {
-                                    anchors.fill: parent
-                                    anchors.margins: 16
-                                    spacing: 10
-
-                                    Text {
-                                        text: "Actions"
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: 14
-                                        font.bold: true
-                                    }
-
-                                    Row {
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
                                         spacing: 10
 
                                         Repeater {
                                             model: root.selectedPackage ? [
                                                 {
-                                                    "label": root.selectedPackage.installed ? "Reinstall" : "Install",
-                                                    "tone": "accent"
+                                                    "label": "Version",
+                                                    "value": root.versionText(root.selectedPackage)
                                                 },
                                                 {
-                                                    "label": "Upgrade",
-                                                    "tone": "warning"
+                                                    "label": "Repository",
+                                                    "value": root.selectedPackage.repo
                                                 },
                                                 {
-                                                    "label": "Remove",
-                                                    "tone": "danger"
+                                                    "label": "License",
+                                                    "value": root.selectedPackage.license
+                                                },
+                                                {
+                                                    "label": "Installed Size",
+                                                    "value": root.selectedPackage.size
                                                 }
                                             ] : []
 
-                                            delegate: Rectangle {
-                                                id: actionButton
+                                                delegate: Row {
+                                                    id: detailRow
 
-                                                required property var modelData
-                                                readonly property color toneColor: modelData.tone === "danger"
-                                                    ? root.palette.danger
-                                                    : modelData.tone === "warning"
-                                                        ? root.palette.warning
-                                                        : root.palette.accent
+                                                    required property var modelData
+                                                    spacing: 12
 
-                                                width: 96
-                                                height: 36
-                                                radius: 12
-                                                color: toneColor
-                                                opacity: 0.16
-                                                border.width: 1
-                                                border.color: toneColor
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: actionButton.modelData.label
-                                                    color: parent.toneColor
-                                                    font.pixelSize: 12
-                                                    font.bold: true
+                                                    Text {
+                                                        width: 108
+                                                        text: detailRow.modelData.label
+                                                        color: root.palette.mutedText
+                                                        font.pixelSize: 12
+                                                        font.bold: true
                                                 }
 
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-
-                                                    onEntered: parent.opacity = 0.24
-                                                    onExited: parent.opacity = 0.16
-                                                    onClicked: root.triggerMockAction(actionButton.modelData.label.toLowerCase(), root.selectedPackage.name)
+                                                    Text {
+                                                        width: 180
+                                                        wrapMode: Text.WordWrap
+                                                        text: detailRow.modelData.value
+                                                        color: root.palette.primaryText
+                                                        font.pixelSize: 13
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            Text {
-                                visible: root.selectedPackage !== null
-                                width: parent.width
-                                wrapMode: Text.WordWrap
-                                text: root.selectedPackage ? root.selectedPackage.website : ""
-                                color: root.palette.accentStrong
-                                font.pixelSize: 13
+                                Column {
+                                    visible: root.selectedPackage !== null
+                                    spacing: 8
+
+                                    Text {
+                                        text: "Dependencies"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+
+                                    Flow {
+                                        width: parent.width
+                                        spacing: 8
+
+                                        Repeater {
+                                            model: root.selectedPackage ? root.selectedPackage.dependencies : []
+
+                                            delegate: Rectangle {
+                                                id: dependencyChip
+
+                                                required property string modelData
+
+                                                height: 28
+                                                radius: 14
+                                                color: root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: root.palette.frameBorder
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: dependencyChip.modelData
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                }
+
+                                                width: textMetrics.width + 24
+
+                                                TextMetrics {
+                                                    id: textMetrics
+                                                    text: dependencyChip.modelData
+                                                    font.pixelSize: 12
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: root.selectedPackage !== null
+                                    width: parent.width
+                                    height: 112
+                                    radius: 18
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        spacing: 10
+
+                                        Text {
+                                            text: "Actions"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                        }
+
+                                        Row {
+                                            spacing: 10
+
+                                            Repeater {
+                                                model: root.selectedPackage ? [
+                                                    {
+                                                        "label": root.selectedPackage.installed ? "Reinstall" : "Install",
+                                                        "tone": "accent"
+                                                    },
+                                                    {
+                                                        "label": "Upgrade",
+                                                        "tone": "warning"
+                                                    },
+                                                    {
+                                                        "label": "Remove",
+                                                        "tone": "danger"
+                                                    }
+                                                ] : []
+
+                                                delegate: Rectangle {
+                                                    id: actionButton
+
+                                                    required property var modelData
+                                                    readonly property color toneColor: modelData.tone === "danger"
+                                                        ? root.palette.danger
+                                                        : modelData.tone === "warning"
+                                                            ? root.palette.warning
+                                                            : root.palette.accent
+
+                                                    width: 96
+                                                    height: 36
+                                                    radius: 12
+                                                    color: toneColor
+                                                    opacity: 0.16
+                                                    border.width: 1
+                                                    border.color: toneColor
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: actionButton.modelData.label
+                                                        color: parent.toneColor
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                    }
+
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+
+                                                        onEntered: parent.opacity = 0.24
+                                                        onExited: parent.opacity = 0.16
+                                                        onClicked: root.triggerMockAction(actionButton.modelData.label.toLowerCase(), root.selectedPackage.name)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    visible: root.selectedPackage !== null
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                    text: root.selectedPackage ? root.selectedPackage.website : ""
+                                    color: root.palette.accentStrong
+                                    font.pixelSize: 13
+                                }
                             }
                         }
                     }
@@ -996,4 +1016,3 @@ ShellRoot {
             }
         }
     }
-}
