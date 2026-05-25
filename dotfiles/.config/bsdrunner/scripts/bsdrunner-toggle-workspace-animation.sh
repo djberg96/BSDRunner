@@ -35,9 +35,18 @@ workspace_override_file() {
     printf '%s\n' "$runner_home/wallpaper-overrides/$theme_name/workspace-$workspace_id"
 }
 
-active_workspace_id() {
-    hyprctl activeworkspace -j 2>/dev/null |
-        tr '\n' ' ' |
+active_workspace_slot() {
+    workspace_json="$(hyprctl activeworkspace -j 2>/dev/null | tr '\n' ' ')"
+
+    workspace_name="$(printf '%s\n' "$workspace_json" |
+        sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\(-\{0,1\}[0-9][0-9]*\)".*/\1/p' |
+        head -n 1)"
+    if [ -n "$workspace_name" ]; then
+        printf '%s\n' "$workspace_name"
+        return 0
+    fi
+
+    printf '%s\n' "$workspace_json" |
         sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\{0,1\}\(-\{0,1\}[0-9][0-9]*\)"\{0,1\}.*/\1/p' |
         head -n 1
 }
@@ -67,15 +76,17 @@ preferred_wallpaper_for_stem() {
 }
 
 ordered_wallpapers() {
-    {
-        printf '%s\n' "${wallpaper_path%.*}"
-        theme_wallpapers | while IFS= read -r candidate; do
-            [ -n "$candidate" ] || continue
-            printf '%s\n' "${candidate%.*}"
-        done
-    } | awk '!seen[$0]++' | while IFS= read -r stem; do
+    current_stem="${wallpaper_path%.*}"
+    preferred_wallpaper_for_stem "$current_stem" || true
+
+    theme_wallpapers | while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        stem="${candidate%.*}"
+        [ "$stem" = "$current_stem" ] && continue
+        printf '%s\n' "$stem"
+    done | sort -u | while IFS= read -r stem; do
         [ -n "$stem" ] || continue
-        preferred_wallpaper_for_stem "$stem"
+        preferred_wallpaper_for_stem "$stem" || true
     done
 }
 
@@ -136,7 +147,7 @@ print_status() {
     printf '}\n'
 }
 
-workspace_id="$(active_workspace_id || true)"
+workspace_id="$(active_workspace_slot || true)"
 [ -n "$workspace_id" ] || exit 0
 [ "$workspace_id" -gt 0 ] 2>/dev/null || exit 0
 
