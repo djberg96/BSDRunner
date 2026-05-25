@@ -1004,11 +1004,15 @@ ShellRoot {
                     border.color: root.palette.panelBorder
 
                     Flickable {
+                        id: detailFlickable
+
                         anchors.fill: parent
                         anchors.margins: 20
                         contentWidth: width
                         contentHeight: detailColumn.height
+                        boundsBehavior: Flickable.StopAtBounds
                         clip: true
+                        interactive: contentHeight > height
 
                         Column {
                             id: detailColumn
@@ -1255,6 +1259,26 @@ ShellRoot {
                                         }
                                     }
                                 }
+                        }
+
+                        Rectangle {
+                            visible: detailFlickable.contentHeight > detailFlickable.height
+                            anchors.top: parent.top
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            width: 6
+                            radius: 3
+                            color: root.palette.frameBorder
+                            opacity: 0.32
+
+                            Rectangle {
+                                width: parent.width
+                                radius: 3
+                                color: root.palette.accent
+                                opacity: 0.78
+                                height: Math.max(36, parent.height * (detailFlickable.height / Math.max(detailFlickable.contentHeight, 1)))
+                                y: (parent.height - height) * (detailFlickable.contentY / Math.max(detailFlickable.contentHeight - detailFlickable.height, 1))
+                            }
                         }
                     }
                 }

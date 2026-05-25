@@ -32,10 +32,10 @@ normalize_records() {
         }
 
         NF {
-            for (i = 1; i <= 6; i += 1)
+            for (i = 1; i <= 7; i += 1)
                 $i = clean($i)
 
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5, $6, $3
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5, $6, $3, $7
         }
     '
 }
@@ -234,8 +234,8 @@ enrich_browse_page() {
             if (installed && installed_value != "" && installed_value != $2)
                 update_value = 1
 
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
-                $1, $2, $3, $4, $5, $6, $7,
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
+                $1, $2, $3, $4, $5, $6, $7, $8,
                 installed, update_value, installed_value, human_size($6)
         }
     ' "$installed_file" "$page_file" >"$output_file"
@@ -249,7 +249,7 @@ enrich_installed_page() {
 
     : >"$output_file"
 
-    while IFS='	' read -r name installed_version comment origin website size_bytes description; do
+    while IFS='	' read -r name installed_version comment origin website size_bytes description license; do
         [ -n "$name" ] || continue
 
         remote_record="$(query_remote_record "$name" "$query_format" "$field_sep" || true)"
@@ -260,6 +260,7 @@ enrich_installed_page() {
         merged_website="$website"
         merged_size="$size_bytes"
         merged_description="$description"
+        merged_license="$license"
         update_available=0
 
         if [ -n "$remote_record" ]; then
@@ -271,6 +272,7 @@ enrich_installed_page() {
                 merged_website="$(printf '%s\n' "$remote_record" | awk -F '	' 'NR == 1 { print $5 }')"
                 merged_size="$(printf '%s\n' "$remote_record" | awk -F '	' 'NR == 1 { print $6 }')"
                 merged_description="$(printf '%s\n' "$remote_record" | awk -F '	' 'NR == 1 { print $7 }')"
+                merged_license="$(printf '%s\n' "$remote_record" | awk -F '	' 'NR == 1 { print $8 }')"
 
                 if [ "$installed_version" != "$remote_version" ]; then
                     comparison="$(pkg version -t "$installed_version" "$remote_version" 2>/dev/null || printf '=')"
@@ -306,7 +308,7 @@ enrich_installed_page() {
             '
         )"
 
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t1\t%s\t%s\t%s\n' \
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t1\t%s\t%s\t%s\n' \
             "$name" \
             "$version" \
             "$merged_comment" \
@@ -314,6 +316,7 @@ enrich_installed_page() {
             "$merged_website" \
             "$merged_size" \
             "$merged_description" \
+            "$merged_license" \
             "$update_available" \
             "$installed_version" \
             "$size_text" >>"$output_file"
@@ -481,20 +484,24 @@ emit_json() {
             if (package_description == "")
                 package_description = package_comment
 
+            package_license = $8
+            if (package_license == "")
+                package_license = "Unknown"
+
             printf "{"
             printf "\"name\":%s,", quote($1)
             printf "\"version\":%s,", quote($2)
-            printf "\"installed_version\":%s,", quote($10)
-            printf "\"installed\":%s,", ($8 == "1" ? "true" : "false")
-            printf "\"update_available\":%s,", ($9 == "1" ? "true" : "false")
+            printf "\"installed_version\":%s,", quote($11)
+            printf "\"installed\":%s,", ($9 == "1" ? "true" : "false")
+            printf "\"update_available\":%s,", ($10 == "1" ? "true" : "false")
             printf "\"repo\":%s,", quote(repo_name($4))
             printf "\"origin\":%s,", quote($4)
             printf "\"category\":%s,", quote(category_name($4))
             printf "\"comment\":%s,", quote(package_comment)
             printf "\"description\":%s,", quote(package_description)
             printf "\"website\":%s,", quote($5)
-            printf "\"license\":\"\","
-            printf "\"size\":%s,", quote($11)
+            printf "\"license\":%s,", quote(package_license)
+            printf "\"size\":%s,", quote($12)
             printf "\"size_bytes\":%s,", ($6 == "" ? "0" : $6)
             printf "\"dependencies\":[]"
             printf "}"
@@ -553,7 +560,8 @@ snapshot() {
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
     field_sep="$(printf '\t')"
-    query_format="$(printf '%%n%s%%v%s%%c%s%%o%s%%w%s%%sb' \
+    query_format="$(printf '%%n%s%%v%s%%c%s%%o%s%%w%s%%sb%s%%L' \
+        "$field_sep" \
         "$field_sep" \
         "$field_sep" \
         "$field_sep" \
