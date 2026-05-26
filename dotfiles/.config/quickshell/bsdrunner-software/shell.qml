@@ -1095,15 +1095,6 @@ ShellRoot {
                                 elide: Text.ElideNone
                             }
 
-                            Text {
-                                visible: root.selectedPackage !== null
-                                width: parent.width
-                                wrapMode: Text.WordWrap
-                                text: root.selectedPackage ? root.selectedPackage.description : ""
-                                color: root.palette.secondaryText
-                                font.pixelSize: 14
-                            }
-
                             Rectangle {
                                 visible: root.selectedPackage !== null
                                 width: parent.width
@@ -1121,13 +1112,6 @@ ShellRoot {
                                     anchors.right: parent.right
                                     anchors.margins: 16
                                     spacing: 14
-
-                                    Text {
-                                        text: "Actions"
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: 14
-                                        font.bold: true
-                                    }
 
                                     Column {
                                         width: parent.width
