@@ -72,9 +72,8 @@ ShellRoot {
             return "Updates"
         default:
             return "Browse Software Packages"
+        }
     }
-}
-}
 
     function installedCount() {
         var count = 0
@@ -263,8 +262,9 @@ ShellRoot {
             selectedPackageName = ""
         } else if (!packageInList(selectedPackageName, visiblePackages)) {
             selectedPackageName = visiblePackages[0].name
-        }
     }
+}
+}
 
     Component.onCompleted: refreshPackages()
 
