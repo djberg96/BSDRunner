@@ -87,7 +87,23 @@ if ! theme_exists "$theme"; then
     exit 1
 fi
 
+cleanup_stale_theme_waybar_configs() {
+    local theme_name=""
+    local repo_theme_config=""
+    local home_theme_config=""
+
+    for theme_name in default haas-bioroid jinteki nbn weyland; do
+        repo_theme_config="$repo_root/dotfiles/.config/bsdrunner/themes/$theme_name/waybar-config"
+        home_theme_config="$HOME/.config/bsdrunner/themes/$theme_name/waybar-config"
+
+        if [[ ! -f "$repo_theme_config" && -f "$home_theme_config" ]]; then
+            rm -f "$home_theme_config"
+        fi
+    done
+}
+
 rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
+cleanup_stale_theme_waybar_configs
 
 mkdir -p "$HOME/.config/bsdrunner/base"
 mkdir -p "$HOME/.config/hypr"

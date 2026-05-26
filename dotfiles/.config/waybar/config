@@ -7,7 +7,7 @@
     "margin-top": 8,
     "margin-left": 10,
     "margin-right": 10,
-    "modules-left": ["custom/theme", "custom/keybinds", "hyprland/workspaces", "custom/wallpaper-animation", "hyprland/window"],
+    "modules-left": ["custom/theme", "custom/apps", "hyprland/workspaces", "custom/wallpaper-animation", "hyprland/window"],
     "modules-center": [],
     "modules-right": ["cpu", "memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
 
@@ -59,11 +59,11 @@
       "on-click": "sh ~/.config/waybar/scripts/bsdrunner-theme-menu.sh"
     },
 
-    "custom/keybinds": {
-      "format": "KEYS",
+    "custom/apps": {
+      "format": "APPS",
       "tooltip": true,
-      "tooltip-format": "Open the BSDRunner keybinding cheat sheet",
-      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-keybindings-menu.sh"
+      "tooltip-format": "Open BSDRunner Software",
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-software.sh"
     },
 
     "cpu": {

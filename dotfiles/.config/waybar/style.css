@@ -20,7 +20,7 @@ tooltip {
 
 #workspaces,
 #custom-theme,
-#custom-keybinds,
+#custom-apps,
 #custom-wallpaper-animation,
 #window,
 #cpu,
@@ -49,7 +49,7 @@ tooltip {
     letter-spacing: 0.08em;
 }
 
-#custom-keybinds {
+#custom-apps {
     color: #d8dee9;
     font-weight: 800;
     letter-spacing: 0.06em;
@@ -86,7 +86,7 @@ tooltip {
     background: rgba(236, 239, 244, 0.10);
 }
 
-#custom-keybinds:hover {
+#custom-apps:hover {
     background: rgba(236, 239, 244, 0.10);
 }
 

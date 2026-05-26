@@ -10,7 +10,7 @@
 #pulseaudio,
 #custom-network,
 #custom-battery,
-#custom-keybinds,
+#custom-apps,
 #clock,
 #tray,
 #custom-power {
@@ -58,7 +58,7 @@
     border-color: rgba(255, 111, 131, 0.60);
 }
 
-#custom-keybinds:hover {
+#custom-apps:hover {
     background: rgba(98, 23, 36, 0.98);
     border-color: rgba(255, 111, 131, 0.60);
 }

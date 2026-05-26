@@ -40,6 +40,7 @@ The goal is a nice, bootable base session for Hyprland `0.54.x` on FreeBSD.
 - `scripts/install-dotfiles.sh`
 - `docs/freebsd-setup.md`
 - `docs/themes.md`
+- `docs/software-center.md`
 
 ## Quick Start
 
@@ -118,7 +119,7 @@ Both paths call the same theme apply script and update:
 Waybar also includes a few lightweight control-surface actions:
 
 - theme switcher
-- keybinding cheat sheet
+- apps launcher
 - power menu
 
 Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.

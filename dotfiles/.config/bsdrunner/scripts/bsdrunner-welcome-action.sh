@@ -30,6 +30,9 @@ case "$action" in
     browser)
         exec firefox
         ;;
+    apps)
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-software.sh"
+        ;;
     reload)
         exec hyprctl reload
         ;;
