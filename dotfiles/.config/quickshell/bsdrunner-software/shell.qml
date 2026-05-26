@@ -58,6 +58,7 @@ ShellRoot {
     property string actionFeedbackDetails: ""
     readonly property var visiblePackages: packageData
     readonly property var selectedPackage: findPackage(selectedPackageName)
+    readonly property string appVersion: "0.0.1"
 
     function normalize(value) {
         return (value || "").toLowerCase()
@@ -628,8 +629,14 @@ ShellRoot {
                     border.color: root.palette.panelBorder
 
                     Column {
-                        anchors.fill: parent
-                        anchors.margins: 20
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.topMargin: 20
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        anchors.bottomMargin: 42
                         spacing: 16
 
                         Column {
@@ -717,9 +724,20 @@ ShellRoot {
                                                     text: navCard.active ? "Current view" : "Switch view"
                                                     color: root.palette.mutedText
                                                     font.pixelSize: 12
-                                                }
-                                            }
-                                        }
+                                }
+                            }
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.bottom: parent.bottom
+                                anchors.leftMargin: 16
+                                anchors.bottomMargin: 12
+                                text: root.appVersion
+                                color: root.palette.mutedText
+                                font.pixelSize: 11
+                                font.bold: true
+                            }
+                }
 
                                         MouseArea {
                                             anchors.fill: parent
