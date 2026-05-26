@@ -953,15 +953,16 @@ ShellRoot {
 
                                                             width: categoryText.implicitWidth + 20
                                                             height: 24
-                                                            radius: 12
-                                                            color: root.palette.accent
-                                                            opacity: 0.16
+                                                            radius: 0
+                                                            color: Qt.alpha(root.palette.accent, 0.2)
+                                                            border.width: 1
+                                                            border.color: root.palette.accent
 
                                                             Text {
                                                                 id: categoryText
                                                                 anchors.centerIn: parent
                                                                 text: packageCard.pkg.category
-                                                                color: root.palette.accent
+                                                                color: root.palette.accentStrong
                                                                 font.pixelSize: 12
                                                                 font.bold: true
                                                             }
