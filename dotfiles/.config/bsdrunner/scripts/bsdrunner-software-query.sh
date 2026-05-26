@@ -369,7 +369,17 @@ enrich_browse_page() {
         installed_version=""
         update_value=0
 
-        installed_version="$(pkg query '%v' "$name" 2>/dev/null || true)"
+        installed_version="$(awk -F '	' -v pkg_name="$name" '
+            $1 == pkg_name {
+                print $2
+                exit
+            }
+        ' "$installed_file")"
+
+        if [ -z "$installed_version" ]; then
+            installed_version="$(pkg query '%v' "$name" 2>/dev/null || true)"
+        fi
+
         if [ -n "$installed_version" ]; then
             installed=1
 
