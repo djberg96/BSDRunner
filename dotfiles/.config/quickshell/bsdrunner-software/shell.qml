@@ -1199,47 +1199,52 @@ ShellRoot {
                                         font.bold: true
                                     }
 
-                                    Repeater {
-                                        model: root.selectedPackage ? [
-                                            {
-                                                "label": "Version",
-                                                "value": root.versionText(root.selectedPackage)
-                                            },
-                                            {
-                                                "label": "Repository",
-                                                "value": root.selectedPackage.repo
-                                            },
-                                            {
-                                                "label": "License",
-                                                "value": root.formatLicense(root.selectedPackage.license)
-                                            },
-                                            {
-                                                "label": "Installed Size",
-                                                "value": root.selectedPackage.size
-                                            }
-                                        ] : []
+                                    Column {
+                                        width: parent.width
+                                        spacing: 6
 
-                                        delegate: Row {
-                                            id: detailRow
+                                        Repeater {
+                                            model: root.selectedPackage ? [
+                                                {
+                                                    "label": "Version",
+                                                    "value": root.versionText(root.selectedPackage)
+                                                },
+                                                {
+                                                    "label": "Repository",
+                                                    "value": root.selectedPackage.repo
+                                                },
+                                                {
+                                                    "label": "License",
+                                                    "value": root.formatLicense(root.selectedPackage.license)
+                                                },
+                                                {
+                                                    "label": "Installed Size",
+                                                    "value": root.selectedPackage.size
+                                                }
+                                            ] : []
 
-                                            required property var modelData
-                                            width: parent.width
-                                            spacing: 12
+                                            delegate: Row {
+                                                id: detailRow
 
-                                            Text {
-                                                width: 108
-                                                text: detailRow.modelData.label
-                                                color: root.palette.mutedText
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                            }
+                                                required property var modelData
+                                                width: parent.width
+                                                spacing: 10
 
-                                            Text {
-                                                width: detailInfoColumn.width - 120
-                                                wrapMode: Text.WordWrap
-                                                text: detailRow.modelData.value
-                                                color: root.palette.primaryText
-                                                font.pixelSize: 13
+                                                Text {
+                                                    width: 108
+                                                    text: detailRow.modelData.label
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: detailInfoColumn.width - 118
+                                                    wrapMode: Text.WordWrap
+                                                    text: detailRow.modelData.value
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                }
                                             }
                                         }
                                     }
