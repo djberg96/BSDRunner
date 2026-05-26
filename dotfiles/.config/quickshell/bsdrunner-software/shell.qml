@@ -761,9 +761,9 @@ ShellRoot {
 
                                         Rectangle {
                                             visible: navMouse.containsMouse && navMouse.enabled
-                                            anchors.top: parent.bottom
-                                            anchors.left: parent.left
-                                            anchors.topMargin: 8
+                                            readonly property bool showAbove: navCard.modelData.id === "updates"
+                                            x: 0
+                                            y: showAbove ? (-height - 8) : (parent.height + 8)
                                             width: navCard.width
                                             height: navHintText.implicitHeight + 20
                                             radius: 12
