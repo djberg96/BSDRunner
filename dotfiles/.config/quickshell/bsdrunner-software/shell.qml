@@ -1012,7 +1012,7 @@ ShellRoot {
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     visible: parent.text.length === 0
-                                    text: "Search packages, comments, or categories"
+                                    text: "Search names and comments, or filter with package:, category:, installed:"
                                     color: root.palette.mutedText
                                     font.pixelSize: 16
                                 }
