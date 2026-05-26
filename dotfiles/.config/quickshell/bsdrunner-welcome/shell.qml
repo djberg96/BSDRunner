@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import Quickshell
+import QtCore
 import QtQuick
 
 ShellRoot {
@@ -10,7 +11,7 @@ ShellRoot {
         id: themeLoader
     }
 
-    readonly property string homeDir: Quickshell.env("HOME") || ""
+    readonly property string homeDir: StandardPaths.writableLocation(StandardPaths.HomeLocation) || ""
     readonly property string activeTheme: themeLoader.activeTheme
     readonly property var palette: themeLoader.palette
 

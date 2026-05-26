@@ -36,6 +36,7 @@ ShellRoot {
     property bool refreshButtonHovered: false
     property int snapshotExitCode: 0
     property string snapshotStderrText: ""
+    property string snapshotStdoutText: ""
     property bool snapshotExited: false
     property bool snapshotStdoutFinished: false
     property bool snapshotStderrFinished: false
@@ -166,6 +167,7 @@ ShellRoot {
         statusMessage = "Loading a package page from pkg..."
         snapshotExitCode = 0
         snapshotStderrText = ""
+        snapshotStdoutText = ""
         snapshotExited = false
         snapshotStdoutFinished = false
         snapshotStderrFinished = false
@@ -177,7 +179,7 @@ ShellRoot {
         if (!snapshotExited || !snapshotStdoutFinished || !snapshotStderrFinished)
             return
 
-        root.applySnapshot(snapshotStdout.text, snapshotExitCode, snapshotStderrText)
+        root.applySnapshot(root.snapshotStdoutText, root.snapshotExitCode, root.snapshotStderrText)
     }
 
     function applySnapshot(text, exitCode, stderrText) {
@@ -262,9 +264,8 @@ ShellRoot {
             selectedPackageName = ""
         } else if (!packageInList(selectedPackageName, visiblePackages)) {
             selectedPackageName = visiblePackages[0].name
+        }
     }
-}
-}
 
     Component.onCompleted: refreshPackages()
 
@@ -282,6 +283,7 @@ ShellRoot {
 
     Process {
         id: snapshotProcess
+        property var controller: root
 
         command: [
             "sh",
@@ -297,8 +299,9 @@ ShellRoot {
             waitForEnd: true
 
             onStreamFinished: {
-                root.snapshotStdoutFinished = true
-                root.maybeFinalizeSnapshot()
+                snapshotProcess.controller.snapshotStdoutText = text
+                snapshotProcess.controller.snapshotStdoutFinished = true
+                snapshotProcess.controller.maybeFinalizeSnapshot()
             }
         }
         stderr: StdioCollector {
@@ -306,17 +309,16 @@ ShellRoot {
             waitForEnd: true
 
             onStreamFinished: {
-                root.snapshotStderrFinished = true
-                root.snapshotStderrText = snapshotStderr.text
-                root.maybeFinalizeSnapshot()
+                snapshotProcess.controller.snapshotStderrFinished = true
+                snapshotProcess.controller.snapshotStderrText = text
+                snapshotProcess.controller.maybeFinalizeSnapshot()
             }
         }
 
         onExited: function(exitCode, exitStatus) {
-            root.snapshotExitCode = exitCode
-            root.snapshotStderrText = snapshotStderr.text
-            root.snapshotExited = true
-            root.maybeFinalizeSnapshot()
+            snapshotProcess.controller.snapshotExitCode = exitCode
+            snapshotProcess.controller.snapshotExited = true
+            snapshotProcess.controller.maybeFinalizeSnapshot()
         }
     }
 
@@ -522,6 +524,8 @@ ShellRoot {
                                         ]
 
                                         delegate: Column {
+                                            id: statusMetricColumn
+
                                             required property var modelData
 
                                             width: statusMetricRow.width
@@ -529,7 +533,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: modelData.label
+                                                text: statusMetricColumn.modelData.label
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: 11
                                                 font.bold: true
@@ -537,9 +541,9 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: modelData.value
+                                                text: statusMetricColumn.modelData.value
                                                 color: root.palette.accentStrong
-                                                font.pixelSize: String(modelData.value).length > 8 ? 15 : 18
+                                                font.pixelSize: String(statusMetricColumn.modelData.value).length > 8 ? 15 : 18
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -1308,3 +1312,4 @@ ShellRoot {
             }
         }
     }
+}

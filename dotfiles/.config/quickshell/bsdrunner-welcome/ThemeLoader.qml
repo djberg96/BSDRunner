@@ -1,11 +1,12 @@
 import Quickshell
 import Quickshell.Io
+import QtCore
 import QtQml
 
 QtObject {
     id: root
 
-    readonly property string homeDir: Quickshell.env("HOME") || ""
+    readonly property string homeDir: StandardPaths.writableLocation(StandardPaths.HomeLocation) || ""
     readonly property string activeTheme: {
         var text = themeFile.text().trim()
         return text.length > 0 ? text : "default"
@@ -36,6 +37,6 @@ QtObject {
 
     property var themePalette: ThemePalette {
         themeName: root.activeTheme
-        paletteText: paletteFile.text()
+        paletteText: root.paletteFile.text()
     }
 }
