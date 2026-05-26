@@ -128,17 +128,23 @@ local_pkg_disk_used_label() {
 
 collect_page_from_stdin() {
     meta_file="$1"
-    needle="$2"
-    offset="$3"
-    limit="$4"
+    text_filter="$2"
+    category_filter="$3"
+    offset="$4"
+    limit="$5"
 
-    awk -F '	' -v meta_file="$meta_file" -v needle="$needle" -v offset="$offset" -v limit="$limit" '
+    awk -F '	' -v meta_file="$meta_file" -v text_filter="$text_filter" -v category_filter="$category_filter" -v offset="$offset" -v limit="$limit" '
         function matches_record() {
-            if (needle == "")
+            split($4, origin_parts, "/")
+            category = tolower(origin_parts[1])
+            if (category_filter != "" && category != category_filter)
+                return 0
+
+            if (text_filter == "")
                 return 1
 
             haystack = tolower($1 " " $3 " " $4)
-            return index(haystack, needle) > 0
+            return index(haystack, text_filter) > 0
         }
 
         BEGIN {
@@ -177,11 +183,54 @@ collect_page_from_file() {
     source_file="$1"
     target_file="$2"
     meta_file="$3"
-    needle="$4"
-    offset="$5"
-    limit="$6"
+    text_filter="$4"
+    category_filter="$5"
+    offset="$6"
+    limit="$7"
 
-    collect_page_from_stdin "$meta_file" "$needle" "$offset" "$limit" <"$source_file" >"$target_file"
+    collect_page_from_stdin "$meta_file" "$text_filter" "$category_filter" "$offset" "$limit" <"$source_file" >"$target_file"
+}
+
+parse_query_filters() {
+    query_text="$1"
+
+    printf '%s\n' "$query_text" | awk '
+        BEGIN {
+            category = ""
+            text = ""
+            waiting_for_category = 0
+        }
+
+        {
+            for (i = 1; i <= NF; i += 1) {
+                token = $i
+
+                if (waiting_for_category) {
+                    category = token
+                    waiting_for_category = 0
+                    continue
+                }
+
+                if (token ~ /^category:/) {
+                    category_value = substr(token, 10)
+                    if (category_value != "")
+                        category = category_value
+                    else
+                        waiting_for_category = 1
+                    continue
+                }
+
+                if (text != "")
+                    text = text " "
+                text = text token
+            }
+        }
+
+        END {
+            printf "category=%s\n", category
+            printf "text=%s\n", text
+        }
+    '
 }
 
 query_remote_record() {
@@ -397,11 +446,12 @@ build_updates_page() {
     installed_file="$1"
     query_format="$2"
     field_sep="$3"
-    query_lc="$4"
-    offset="$5"
-    limit="$6"
-    page_file="$7"
-    meta_file="$8"
+    text_filter="$4"
+    category_filter="$5"
+    offset="$6"
+    limit="$7"
+    page_file="$8"
+    meta_file="$9"
 
     : >"$page_file"
 
@@ -421,12 +471,23 @@ build_updates_page() {
         comparison="$(pkg version -t "$installed_version" "$remote_version" 2>/dev/null || printf '=')"
         [ "$comparison" = "<" ] || continue
 
-        if [ -n "$query_lc" ]; then
-            if ! printf '%s\n' "$remote_record" | awk -F '	' -v needle="$query_lc" '
+        if [ -n "$text_filter" ] || [ -n "$category_filter" ]; then
+            if ! printf '%s\n' "$remote_record" | awk -F '	' -v text_filter="$text_filter" -v category_filter="$category_filter" '
                 BEGIN { found = 0 }
                 {
+                    split($4, origin_parts, "/")
+                    category = tolower(origin_parts[1])
+
+                    if (category_filter != "" && category != category_filter)
+                        next
+
+                    if (text_filter == "") {
+                        found = 1
+                        next
+                    }
+
                     haystack = tolower($1 " " $3 " " $4)
-                    if (index(haystack, needle) > 0)
+                    if (index(haystack, text_filter) > 0)
                         found = 1
                 }
                 END { exit found ? 0 : 1 }
@@ -658,6 +719,9 @@ snapshot() {
         "$field_sep" \
         "$field_sep")"
     query_lc="$(printf '%s' "$query" | tr '[:upper:]' '[:lower:]')"
+    parsed_filters="$(parse_query_filters "$query_lc")"
+    text_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "text" { print substr($0, 6) }')"
+    category_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "category" { print substr($0, 10) }')"
 
     installed_tsv="$tmp_dir/installed.tsv"
     page_raw_tsv="$tmp_dir/page-raw.tsv"
@@ -677,7 +741,7 @@ snapshot() {
 
     case "$view" in
         browse)
-            if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" | collect_page_from_stdin "$page_meta" "$query_lc" "$offset" "$page_size" >"$page_raw_tsv"; then
+            if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" | collect_page_from_stdin "$page_meta" "$text_filter" "$category_filter" "$offset" "$page_size" >"$page_raw_tsv"; then
                 remote_error="$(tr '\n' ' ' <"$tmp_dir/remote.err" | trim_file)"
                 error_json "Unable to query remote pkg metadata. ${remote_error}"
                 exit 1
@@ -686,11 +750,11 @@ snapshot() {
             enrich_browse_page "$page_raw_tsv" "$installed_tsv" "$page_tsv"
             ;;
         installed)
-            collect_page_from_file "$installed_tsv" "$page_raw_tsv" "$page_meta" "$query_lc" "$offset" "$page_size"
+            collect_page_from_file "$installed_tsv" "$page_raw_tsv" "$page_meta" "$text_filter" "$category_filter" "$offset" "$page_size"
             enrich_installed_page "$page_raw_tsv" "$query_format" "$field_sep" "$page_tsv"
             ;;
         updates)
-            build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$query_lc" "$offset" "$page_size" "$page_tsv" "$page_meta"
+            build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$text_filter" "$category_filter" "$offset" "$page_size" "$page_tsv" "$page_meta"
             ;;
     esac
 
