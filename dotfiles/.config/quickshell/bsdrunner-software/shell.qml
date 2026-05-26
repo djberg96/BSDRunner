@@ -700,6 +700,7 @@ ShellRoot {
                                         width: 176
                                         height: 66
                                         radius: 16
+                                        z: navMouse.containsMouse ? 10 : 0
                                         color: navCard.active ? root.palette.cardHover : root.palette.panelBackground
                                         border.width: 2
                                         border.color: navCard.active ? navCard.modelData.accent : root.palette.frameBorder
