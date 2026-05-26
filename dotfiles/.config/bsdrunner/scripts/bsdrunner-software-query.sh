@@ -382,12 +382,14 @@ enrich_browse_page() {
 
         if [ -n "$installed_version" ]; then
             installed=1
+        elif pkg info -q -e "$name" 2>/dev/null; then
+            installed=1
+        fi
 
-            if [ "$installed_version" != "$version" ]; then
-                comparison="$(pkg version -t "$installed_version" "$version" 2>/dev/null || printf '=')"
-                if [ "$comparison" = "<" ]; then
-                    update_value=1
-                fi
+        if [ "$installed" -eq 1 ] && [ -n "$installed_version" ] && [ "$installed_version" != "$version" ]; then
+            comparison="$(pkg version -t "$installed_version" "$version" 2>/dev/null || printf '=')"
+            if [ "$comparison" = "<" ]; then
+                update_value=1
             fi
         fi
 

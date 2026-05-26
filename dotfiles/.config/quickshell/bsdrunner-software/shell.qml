@@ -251,7 +251,20 @@ ShellRoot {
     }
 
     function isTruthyFlag(value) {
-        return value === true || value === 1 || value === "1" || value === "true"
+        if (value === true)
+            return true
+
+        if (value === false || value === null || value === undefined)
+            return false
+
+        if (typeof value === "number")
+            return value !== 0
+
+        var normalizedValue = String(value).toLowerCase()
+        return normalizedValue === "1"
+            || normalizedValue === "true"
+            || normalizedValue === "yes"
+            || normalizedValue === "on"
     }
 
     function isInstalledPackage(pkg) {

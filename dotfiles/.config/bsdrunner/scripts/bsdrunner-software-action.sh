@@ -39,6 +39,30 @@ package_name_is_valid() {
     esac
 }
 
+installed_version() {
+    pkg query '%v' "$package_name" 2>/dev/null || true
+}
+
+package_is_installed() {
+    pkg info -q -e "$package_name" 2>/dev/null
+}
+
+verify_expected_state() {
+    current_version="$(installed_version)"
+
+    case "$action" in
+        install|reinstall|upgrade)
+            package_is_installed
+            ;;
+        remove)
+            ! package_is_installed
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 run_action() {
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-software-action.XXXXXX")"
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
@@ -55,6 +79,31 @@ run_action() {
         fi
 
         details="$(cat "$stdout_file" "$stderr_file" 2>/dev/null || true)"
+
+        if ! verify_expected_state; then
+            state_details="$details"
+            current_version="$(installed_version)"
+            case "$action" in
+                install|reinstall|upgrade)
+                    verification_message="pkg finished, but $package_name does not appear to be installed afterward."
+                    ;;
+                remove)
+                    verification_message="pkg finished, but $package_name still appears to be installed afterward."
+                    ;;
+                *)
+                    verification_message="Package state verification failed for $package_name."
+                    ;;
+            esac
+
+            if [ -n "$current_version" ]; then
+                state_details="$state_details
+Installed version after action: $current_version"
+            fi
+
+            emit_json false "$verification_message" "$state_details"
+            return 1
+        fi
+
         emit_json true "$success_message" "$details"
         return 0
     fi
