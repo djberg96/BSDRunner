@@ -940,13 +940,13 @@ ShellRoot {
                                                             width: 80
                                                             height: 24
                                                             radius: 12
-                                                            color: packageCard.pkg.installed ? root.palette.success : root.palette.accent
+                                                            color: root.isInstalledPackage(packageCard.pkg) ? root.palette.success : root.palette.accent
                                                             opacity: 0.16
 
                                                             Text {
                                                                 anchors.centerIn: parent
-                                                                text: packageCard.pkg.installed ? "Installed" : "Available"
-                                                                color: packageCard.pkg.installed ? root.palette.success : root.palette.accentStrong
+                                                                text: root.isInstalledPackage(packageCard.pkg) ? "Installed" : "Available"
+                                                                color: root.isInstalledPackage(packageCard.pkg) ? root.palette.success : root.palette.accentStrong
                                                                 font.pixelSize: 12
                                                                 font.bold: true
                                                             }
@@ -1120,19 +1120,19 @@ ShellRoot {
                                                     "id": root.isInstalledPackage(root.selectedPackage) ? "reinstall" : "install",
                                                     "label": root.isInstalledPackage(root.selectedPackage) ? "Reinstall" : "Install",
                                                     "tone": "accent",
-                                                    "enabled": true
+                                                    "available": true
                                                 },
                                                 {
                                                     "id": "upgrade",
                                                     "label": "Upgrade",
                                                     "tone": "warning",
-                                                    "enabled": root.hasAvailableUpgrade(root.selectedPackage)
+                                                    "available": root.hasAvailableUpgrade(root.selectedPackage)
                                                 },
                                                 {
                                                     "id": "remove",
                                                     "label": "Remove",
                                                     "tone": "danger",
-                                                    "enabled": root.isInstalledPackage(root.selectedPackage)
+                                                    "available": root.isInstalledPackage(root.selectedPackage)
                                                 }
                                             ] : []
 
@@ -1140,7 +1140,7 @@ ShellRoot {
                                                 id: actionButton
 
                                                 required property var modelData
-                                                readonly property bool actionEnabled: !!modelData.enabled
+                                                readonly property bool actionEnabled: modelData.available === true
                                                 readonly property color toneColor: modelData.tone === "danger"
                                                     ? root.palette.danger
                                                     : modelData.tone === "warning"
