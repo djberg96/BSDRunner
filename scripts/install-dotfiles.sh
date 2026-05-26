@@ -57,6 +57,134 @@ write_hypr_theme() {
 EOF
 }
 
+write_wlogout_style() {
+    local target="$1"
+    local selected_theme="$2"
+    local window_bg=""
+    local border=""
+    local button_bg=""
+    local button_hover=""
+    local text=""
+    local lock=""
+    local logout=""
+    local suspend=""
+    local reboot=""
+    local shutdown=""
+    local cancel=""
+
+    case "$selected_theme" in
+        jinteki)
+            window_bg='rgba(6, 4, 5, 0.92)'
+            border='rgba(198, 31, 58, 0.65)'
+            button_bg='rgba(28, 15, 18, 0.995)'
+            button_hover='rgba(98, 23, 36, 1.0)'
+            text='#fff1f3'
+            lock='#ffd7dd'
+            logout='#ffc7cf'
+            suspend='#ffb36b'
+            reboot='#ff8795'
+            shutdown='#ff6f83'
+            cancel='#f7e2e5'
+            ;;
+        haas-bioroid)
+            window_bg='rgba(6, 10, 14, 0.92)'
+            border='rgba(47, 95, 142, 0.72)'
+            button_bg='rgba(16, 23, 31, 0.995)'
+            button_hover='rgba(28, 53, 78, 1.0)'
+            text='#eef7ff'
+            lock='#b9d8f2'
+            logout='#95c8ee'
+            suspend='#f0c674'
+            reboot='#e39090'
+            shutdown='#ff7a7a'
+            cancel='#d7e9f8'
+            ;;
+        nbn)
+            window_bg='rgba(16, 12, 4, 0.92)'
+            border='rgba(243, 195, 22, 0.72)'
+            button_bg='rgba(34, 25, 8, 0.995)'
+            button_hover='rgba(118, 82, 12, 1.0)'
+            text='#fff8df'
+            lock='#ffe69b'
+            logout='#ffd36f'
+            suspend='#ffb45f'
+            reboot='#ff9d4d'
+            shutdown='#ff7c3f'
+            cancel='#fff0bd'
+            ;;
+        weyland)
+            window_bg='rgba(8, 10, 5, 0.92)'
+            border='rgba(93, 140, 69, 0.72)'
+            button_bg='rgba(22, 28, 14, 0.995)'
+            button_hover='rgba(57, 79, 33, 1.0)'
+            text='#f2f7e8'
+            lock='#c7ddb1'
+            logout='#b0d38c'
+            suspend='#d0c27a'
+            reboot='#d89f5f'
+            shutdown='#db7b55'
+            cancel='#dde9cf'
+            ;;
+        *)
+            window_bg='rgba(8, 12, 16, 0.92)'
+            border='rgba(90, 127, 160, 0.72)'
+            button_bg='rgba(18, 24, 30, 0.995)'
+            button_hover='rgba(43, 69, 91, 1.0)'
+            text='#eef5fb'
+            lock='#d3e5f4'
+            logout='#bdd6eb'
+            suspend='#e2c27a'
+            reboot='#d9a27f'
+            shutdown='#d97f7f'
+            cancel='#dfeaf3'
+            ;;
+    esac
+
+    cat > "$target" <<EOF
+window {
+    background-color: $window_bg;
+}
+
+button {
+    background-image: none;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 0%;
+    border: 2px solid $border;
+    border-radius: 22px;
+    background-color: $button_bg;
+    color: $text;
+    font-family: "JetBrains Mono";
+    font-size: 24px;
+    font-weight: 800;
+    margin: 14px;
+    min-width: 150px;
+    min-height: 150px;
+    box-shadow: none;
+    text-shadow: none;
+    padding: 0;
+}
+
+button:hover {
+    background-color: $button_hover;
+    border-color: $text;
+}
+
+button:focus {
+    background-color: $button_hover;
+    border-color: $text;
+    color: #ffffff;
+}
+
+#lock { color: $lock; }
+#logout { color: $logout; }
+#suspend { color: $suspend; }
+#reboot { color: $reboot; }
+#shutdown { color: $shutdown; }
+#cancel { color: $cancel; }
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -t|--theme)
@@ -109,6 +237,7 @@ mkdir -p "$HOME/.config/bsdrunner/base"
 mkdir -p "$HOME/.config/hypr"
 mkdir -p "$HOME/.config/rofi"
 mkdir -p "$HOME/.config/waybar"
+mkdir -p "$HOME/.config/wlogout"
 
 printf '%s\n' "$theme" > "$HOME/.config/bsdrunner/current-theme"
 
@@ -122,6 +251,7 @@ cp "$repo_root/dotfiles/.config/waybar/config" \
    "$HOME/.config/bsdrunner/base/waybar-config"
 
 write_hypr_theme "$HOME/.config/hypr/bsdrunner-theme.conf" "$theme"
+write_wlogout_style "$HOME/.config/wlogout/style.css" "$theme"
 
 cat \
     "$HOME/.config/bsdrunner/base/kitty.conf" \
