@@ -710,7 +710,8 @@ ShellRoot {
                                             }
 
                                             Column {
-                                                anchors.verticalCenter: parent.verticalCenter
+                                                width: parent.width - 38 - parent.spacing
+                                                y: Math.round((parent.height - height) / 2)
                                                 spacing: 2
 
                                                 Text {
@@ -724,20 +725,9 @@ ShellRoot {
                                                     text: navCard.active ? "Current view" : "Switch view"
                                                     color: root.palette.mutedText
                                                     font.pixelSize: 12
-                                }
-                            }
-
-                            Text {
-                                anchors.left: parent.left
-                                anchors.bottom: parent.bottom
-                                anchors.leftMargin: 16
-                                anchors.bottomMargin: 12
-                                text: root.appVersion
-                                color: root.palette.mutedText
-                                font.pixelSize: 11
-                                font.bold: true
-                            }
-                }
+                                                }
+                                            }
+                                        }
 
                                         MouseArea {
                                             anchors.fill: parent
@@ -910,6 +900,17 @@ ShellRoot {
                                     font.pixelSize: 13
                                 }
                             }
+                        }
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.bottom: parent.bottom
+                            anchors.leftMargin: 16
+                            anchors.bottomMargin: 12
+                            text: root.appVersion
+                            color: root.palette.mutedText
+                            font.pixelSize: 11
+                            font.bold: true
                         }
                     }
 
