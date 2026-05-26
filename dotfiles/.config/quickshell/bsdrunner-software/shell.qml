@@ -115,12 +115,24 @@ ShellRoot {
         statusMessage = "Read-only mode: " + action + suffix + " is not wired to mdo-backed actions yet."
     }
 
+    function isTruthyFlag(value) {
+        return value === true || value === 1 || value === "1" || value === "true"
+    }
+
+    function isInstalledPackage(pkg) {
+        return !!pkg && isTruthyFlag(pkg.installed)
+    }
+
+    function hasAvailableUpgrade(pkg) {
+        return !!pkg && isInstalledPackage(pkg) && isTruthyFlag(pkg.update_available)
+    }
+
     function versionText(pkg) {
         if (!pkg)
             return ""
-        if (pkg.update_available && pkg.installed_version && pkg.installed_version !== pkg.version)
+        if (hasAvailableUpgrade(pkg) && pkg.installed_version && pkg.installed_version !== pkg.version)
             return pkg.installed_version + " -> " + pkg.version
-        if (pkg.installed && pkg.installed_version)
+        if (isInstalledPackage(pkg) && pkg.installed_version)
             return pkg.installed_version
         return pkg.version || ""
     }
@@ -1105,8 +1117,8 @@ ShellRoot {
                                         Repeater {
                                             model: root.selectedPackage ? [
                                                 {
-                                                    "id": root.selectedPackage.installed ? "reinstall" : "install",
-                                                    "label": root.selectedPackage.installed ? "Reinstall" : "Install",
+                                                    "id": root.isInstalledPackage(root.selectedPackage) ? "reinstall" : "install",
+                                                    "label": root.isInstalledPackage(root.selectedPackage) ? "Reinstall" : "Install",
                                                     "tone": "accent",
                                                     "enabled": true
                                                 },
@@ -1114,13 +1126,13 @@ ShellRoot {
                                                     "id": "upgrade",
                                                     "label": "Upgrade",
                                                     "tone": "warning",
-                                                    "enabled": root.selectedPackage.installed && root.selectedPackage.update_available
+                                                    "enabled": root.hasAvailableUpgrade(root.selectedPackage)
                                                 },
                                                 {
                                                     "id": "remove",
                                                     "label": "Remove",
                                                     "tone": "danger",
-                                                    "enabled": root.selectedPackage.installed
+                                                    "enabled": root.isInstalledPackage(root.selectedPackage)
                                                 }
                                             ] : []
 
