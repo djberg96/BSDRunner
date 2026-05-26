@@ -934,9 +934,7 @@ ShellRoot {
 
                                                         Text {
                                                             width: packageHeaderRow.width
-                                                                - statusBadge.width
                                                                 - (updateBadge.visible ? updateBadge.width + packageHeaderRow.spacing : 0)
-                                                                - packageHeaderRow.spacing
                                                             height: 24
                                                             text: packageCard.pkg.name
                                                             color: root.palette.primaryText
@@ -946,24 +944,6 @@ ShellRoot {
                                                             font.bold: true
                                                             wrapMode: Text.NoWrap
                                                             elide: Text.ElideNone
-                                                        }
-
-                                                        Rectangle {
-                                                            id: statusBadge
-
-                                                            width: 80
-                                                            height: 24
-                                                            radius: 12
-                                                            color: root.isInstalledPackage(packageCard.pkg) ? root.palette.success : root.palette.accent
-                                                            opacity: 0.16
-
-                                                            Text {
-                                                                anchors.centerIn: parent
-                                                                text: root.isInstalledPackage(packageCard.pkg) ? "Installed" : "Available"
-                                                                color: root.isInstalledPackage(packageCard.pkg) ? root.palette.success : root.palette.accentStrong
-                                                                font.pixelSize: 12
-                                                                font.bold: true
-                                                            }
                                                         }
 
                                                         Rectangle {
