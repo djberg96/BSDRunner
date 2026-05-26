@@ -1105,16 +1105,22 @@ ShellRoot {
                                         Repeater {
                                             model: root.selectedPackage ? [
                                                 {
+                                                    "id": root.selectedPackage.installed ? "reinstall" : "install",
                                                     "label": root.selectedPackage.installed ? "Reinstall" : "Install",
-                                                    "tone": "accent"
+                                                    "tone": "accent",
+                                                    "enabled": true
                                                 },
                                                 {
+                                                    "id": "upgrade",
                                                     "label": "Upgrade",
-                                                    "tone": "warning"
+                                                    "tone": "warning",
+                                                    "enabled": root.selectedPackage.installed && root.selectedPackage.update_available
                                                 },
                                                 {
+                                                    "id": "remove",
                                                     "label": "Remove",
-                                                    "tone": "danger"
+                                                    "tone": "danger",
+                                                    "enabled": root.selectedPackage.installed
                                                 }
                                             ] : []
 
@@ -1122,6 +1128,7 @@ ShellRoot {
                                                 id: actionButton
 
                                                 required property var modelData
+                                                readonly property bool actionEnabled: !!modelData.enabled
                                                 readonly property color toneColor: modelData.tone === "danger"
                                                     ? root.palette.danger
                                                     : modelData.tone === "warning"
@@ -1131,27 +1138,28 @@ ShellRoot {
                                                 width: parent.width
                                                 height: 36
                                                 radius: 12
-                                                color: toneColor
-                                                opacity: 0.34
+                                                color: actionEnabled ? toneColor : root.palette.cardBackground
+                                                opacity: actionEnabled ? 0.28 : 1
                                                 border.width: 2
-                                                border.color: toneColor
+                                                border.color: actionEnabled ? toneColor : root.palette.frameBorder
 
                                                 Text {
                                                     anchors.centerIn: parent
                                                     text: actionButton.modelData.label
-                                                    color: parent.toneColor
+                                                    color: actionButton.actionEnabled ? actionButton.toneColor : root.palette.mutedText
                                                     font.pixelSize: 12
                                                     font.bold: true
                                                 }
 
                                                 MouseArea {
                                                     anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
+                                                    enabled: actionButton.actionEnabled
+                                                    hoverEnabled: actionButton.actionEnabled
+                                                    cursorShape: actionButton.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
                                                     onEntered: parent.opacity = 0.48
-                                                    onExited: parent.opacity = 0.34
-                                                    onClicked: root.triggerMockAction(actionButton.modelData.label.toLowerCase(), root.selectedPackage.name)
+                                                    onExited: parent.opacity = parent.actionEnabled ? 0.28 : 1
+                                                    onClicked: root.triggerMockAction(actionButton.modelData.label, root.selectedPackage.name)
                                                 }
                                             }
                                         }
