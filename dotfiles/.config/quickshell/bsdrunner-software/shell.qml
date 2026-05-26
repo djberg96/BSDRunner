@@ -926,17 +926,30 @@ ShellRoot {
                                                     spacing: 8
 
                                                     Row {
+                                                        id: packageHeaderRow
+
                                                         width: parent.width
                                                         spacing: 10
 
                                                         Text {
+                                                            width: packageHeaderRow.width
+                                                                - statusBadge.width
+                                                                - (updateBadge.visible ? updateBadge.width + packageHeaderRow.spacing : 0)
+                                                                - packageHeaderRow.spacing
+                                                            height: 24
                                                             text: packageCard.pkg.name
                                                             color: root.palette.primaryText
                                                             font.pixelSize: 20
+                                                            minimumPixelSize: 13
+                                                            fontSizeMode: Text.HorizontalFit
                                                             font.bold: true
+                                                            wrapMode: Text.NoWrap
+                                                            elide: Text.ElideNone
                                                         }
 
                                                         Rectangle {
+                                                            id: statusBadge
+
                                                             width: 80
                                                             height: 24
                                                             radius: 12
@@ -953,6 +966,8 @@ ShellRoot {
                                                         }
 
                                                         Rectangle {
+                                                            id: updateBadge
+
                                                             visible: root.hasAvailableUpgrade(packageCard.pkg)
                                                             width: 72
                                                             height: 24
@@ -1069,11 +1084,15 @@ ShellRoot {
 
                             Text {
                                 width: parent.width
-                                wrapMode: Text.WordWrap
+                                height: 38
                                 text: root.selectedPackage ? root.selectedPackage.name : "No package selected"
                                 color: root.palette.primaryText
                                 font.pixelSize: 30
+                                minimumPixelSize: 18
+                                fontSizeMode: Text.HorizontalFit
                                 font.bold: true
+                                wrapMode: Text.NoWrap
+                                elide: Text.ElideNone
                             }
 
                             Text {
