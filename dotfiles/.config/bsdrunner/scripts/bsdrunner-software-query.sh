@@ -196,6 +196,76 @@ query_remote_record() {
     return 1
 }
 
+dependency_blob_for_package() {
+    mode="$1"
+    package_name="$2"
+
+    case "$mode" in
+        installed)
+            dependency_output="$(pkg query '%dn' "$package_name" 2>/dev/null || true)"
+            ;;
+        remote)
+            dependency_output="$(pkg rquery '%dn' "$package_name" 2>/dev/null || true)"
+            ;;
+        *)
+            dependency_output=""
+            ;;
+    esac
+
+    printf '%s\n' "$dependency_output" | awk '
+        NF {
+            gsub(/\r/, "", $0)
+            sub(/^[[:space:]]+/, "", $0)
+            sub(/[[:space:]]+$/, "", $0)
+            if ($0 == "")
+                next
+
+            if (!first)
+                printf "|"
+
+            printf "%s", $0
+            first = 0
+        }
+
+        END {
+            printf "\n"
+        }
+    '
+}
+
+attach_dependencies_to_page() {
+    input_file="$1"
+    output_file="$2"
+
+    : >"$output_file"
+
+    while IFS='	' read -r name version comment origin website size_bytes description license installed update_available installed_version size_text; do
+        [ -n "$name" ] || continue
+
+        dependency_mode="remote"
+        if [ "${installed:-0}" = "1" ]; then
+            dependency_mode="installed"
+        fi
+
+        dependency_blob="$(dependency_blob_for_package "$dependency_mode" "$name")"
+
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$name" \
+            "$version" \
+            "$comment" \
+            "$origin" \
+            "$website" \
+            "$size_bytes" \
+            "$description" \
+            "$license" \
+            "$installed" \
+            "$update_available" \
+            "$installed_version" \
+            "$size_text" \
+            "$dependency_blob" >>"$output_file"
+    done <"$input_file"
+}
+
 enrich_browse_page() {
     page_file="$1"
     installed_file="$2"
@@ -450,6 +520,25 @@ emit_json() {
             return "\"" escape_json(value) "\""
         }
 
+        function emit_dependency_array(blob,   count, i, parts, first_dep) {
+            printf "["
+            if (blob != "") {
+                count = split(blob, parts, /\|/)
+                first_dep = 1
+                for (i = 1; i <= count; i += 1) {
+                    if (parts[i] == "")
+                        continue
+
+                    if (!first_dep)
+                        printf ","
+
+                    printf "%s", quote(parts[i])
+                    first_dep = 0
+                }
+            }
+            printf "]"
+        }
+
         function repo_name(origin) {
             if (origin ~ /^base\//)
                 return "FreeBSD-base"
@@ -503,7 +592,8 @@ emit_json() {
             printf "\"license\":%s,", quote(package_license)
             printf "\"size\":%s,", quote($12)
             printf "\"size_bytes\":%s,", ($6 == "" ? "0" : $6)
-            printf "\"dependencies\":[]"
+            printf "\"dependencies\":"
+            emit_dependency_array($13)
             printf "}"
 
             first_record = 0
@@ -572,6 +662,7 @@ snapshot() {
     installed_tsv="$tmp_dir/installed.tsv"
     page_raw_tsv="$tmp_dir/page-raw.tsv"
     page_tsv="$tmp_dir/page.tsv"
+    page_with_dependencies_tsv="$tmp_dir/page-with-dependencies.tsv"
     page_meta="$tmp_dir/page.meta"
 
     if ! pkg query -a "$query_format" 2>"$tmp_dir/installed.err" | normalize_records "$field_sep" >"$installed_tsv"; then
@@ -602,6 +693,8 @@ snapshot() {
             build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$query_lc" "$offset" "$page_size" "$page_tsv" "$page_meta"
             ;;
     esac
+
+    attach_dependencies_to_page "$page_tsv" "$page_with_dependencies_tsv"
 
     loaded="$(awk -F '=' '$1 == "loaded" { print $2 }' "$page_meta")"
     has_next_flag="$(awk -F '=' '$1 == "has_next" { print $2 }' "$page_meta")"
@@ -639,7 +732,7 @@ snapshot() {
     generated_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
     emit_json \
-        "$page_tsv" \
+        "$page_with_dependencies_tsv" \
         "$message" \
         "$generated_at" \
         "$loaded" \
