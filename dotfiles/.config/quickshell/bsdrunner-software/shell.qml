@@ -1731,18 +1731,24 @@ ShellRoot {
                                                 delegate: Rectangle {
                                                     id: dependencyChip
 
-                                                    required property string modelData
+                                                    required property var modelData
 
                                                     height: 28
                                                     radius: 14
-                                                    color: root.palette.cardBackground
+                                                    color: dependencyChip.modelData.installed
+                                                        ? Qt.alpha(root.palette.success, 0.18)
+                                                        : root.palette.cardBackground
                                                     border.width: 1
-                                                    border.color: root.palette.frameBorder
+                                                    border.color: dependencyChip.modelData.installed
+                                                        ? root.palette.success
+                                                        : root.palette.frameBorder
 
                                                     Text {
                                                         anchors.centerIn: parent
-                                                        text: dependencyChip.modelData
-                                                        color: root.palette.primaryText
+                                                        text: dependencyChip.modelData.name
+                                                        color: dependencyChip.modelData.installed
+                                                            ? root.palette.success
+                                                            : root.palette.primaryText
                                                         font.pixelSize: 12
                                                     }
 
@@ -1750,7 +1756,7 @@ ShellRoot {
 
                                                     TextMetrics {
                                                         id: textMetrics
-                                                        text: dependencyChip.modelData
+                                                        text: dependencyChip.modelData.name
                                                         font.pixelSize: 12
                                                     }
                                                 }

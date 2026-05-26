@@ -474,25 +474,33 @@ dependency_blob_for_package() {
             ;;
     esac
 
-    printf '%s\n' "$dependency_output" | awk '
-        NF {
-            gsub(/\r/, "", $0)
-            sub(/^[[:space:]]+/, "", $0)
-            sub(/[[:space:]]+$/, "", $0)
-            if ($0 == "")
-                next
+    first_entry=1
+    printf '%s\n' "$dependency_output" | while IFS= read -r dependency_name; do
+        dependency_name="$(printf '%s\n' "$dependency_name" | awk '
+            {
+                gsub(/\r/, "", $0)
+                sub(/^[[:space:]]+/, "", $0)
+                sub(/[[:space:]]+$/, "", $0)
+                print
+            }
+        ')"
 
-            if (!first)
-                printf "|"
+        [ -n "$dependency_name" ] || continue
 
-            printf "%s", $0
-            first = 0
-        }
+        dependency_installed=0
+        if pkg info -q -e "$dependency_name" 2>/dev/null; then
+            dependency_installed=1
+        fi
 
-        END {
-            printf "\n"
-        }
-    '
+        if [ "$first_entry" -eq 0 ]; then
+            printf '|'
+        fi
+
+        printf '%s~%s' "$dependency_name" "$dependency_installed"
+        first_entry=0
+    done
+
+    printf '\n'
 }
 
 attach_dependencies_to_page() {
@@ -849,7 +857,7 @@ emit_json() {
             return "\"" escape_json(value) "\""
         }
 
-        function emit_dependency_array(blob,   count, i, parts, first_dep) {
+        function emit_dependency_array(blob,   count, dep_fields, i, installed_flag, parts, first_dep) {
             printf "["
             if (blob != "") {
                 count = split(blob, parts, /\|/)
@@ -861,7 +869,9 @@ emit_json() {
                     if (!first_dep)
                         printf ","
 
-                    printf "%s", quote(parts[i])
+                    split(parts[i], dep_fields, /~/)
+                    installed_flag = (dep_fields[2] == "1" ? "true" : "false")
+                    printf "{\"name\":%s,\"installed\":%s}", quote(dep_fields[1]), installed_flag
                     first_dep = 0
                 }
             }
