@@ -912,13 +912,14 @@ ShellRoot {
                                                 required property var modelData
                                                 readonly property var pkg: modelData
                                                 readonly property bool active: root.selectedPackageName === pkg.name
+                                                readonly property bool hovered: packageMouse.containsMouse
 
                                                 width: packageColumn.width
                                                 height: 102
                                                 radius: 18
-                                                color: active ? root.palette.cardHover : root.palette.panelBackground
+                                                color: active || hovered ? root.palette.cardHover : root.palette.panelBackground
                                                 border.width: 1
-                                                border.color: active ? root.palette.accent : root.palette.frameBorder
+                                                border.color: active ? root.palette.accent : hovered ? root.palette.panelBorder : root.palette.frameBorder
 
                                                 Column {
                                                     anchors.fill: parent
@@ -1018,12 +1019,11 @@ ShellRoot {
                                                 }
 
                                                 MouseArea {
+                                                    id: packageMouse
                                                     anchors.fill: parent
                                                     hoverEnabled: true
                                                     cursorShape: Qt.PointingHandCursor
 
-                                                    onEntered: parent.color = root.palette.cardHover
-                                                    onExited: parent.color = parent.active ? root.palette.cardHover : root.palette.panelBackground
                                                     onClicked: root.selectedPackageName = parent.modelData.name
                                                 }
                                             }
