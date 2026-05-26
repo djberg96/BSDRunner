@@ -68,11 +68,11 @@ ShellRoot {
     function viewTitle() {
         switch (currentView) {
         case "installed":
-            return "Installed"
+            return "Browse Installed Packages"
         case "updates":
-            return "Updates"
+            return "Browse Package Updates"
         default:
-            return "Browse Software Packages"
+            return "Browse All Packages"
         }
     }
 
@@ -385,7 +385,7 @@ ShellRoot {
                             spacing: 0
 
                             Text {
-                                text: "Actions"
+                                text: "Browse:"
                                 color: root.palette.primaryText
                                 font.pixelSize: 34
                                 font.bold: true
@@ -399,7 +399,7 @@ ShellRoot {
                                     model: [
                                         {
                                             "id": "browse",
-                                            "label": "Browse",
+                                            "label": "All",
                                             "count": root.browseCountLabel,
                                             "accent": root.palette.accent
                                         },
