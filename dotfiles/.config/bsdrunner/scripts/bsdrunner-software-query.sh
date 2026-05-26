@@ -130,14 +130,34 @@ collect_page_from_stdin() {
     meta_file="$1"
     text_filter="$2"
     category_filter="$3"
-    offset="$4"
-    limit="$5"
+    package_filter="$4"
+    offset="$5"
+    limit="$6"
 
-    awk -F '	' -v meta_file="$meta_file" -v text_filter="$text_filter" -v category_filter="$category_filter" -v offset="$offset" -v limit="$limit" '
+    awk -F '	' -v meta_file="$meta_file" -v text_filter="$text_filter" -v category_filter="$category_filter" -v package_filter="$package_filter" -v offset="$offset" -v limit="$limit" '
+        function matches_package_name(name, filter, prefix_mode, base_filter) {
+            if (filter == "")
+                return 1
+
+            prefix_mode = (filter ~ /\*$/)
+            base_filter = prefix_mode ? substr(filter, 1, length(filter) - 1) : filter
+            if (base_filter == "")
+                return 1
+
+            name = tolower(name)
+            if (prefix_mode)
+                return index(name, base_filter) == 1
+
+            return index(name, base_filter) > 0
+        }
+
         function matches_record() {
             split($4, origin_parts, "/")
             category = tolower(origin_parts[1])
             if (category_filter != "" && category != category_filter)
+                return 0
+
+            if (!matches_package_name($1, package_filter))
                 return 0
 
             if (text_filter == "")
@@ -185,10 +205,11 @@ collect_page_from_file() {
     meta_file="$3"
     text_filter="$4"
     category_filter="$5"
-    offset="$6"
-    limit="$7"
+    package_filter="$6"
+    offset="$7"
+    limit="$8"
 
-    collect_page_from_stdin "$meta_file" "$text_filter" "$category_filter" "$offset" "$limit" <"$source_file" >"$target_file"
+    collect_page_from_stdin "$meta_file" "$text_filter" "$category_filter" "$package_filter" "$offset" "$limit" <"$source_file" >"$target_file"
 }
 
 parse_query_filters() {
@@ -197,8 +218,10 @@ parse_query_filters() {
     printf '%s\n' "$query_text" | awk '
         BEGIN {
             category = ""
+            package_filter = ""
             text = ""
             waiting_for_category = 0
+            waiting_for_package = 0
         }
 
         {
@@ -211,12 +234,28 @@ parse_query_filters() {
                     continue
                 }
 
+                if (waiting_for_package) {
+                    package_filter = token
+                    waiting_for_package = 0
+                    continue
+                }
+
                 if (token ~ /^category:/) {
                     category_value = substr(token, 10)
                     if (category_value != "")
                         category = category_value
                     else
                         waiting_for_category = 1
+                    continue
+                }
+
+                if (token ~ /^(package|name):/) {
+                    package_value = token
+                    sub(/^(package|name):/, "", package_value)
+                    if (package_value != "")
+                        package_filter = package_value
+                    else
+                        waiting_for_package = 1
                     continue
                 }
 
@@ -228,6 +267,7 @@ parse_query_filters() {
 
         END {
             printf "category=%s\n", category
+            printf "package=%s\n", package_filter
             printf "text=%s\n", text
         }
     '
@@ -448,10 +488,11 @@ build_updates_page() {
     field_sep="$3"
     text_filter="$4"
     category_filter="$5"
-    offset="$6"
-    limit="$7"
-    page_file="$8"
-    meta_file="$9"
+    package_filter="$6"
+    offset="$7"
+    limit="$8"
+    page_file="$9"
+    meta_file="${10}"
 
     : >"$page_file"
 
@@ -471,14 +512,33 @@ build_updates_page() {
         comparison="$(pkg version -t "$installed_version" "$remote_version" 2>/dev/null || printf '=')"
         [ "$comparison" = "<" ] || continue
 
-        if [ -n "$text_filter" ] || [ -n "$category_filter" ]; then
-            if ! printf '%s\n' "$remote_record" | awk -F '	' -v text_filter="$text_filter" -v category_filter="$category_filter" '
+        if [ -n "$text_filter" ] || [ -n "$category_filter" ] || [ -n "$package_filter" ]; then
+            if ! printf '%s\n' "$remote_record" | awk -F '	' -v text_filter="$text_filter" -v category_filter="$category_filter" -v package_filter="$package_filter" '
+                function matches_package_name(name, filter, prefix_mode, base_filter) {
+                    if (filter == "")
+                        return 1
+
+                    prefix_mode = (filter ~ /\*$/)
+                    base_filter = prefix_mode ? substr(filter, 1, length(filter) - 1) : filter
+                    if (base_filter == "")
+                        return 1
+
+                    name = tolower(name)
+                    if (prefix_mode)
+                        return index(name, base_filter) == 1
+
+                    return index(name, base_filter) > 0
+                }
+
                 BEGIN { found = 0 }
                 {
                     split($4, origin_parts, "/")
                     category = tolower(origin_parts[1])
 
                     if (category_filter != "" && category != category_filter)
+                        next
+
+                    if (!matches_package_name($1, package_filter))
                         next
 
                     if (text_filter == "") {
@@ -722,6 +782,7 @@ snapshot() {
     parsed_filters="$(parse_query_filters "$query_lc")"
     text_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "text" { print substr($0, 6) }')"
     category_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "category" { print substr($0, 10) }')"
+    package_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "package" { print substr($0, 9) }')"
 
     installed_tsv="$tmp_dir/installed.tsv"
     page_raw_tsv="$tmp_dir/page-raw.tsv"
@@ -741,7 +802,7 @@ snapshot() {
 
     case "$view" in
         browse)
-            if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" | collect_page_from_stdin "$page_meta" "$text_filter" "$category_filter" "$offset" "$page_size" >"$page_raw_tsv"; then
+            if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" | collect_page_from_stdin "$page_meta" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size" >"$page_raw_tsv"; then
                 remote_error="$(tr '\n' ' ' <"$tmp_dir/remote.err" | trim_file)"
                 error_json "Unable to query remote pkg metadata. ${remote_error}"
                 exit 1
@@ -750,11 +811,11 @@ snapshot() {
             enrich_browse_page "$page_raw_tsv" "$installed_tsv" "$page_tsv"
             ;;
         installed)
-            collect_page_from_file "$installed_tsv" "$page_raw_tsv" "$page_meta" "$text_filter" "$category_filter" "$offset" "$page_size"
+            collect_page_from_file "$installed_tsv" "$page_raw_tsv" "$page_meta" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size"
             enrich_installed_page "$page_raw_tsv" "$query_format" "$field_sep" "$page_tsv"
             ;;
         updates)
-            build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$text_filter" "$category_filter" "$offset" "$page_size" "$page_tsv" "$page_meta"
+            build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size" "$page_tsv" "$page_meta"
             ;;
     esac
 
