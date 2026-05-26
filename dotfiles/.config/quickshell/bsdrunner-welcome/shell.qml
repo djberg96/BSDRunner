@@ -11,7 +11,14 @@ ShellRoot {
         id: themeLoader
     }
 
-    readonly property string homeDir: StandardPaths.writableLocation(StandardPaths.HomeLocation) || ""
+    function localPath(value) {
+        var text = String(value || "")
+        if (text.indexOf("file://") === 0)
+            return decodeURIComponent(text.replace(/^file:\/+/, "/"))
+        return text
+    }
+
+    readonly property string homeDir: localPath(StandardPaths.writableLocation(StandardPaths.HomeLocation))
     readonly property string activeTheme: themeLoader.activeTheme
     readonly property var palette: themeLoader.palette
 

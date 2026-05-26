@@ -6,7 +6,14 @@ import QtQml
 QtObject {
     id: root
 
-    readonly property string homeDir: StandardPaths.writableLocation(StandardPaths.HomeLocation) || ""
+    function localPath(value) {
+        var text = String(value || "")
+        if (text.indexOf("file://") === 0)
+            return decodeURIComponent(text.replace(/^file:\/+/, "/"))
+        return text
+    }
+
+    readonly property string homeDir: localPath(StandardPaths.writableLocation(StandardPaths.HomeLocation))
     readonly property string activeTheme: {
         var text = themeFile.text().trim()
         return text.length > 0 ? text : "default"
