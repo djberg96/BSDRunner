@@ -569,7 +569,7 @@ ShellRoot {
                                     anchors.left: parent.left
                                     anchors.bottom: parent.bottom
                                     anchors.leftMargin: 16
-                                    anchors.bottomMargin: 68
+                                    anchors.bottomMargin: 18
                                     width: 144
                                     height: 34
                                     radius: 12
