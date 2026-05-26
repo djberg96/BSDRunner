@@ -953,7 +953,7 @@ ShellRoot {
                                                         }
 
                                                         Rectangle {
-                                                            visible: packageCard.pkg.update_available
+                                                            visible: root.hasAvailableUpgrade(packageCard.pkg)
                                                             width: 72
                                                             height: 24
                                                             radius: 12
@@ -1141,6 +1141,7 @@ ShellRoot {
 
                                                 required property var modelData
                                                 readonly property bool actionEnabled: modelData.available === true
+                                                readonly property bool hovered: actionMouse.containsMouse
                                                 readonly property color toneColor: modelData.tone === "danger"
                                                     ? root.palette.danger
                                                     : modelData.tone === "warning"
@@ -1150,8 +1151,9 @@ ShellRoot {
                                                 width: parent.width
                                                 height: 36
                                                 radius: 12
-                                                color: actionEnabled ? toneColor : root.palette.cardBackground
-                                                opacity: actionEnabled ? 0.28 : 1
+                                                color: actionEnabled
+                                                    ? Qt.alpha(toneColor, hovered ? 0.24 : 0.14)
+                                                    : root.palette.cardBackground
                                                 border.width: 2
                                                 border.color: actionEnabled ? toneColor : root.palette.frameBorder
 
@@ -1164,13 +1166,12 @@ ShellRoot {
                                                 }
 
                                                 MouseArea {
+                                                    id: actionMouse
                                                     anchors.fill: parent
                                                     enabled: actionButton.actionEnabled
                                                     hoverEnabled: actionButton.actionEnabled
                                                     cursorShape: actionButton.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
-                                                    onEntered: parent.opacity = 0.48
-                                                    onExited: parent.opacity = parent.actionEnabled ? 0.28 : 1
                                                     onClicked: root.triggerMockAction(actionButton.modelData.label, root.selectedPackage.name)
                                                 }
                                             }
