@@ -249,9 +249,10 @@ parse_query_filters() {
                     continue
                 }
 
-                if (token ~ /^(package|name):/) {
+                if (token ~ /^package:/ || token ~ /^name:/) {
                     package_value = token
-                    sub(/^(package|name):/, "", package_value)
+                    sub(/^package:/, "", package_value)
+                    sub(/^name:/, "", package_value)
                     if (package_value != "")
                         package_filter = package_value
                     else
