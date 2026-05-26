@@ -672,19 +672,22 @@ ShellRoot {
                                             "id": "browse",
                                             "label": "All",
                                             "count": root.browseCountLabel,
-                                            "accent": root.palette.accent
+                                            "accent": root.palette.accent,
+                                            "hint": "Browse the full FreeBSD package catalog."
                                         },
                                         {
                                             "id": "installed",
                                             "label": "Installed",
                                             "count": root.installedCountLabel,
-                                            "accent": root.palette.success
+                                            "accent": root.palette.success,
+                                            "hint": "Show packages already installed on this system."
                                         },
                                         {
                                             "id": "updates",
                                             "label": "Updates",
                                             "count": root.updatesCountLabel,
-                                            "accent": root.palette.warning
+                                            "accent": root.palette.warning,
+                                            "hint": "Show installed packages with available updates."
                                         }
                                     ]
 
@@ -743,6 +746,8 @@ ShellRoot {
                                         }
 
                                         MouseArea {
+                                            id: navMouse
+
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             enabled: !root.runningAction
@@ -751,6 +756,31 @@ ShellRoot {
                                             onEntered: parent.color = root.palette.cardHover
                                             onExited: parent.color = parent.active ? root.palette.cardHover : root.palette.panelBackground
                                             onClicked: root.setView(parent.modelData.id)
+                                        }
+
+                                        Rectangle {
+                                            visible: navMouse.containsMouse && navMouse.enabled
+                                            anchors.top: parent.bottom
+                                            anchors.left: parent.left
+                                            anchors.topMargin: 8
+                                            width: navCard.width
+                                            height: navHintText.implicitHeight + 20
+                                            radius: 12
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.palette.panelBorder
+                                            z: 20
+
+                                            Text {
+                                                id: navHintText
+
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                text: navCard.modelData.hint
+                                                wrapMode: Text.WordWrap
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                            }
                                         }
                                     }
                                 }
