@@ -1147,20 +1147,27 @@ ShellRoot {
                                                     : modelData.tone === "warning"
                                                         ? root.palette.warning
                                                         : root.palette.accent
+                                                readonly property color fillColor: actionEnabled
+                                                    ? Qt.alpha(toneColor, hovered ? 0.92 : 0.82)
+                                                    : root.palette.panelBackground
+                                                readonly property color outlineColor: actionEnabled
+                                                    ? toneColor
+                                                    : Qt.alpha(root.palette.frameBorder, 0.55)
+                                                readonly property color labelColor: actionEnabled
+                                                    ? root.palette.primaryText
+                                                    : Qt.alpha(root.palette.mutedText, 0.7)
 
                                                 width: parent.width
                                                 height: 36
                                                 radius: 12
-                                                color: actionEnabled
-                                                    ? Qt.alpha(toneColor, hovered ? 0.24 : 0.14)
-                                                    : root.palette.cardBackground
+                                                color: fillColor
                                                 border.width: 2
-                                                border.color: actionEnabled ? toneColor : root.palette.frameBorder
+                                                border.color: outlineColor
 
                                                 Text {
                                                     anchors.centerIn: parent
                                                     text: actionButton.modelData.label
-                                                    color: actionButton.actionEnabled ? actionButton.toneColor : root.palette.mutedText
+                                                    color: actionButton.labelColor
                                                     font.pixelSize: 12
                                                     font.bold: true
                                                 }
