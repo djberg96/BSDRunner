@@ -226,6 +226,132 @@ collect_page_from_file() {
     collect_page_from_stdin "$meta_file" "$text_filter" "$category_filter" "$package_filter" "$offset" "$limit" <"$source_file" >"$target_file"
 }
 
+collect_browse_page() {
+    installed_file="$1"
+    source_file="$2"
+    target_file="$3"
+    meta_file="$4"
+    text_filter="$5"
+    category_filter="$6"
+    package_filter="$7"
+    installed_filter="$8"
+    offset="$9"
+    limit="${10}"
+
+    awk -F '	' \
+        -v meta_file="$meta_file" \
+        -v text_filter="$text_filter" \
+        -v category_filter="$category_filter" \
+        -v package_filter="$package_filter" \
+        -v installed_filter="$installed_filter" \
+        -v offset="$offset" \
+        -v limit="$limit" \
+        -v empty_field_token="$empty_field_token" '
+        function matches_package_name(name, filter, prefix_mode, base_filter) {
+            if (filter == "")
+                return 1
+
+            prefix_mode = (filter ~ /\*$/)
+            base_filter = prefix_mode ? substr(filter, 1, length(filter) - 1) : filter
+            if (base_filter == "")
+                return 1
+
+            name = tolower(name)
+            if (prefix_mode)
+                return index(name, base_filter) == 1
+
+            return index(name, base_filter) > 0
+        }
+
+        function human_size(bytes,   value, idx, units) {
+            if (bytes == "" || bytes == empty_field_token || bytes !~ /^[0-9]+$/)
+                return empty_field_token
+
+            split("B KB MB GB TB", units, " ")
+            value = bytes + 0
+            idx = 1
+
+            while (value >= 1024 && idx < 5) {
+                value /= 1024
+                idx += 1
+            }
+
+            if (idx == 1)
+                return sprintf("%d %s", value, units[idx])
+
+            return sprintf("%.1f %s", value, units[idx])
+        }
+
+        function matches_record(installed_flag,   category, haystack, origin_parts) {
+            split($4, origin_parts, "/")
+            category = tolower($4 == empty_field_token ? "" : origin_parts[1])
+
+            if (category_filter != "" && category != category_filter)
+                return 0
+
+            if (installed_filter == "true" && !installed_flag)
+                return 0
+
+            if (installed_filter == "false" && installed_flag)
+                return 0
+
+            if (!matches_package_name($1, package_filter))
+                return 0
+
+            if (text_filter == "")
+                return 1
+
+            haystack = tolower($1 " " $3 " " $4)
+            return index(haystack, text_filter) > 0
+        }
+
+        BEGIN {
+            matched = 0
+            loaded = 0
+            has_next = 0
+        }
+
+        FNR == NR {
+            installed_versions[$1] = $2
+            next
+        }
+
+        {
+            installed_flag = (($1 in installed_versions) ? 1 : 0)
+            installed_version = installed_flag ? installed_versions[$1] : empty_field_token
+            update_value = 0
+
+            if (installed_flag && installed_version != empty_field_token && installed_version != $2)
+                update_value = 1
+
+            if (!matches_record(installed_flag))
+                next
+
+            if (matched < offset) {
+                matched += 1
+                next
+            }
+
+            if (loaded < limit) {
+                size_text = human_size($6)
+                printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
+                    $1, $2, $3, $4, $5, $6, $7, $8,
+                    installed_flag, update_value, installed_version, size_text
+                loaded += 1
+                matched += 1
+                next
+            }
+
+            has_next = 1
+            exit
+        }
+
+        END {
+            printf "loaded=%d\nhas_next=%d\n", loaded, has_next > meta_file
+        }
+    ' "$installed_file" "$source_file" >"$target_file"
+}
+
 parse_query_filters() {
     query_text="$1"
 
@@ -233,9 +359,11 @@ parse_query_filters() {
         BEGIN {
             category = ""
             package_filter = ""
+            installed = ""
             text = ""
             waiting_for_category = 0
             waiting_for_package = 0
+            waiting_for_installed = 0
         }
 
         {
@@ -251,6 +379,12 @@ parse_query_filters() {
                 if (waiting_for_package) {
                     package_filter = token
                     waiting_for_package = 0
+                    continue
+                }
+
+                if (waiting_for_installed) {
+                    installed = token
+                    waiting_for_installed = 0
                     continue
                 }
 
@@ -274,6 +408,15 @@ parse_query_filters() {
                     continue
                 }
 
+                if (token ~ /^installed:/) {
+                    installed_value = substr(token, 11)
+                    if (installed_value != "")
+                        installed = installed_value
+                    else
+                        waiting_for_installed = 1
+                    continue
+                }
+
                 if (text != "")
                     text = text " "
                 text = text token
@@ -283,9 +426,24 @@ parse_query_filters() {
         END {
             printf "category=%s\n", category
             printf "package=%s\n", package_filter
+            printf "installed=%s\n", installed
             printf "text=%s\n", text
         }
     '
+}
+
+normalize_installed_filter() {
+    case "${1:-}" in
+        true|1|yes|on)
+            printf 'true\n'
+            ;;
+        false|0|no|off)
+            printf 'false\n'
+            ;;
+        *)
+            printf '\n'
+            ;;
+    esac
 }
 
 query_remote_record() {
@@ -833,8 +991,11 @@ snapshot() {
     text_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "text" { print substr($0, 6) }')"
     category_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "category" { print substr($0, 10) }')"
     package_filter="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "package" { print substr($0, 9) }')"
+    installed_filter_raw="$(printf '%s\n' "$parsed_filters" | awk -F '=' '$1 == "installed" { print substr($0, 11) }')"
+    installed_filter="$(normalize_installed_filter "$installed_filter_raw")"
 
     installed_tsv="$tmp_dir/installed.tsv"
+    remote_tsv="$tmp_dir/remote.tsv"
     page_raw_tsv="$tmp_dir/page-raw.tsv"
     page_tsv="$tmp_dir/page.tsv"
     page_with_dependencies_tsv="$tmp_dir/page-with-dependencies.tsv"
@@ -852,20 +1013,30 @@ snapshot() {
 
     case "$view" in
         browse)
-            if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" | collect_page_from_stdin "$page_meta" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size" >"$page_raw_tsv"; then
+            if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" >"$remote_tsv"; then
                 remote_error="$(tr '\n' ' ' <"$tmp_dir/remote.err" | trim_file)"
                 error_json "Unable to query remote pkg metadata. ${remote_error}"
                 exit 1
             fi
 
-            enrich_browse_page "$page_raw_tsv" "$installed_tsv" "$page_tsv"
+            collect_browse_page "$installed_tsv" "$remote_tsv" "$page_tsv" "$page_meta" "$text_filter" "$category_filter" "$package_filter" "$installed_filter" "$offset" "$page_size"
             ;;
         installed)
-            collect_page_from_file "$installed_tsv" "$page_raw_tsv" "$page_meta" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size"
-            enrich_installed_page "$page_raw_tsv" "$query_format" "$field_sep" "$page_tsv"
+            if [ "$installed_filter" = "false" ]; then
+                : >"$page_tsv"
+                printf 'loaded=0\nhas_next=0\n' >"$page_meta"
+            else
+                collect_page_from_file "$installed_tsv" "$page_raw_tsv" "$page_meta" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size"
+                enrich_installed_page "$page_raw_tsv" "$query_format" "$field_sep" "$page_tsv"
+            fi
             ;;
         updates)
-            build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size" "$page_tsv" "$page_meta"
+            if [ "$installed_filter" = "false" ]; then
+                : >"$page_tsv"
+                printf 'loaded=0\nhas_next=0\n' >"$page_meta"
+            else
+                build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size" "$page_tsv" "$page_meta"
+            fi
             ;;
     esac
 
