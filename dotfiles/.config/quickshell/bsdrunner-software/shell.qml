@@ -53,6 +53,9 @@ ShellRoot {
     property bool actionExited: false
     property bool actionStdoutFinished: false
     property bool actionStderrFinished: false
+    property string actionFeedbackTone: "info"
+    property string actionFeedbackTitle: ""
+    property string actionFeedbackDetails: ""
     readonly property var visiblePackages: packageData
     readonly property var selectedPackage: findPackage(selectedPackageName)
 
@@ -133,6 +136,9 @@ ShellRoot {
         if (runningAction || !pkgName)
             return
 
+        actionFeedbackTone = "info"
+        actionFeedbackTitle = ""
+        actionFeedbackDetails = ""
         pendingActionId = actionId
         pendingActionLabel = actionLabel
         pendingActionPackageName = pkgName
@@ -173,8 +179,9 @@ ShellRoot {
         actionStdoutFinished = false
         actionStderrFinished = false
 
-        statusTone = "warning"
-        statusMessage = "Running " + activeActionLabel.toLowerCase() + " for " + activeActionPackageName + "..."
+        actionFeedbackTone = "warning"
+        actionFeedbackTitle = "Running " + activeActionLabel + " for " + activeActionPackageName
+        actionFeedbackDetails = "Waiting for pkg output..."
         actionProcess.running = true
     }
 
@@ -212,17 +219,26 @@ ShellRoot {
         if (stderrText && stderrText.trim().length > 0)
             detailText = detailText.length > 0 ? detailText + "\n" + stderrText.trim() : stderrText.trim()
 
+        var compactDetail = detailText.trim()
+        var firstDetailLine = ""
+        if (compactDetail.length > 0)
+            firstDetailLine = compactDetail.split(/\r?\n/)[0]
+
         if (payload && payload.ok && exitCode === 0) {
-            statusTone = "success"
-            statusMessage = payload.message || (activeActionLabel + " completed for " + activeActionPackageName + ".")
+            actionFeedbackTone = "success"
+            actionFeedbackTitle = payload.message || (activeActionLabel + " completed for " + activeActionPackageName + ".")
+            actionFeedbackDetails = compactDetail.length > 0 ? compactDetail : "The package action completed successfully."
             refreshPackages(false)
         } else {
-            statusTone = "error"
-            statusMessage = payload && payload.message
+            actionFeedbackTone = "error"
+            actionFeedbackTitle = payload && payload.message
                 ? payload.message
-                : detailText.length > 0
-                    ? detailText
-                    : "Package action failed."
+                : "Package action failed."
+            actionFeedbackDetails = compactDetail.length > 0
+                ? compactDetail
+                : "No additional error details were returned."
+            statusTone = "error"
+            statusMessage = firstDetailLine.length > 0 ? firstDetailLine : actionFeedbackTitle
         }
 
         activeActionId = ""
@@ -910,11 +926,7 @@ ShellRoot {
                                         Text {
                                             width: 218
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: root.loadingPackages
-                                                ? "Loading..."
-                                                : root.runningAction
-                                                    ? "Package action in progress"
-                                                    : root.statusSearchText()
+                                            text: root.loadingPackages ? "Loading..." : root.statusSearchText()
                                             color: root.palette.secondaryText
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
@@ -1261,6 +1273,48 @@ ShellRoot {
                                     Column {
                                         width: parent.width
                                         spacing: 10
+
+                                        Rectangle {
+                                            visible: root.actionFeedbackTitle.length > 0
+                                            width: parent.width
+                                            height: actionFeedbackColumn.implicitHeight + 22
+                                            radius: 14
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.actionFeedbackTone === "error"
+                                                ? root.palette.danger
+                                                : root.actionFeedbackTone === "success"
+                                                    ? root.palette.success
+                                                    : root.palette.warning
+
+                                            Column {
+                                                id: actionFeedbackColumn
+
+                                                anchors.fill: parent
+                                                anchors.margins: 11
+                                                spacing: 8
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.actionFeedbackTitle
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                    wrapMode: Text.WordWrap
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    visible: root.actionFeedbackDetails.length > 0
+                                                    text: root.actionFeedbackDetails
+                                                    color: root.actionFeedbackTone === "error"
+                                                        ? root.palette.danger
+                                                        : root.palette.secondaryText
+                                                    font.pixelSize: 12
+                                                    wrapMode: Text.WordWrap
+                                                }
+                                            }
+                                        }
 
                                         Rectangle {
                                             visible: root.pendingActionId.length > 0
