@@ -7,6 +7,7 @@ view="${2:-browse}"
 page_index="${3:-0}"
 page_size="${4:-40}"
 query="${5:-}"
+empty_field_token="__EMPTY__"
 
 json_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -21,7 +22,7 @@ error_json() {
 normalize_records() {
     field_sep="$1"
 
-    awk -v FS="$field_sep" '
+    awk -v FS="$field_sep" -v empty_field_token="$empty_field_token" '
         function clean(value) {
             gsub(/\r/, "", value)
             gsub(/\t+/, " ", value)
@@ -35,9 +36,22 @@ normalize_records() {
             for (i = 1; i <= 7; i += 1)
                 $i = clean($i)
 
+            for (i = 1; i <= 7; i += 1) {
+                if ($i == "")
+                    $i = empty_field_token
+            }
+
             printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5, $6, $3, $7
         }
     '
+}
+
+encode_empty_field() {
+    if [ -n "${1:-}" ]; then
+        printf '%s\n' "$1"
+    else
+        printf '%s\n' "$empty_field_token"
+    fi
 }
 
 trim_file() {
@@ -394,6 +408,13 @@ enrich_browse_page() {
         fi
 
         size_text="$(human_size_value "$size_bytes")"
+        comment="$(encode_empty_field "$comment")"
+        origin="$(encode_empty_field "$origin")"
+        website="$(encode_empty_field "$website")"
+        description="$(encode_empty_field "$description")"
+        license="$(encode_empty_field "$license")"
+        installed_version="$(encode_empty_field "$installed_version")"
+        size_text="$(encode_empty_field "$size_text")"
 
         printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
             "$name" \
@@ -477,6 +498,14 @@ enrich_installed_page() {
                 }
             '
         )"
+
+        merged_comment="$(encode_empty_field "$merged_comment")"
+        merged_origin="$(encode_empty_field "$merged_origin")"
+        merged_website="$(encode_empty_field "$merged_website")"
+        merged_description="$(encode_empty_field "$merged_description")"
+        merged_license="$(encode_empty_field "$merged_license")"
+        installed_version="$(encode_empty_field "$installed_version")"
+        size_text="$(encode_empty_field "$size_text")"
 
         printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t1\t%s\t%s\t%s\n' \
             "$name" \
@@ -598,6 +627,9 @@ build_updates_page() {
                 '
             )"
 
+            installed_version="$(encode_empty_field "$installed_version")"
+            size_text="$(encode_empty_field "$size_text")"
+
             printf '%s\t1\t1\t%s\t%s\n' "$remote_record" "$installed_version" "$size_text" >>"$page_file"
             matched=$((matched + 1))
             loaded=$((loaded + 1))
@@ -638,13 +670,20 @@ emit_json() {
         -v browse_label="$browse_label" \
         -v installed_label="$installed_label" \
         -v updates_label="$updates_label" \
-        -v installed_size_label="$installed_size_label" '
+        -v installed_size_label="$installed_size_label" \
+        -v empty_field_token="$empty_field_token" '
         function escape_json(value) {
             gsub(/\\/, "\\\\", value)
             gsub(/"/, "\\\"", value)
             gsub(/\t/, " ", value)
             gsub(/\r/, " ", value)
             gsub(/\n/, " ", value)
+            return value
+        }
+
+        function decode_field(value) {
+            if (value == empty_field_token)
+                return ""
             return value
         }
 
@@ -697,35 +736,35 @@ emit_json() {
             if (!first_record)
                 printf ","
 
-            package_comment = $3
+            package_comment = decode_field($3)
             if (package_comment == "")
                 package_comment = "No package summary available."
 
-            package_description = $7
+            package_description = decode_field($7)
             if (package_description == "")
                 package_description = package_comment
 
-            package_license = $8
+            package_license = decode_field($8)
             if (package_license == "")
                 package_license = "Unknown"
 
             printf "{"
-            printf "\"name\":%s,", quote($1)
-            printf "\"version\":%s,", quote($2)
-            printf "\"installed_version\":%s,", quote($11)
+            printf "\"name\":%s,", quote(decode_field($1))
+            printf "\"version\":%s,", quote(decode_field($2))
+            printf "\"installed_version\":%s,", quote(decode_field($11))
             printf "\"installed\":%s,", ($9 == "1" ? "true" : "false")
             printf "\"update_available\":%s,", ($10 == "1" ? "true" : "false")
-            printf "\"repo\":%s,", quote(repo_name($4))
-            printf "\"origin\":%s,", quote($4)
-            printf "\"category\":%s,", quote(category_name($4))
+            printf "\"repo\":%s,", quote(repo_name(decode_field($4)))
+            printf "\"origin\":%s,", quote(decode_field($4))
+            printf "\"category\":%s,", quote(category_name(decode_field($4)))
             printf "\"comment\":%s,", quote(package_comment)
             printf "\"description\":%s,", quote(package_description)
-            printf "\"website\":%s,", quote($5)
+            printf "\"website\":%s,", quote(decode_field($5))
             printf "\"license\":%s,", quote(package_license)
-            printf "\"size\":%s,", quote($12)
-            printf "\"size_bytes\":%s,", ($6 == "" ? "0" : $6)
+            printf "\"size\":%s,", quote(decode_field($12))
+            printf "\"size_bytes\":%s,", (decode_field($6) == "" ? "0" : decode_field($6))
             printf "\"dependencies\":"
-            emit_dependency_array($13)
+            emit_dependency_array(decode_field($13))
             printf "}"
 
             first_record = 0
