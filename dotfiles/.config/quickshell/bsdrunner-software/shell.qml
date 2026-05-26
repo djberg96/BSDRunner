@@ -915,7 +915,7 @@ ShellRoot {
                                                 readonly property bool hovered: packageMouse.containsMouse
 
                                                 width: packageColumn.width
-                                                height: 102
+                                                height: 82
                                                 radius: 18
                                                 color: active || hovered ? root.palette.cardHover : root.palette.panelBackground
                                                 border.width: 1
@@ -934,6 +934,8 @@ ShellRoot {
 
                                                         Text {
                                                             width: packageHeaderRow.width
+                                                                - categoryBadge.width
+                                                                - packageHeaderRow.spacing
                                                                 - (updateBadge.visible ? updateBadge.width + packageHeaderRow.spacing : 0)
                                                             height: 24
                                                             text: packageCard.pkg.name
@@ -944,6 +946,25 @@ ShellRoot {
                                                             font.bold: true
                                                             wrapMode: Text.NoWrap
                                                             elide: Text.ElideNone
+                                                        }
+
+                                                        Rectangle {
+                                                            id: categoryBadge
+
+                                                            width: categoryText.implicitWidth + 20
+                                                            height: 24
+                                                            radius: 12
+                                                            color: root.palette.accent
+                                                            opacity: 0.16
+
+                                                            Text {
+                                                                id: categoryText
+                                                                anchors.centerIn: parent
+                                                                text: packageCard.pkg.category
+                                                                color: root.palette.accent
+                                                                font.pixelSize: 12
+                                                                font.bold: true
+                                                            }
                                                         }
 
                                                         Rectangle {
@@ -972,29 +993,6 @@ ShellRoot {
                                                         text: packageCard.pkg.comment
                                                         color: root.palette.secondaryText
                                                         font.pixelSize: 14
-                                                    }
-
-                                                    Row {
-                                                        spacing: 14
-
-                                                        Text {
-                                                            text: packageCard.pkg.category
-                                                            color: root.palette.accent
-                                                            font.pixelSize: 12
-                                                            font.bold: true
-                                                        }
-
-                                                        Text {
-                                                            text: root.versionText(packageCard.pkg)
-                                                            color: root.palette.mutedText
-                                                            font.pixelSize: 12
-                                                        }
-
-                                                        Text {
-                                                            text: packageCard.pkg.repo
-                                                            color: root.palette.mutedText
-                                                            font.pixelSize: 12
-                                                        }
                                                     }
                                                 }
 
