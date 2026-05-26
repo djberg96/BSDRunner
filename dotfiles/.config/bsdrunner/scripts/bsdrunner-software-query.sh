@@ -360,45 +360,43 @@ enrich_browse_page() {
     page_file="$1"
     installed_file="$2"
     output_file="$3"
+    : >"$output_file"
 
-    awk -F '	' '
-        function human_size(bytes) {
-            if (bytes == "" || bytes !~ /^[0-9]+$/)
-                return ""
+    while IFS='	' read -r name version comment origin website size_bytes description license; do
+        [ -n "$name" ] || continue
 
-            split("B KB MB GB TB", human_units, " ")
-            human_size_value = bytes + 0
-            human_unit_index = 1
+        installed=0
+        installed_version=""
+        update_value=0
 
-            while (human_size_value >= 1024 && human_unit_index < 5) {
-                human_size_value /= 1024
-                human_unit_index += 1
-            }
+        installed_version="$(pkg query '%v' "$name" 2>/dev/null || true)"
+        if [ -n "$installed_version" ]; then
+            installed=1
 
-            if (human_unit_index == 1)
-                return sprintf("%d %s", human_size_value, human_units[human_unit_index])
+            if [ "$installed_version" != "$version" ]; then
+                comparison="$(pkg version -t "$installed_version" "$version" 2>/dev/null || printf '=')"
+                if [ "$comparison" = "<" ]; then
+                    update_value=1
+                fi
+            fi
+        fi
 
-            return sprintf("%.1f %s", human_size_value, human_units[human_unit_index])
-        }
+        size_text="$(human_size_value "$size_bytes")"
 
-        FNR == NR {
-            installed_version[$1] = $2
-            next
-        }
-
-        {
-            installed = ($1 in installed_version) ? 1 : 0
-            installed_value = installed ? installed_version[$1] : ""
-            update_value = 0
-
-            if (installed && installed_value != "" && installed_value != $2)
-                update_value = 1
-
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
-                $1, $2, $3, $4, $5, $6, $7, $8,
-                installed, update_value, installed_value, human_size($6)
-        }
-    ' "$installed_file" "$page_file" >"$output_file"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$name" \
+            "$version" \
+            "$comment" \
+            "$origin" \
+            "$website" \
+            "$size_bytes" \
+            "$description" \
+            "$license" \
+            "$installed" \
+            "$update_value" \
+            "$installed_version" \
+            "$size_text" >>"$output_file"
+    done <"$page_file"
 }
 
 enrich_installed_page() {
