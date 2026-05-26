@@ -1211,7 +1211,7 @@ ShellRoot {
 
                                                         Text {
                                                             width: packageHeaderRow.width
-                                                                - (installedMarker.visible ? installedMarker.width + packageHeaderRow.spacing : 0)
+                                                                - (installedMarker.visible ? installedMarker.implicitWidth + packageHeaderRow.spacing : 0)
                                                                 - categoryBadge.width
                                                                 - packageHeaderRow.spacing
                                                                 - (updateBadge.visible ? updateBadge.width + packageHeaderRow.spacing : 0)
@@ -1230,7 +1230,6 @@ ShellRoot {
                                                             id: installedMarker
 
                                                             visible: root.currentView === "browse" && root.isInstalledPackage(packageCard.pkg)
-                                                            width: visible ? implicitWidth : 0
                                                             height: 24
                                                             text: "*"
                                                             color: root.palette.success
