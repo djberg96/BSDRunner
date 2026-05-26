@@ -228,6 +228,9 @@ ShellRoot {
             actionFeedbackTone = "success"
             actionFeedbackTitle = payload.message || (activeActionLabel + " completed for " + activeActionPackageName + ".")
             actionFeedbackDetails = compactDetail.length > 0 ? compactDetail : "The package action completed successfully."
+            applyOptimisticActionState(activeActionId, activeActionPackageName)
+            statusTone = "info"
+            statusMessage = "Refreshing package metadata..."
             refreshPackages(false)
         } else {
             actionFeedbackTone = "error"
@@ -256,6 +259,84 @@ ShellRoot {
 
     function hasAvailableUpgrade(pkg) {
         return !!pkg && isInstalledPackage(pkg) && isTruthyFlag(pkg.update_available)
+    }
+
+    function copyPackageRecord(pkg) {
+        var copy = {}
+        for (var key in pkg)
+            copy[key] = pkg[key]
+        return copy
+    }
+
+    function applyOptimisticActionState(actionId, pkgName) {
+        if (!pkgName || pkgName.length === 0)
+            return
+
+        var nextPackages = []
+        var installedDelta = 0
+        var updatesDelta = 0
+
+        for (var i = 0; i < packageData.length; i += 1) {
+            var current = packageData[i]
+            if (current.name !== pkgName) {
+                nextPackages.push(current)
+                continue
+            }
+
+            var updated = copyPackageRecord(current)
+            var wasInstalled = isInstalledPackage(current)
+
+            switch (actionId) {
+            case "install":
+                if (!wasInstalled)
+                    installedDelta += 1
+                updated.installed = true
+                updated.installed_version = updated.version || updated.installed_version
+                updated.update_available = false
+                break
+            case "reinstall":
+                updated.installed = true
+                updated.installed_version = updated.version || updated.installed_version
+                updated.update_available = false
+                break
+            case "upgrade":
+                if (hasAvailableUpgrade(current))
+                    updatesDelta -= 1
+                updated.installed = true
+                updated.installed_version = updated.version || updated.installed_version
+                updated.update_available = false
+                break
+            case "remove":
+                if (wasInstalled)
+                    installedDelta -= 1
+                if (hasAvailableUpgrade(current))
+                    updatesDelta -= 1
+                updated.installed = false
+                updated.installed_version = ""
+                updated.update_available = false
+                if (currentView === "installed")
+                    continue
+                break
+            }
+
+            if (currentView === "updates" && actionId === "upgrade")
+                continue
+
+            nextPackages.push(updated)
+        }
+
+        packageData = nextPackages
+        if (installedDelta !== 0) {
+            installedTotalCount = Math.max(0, installedTotalCount + installedDelta)
+            installedCountLabel = String(installedTotalCount)
+        }
+        if (updatesDelta !== 0 && updatesCountLabel !== "--") {
+            var parsedUpdates = Number(updatesCountLabel)
+            if (!isNaN(parsedUpdates))
+                updatesCountLabel = String(Math.max(0, parsedUpdates + updatesDelta))
+        }
+
+        installedSizeLabel = "Refreshing..."
     }
 
     function versionText(pkg) {
@@ -1111,6 +1192,7 @@ ShellRoot {
 
                                                         Text {
                                                             width: packageHeaderRow.width
+                                                                - (installedMarker.visible ? installedMarker.width + packageHeaderRow.spacing : 0)
                                                                 - categoryBadge.width
                                                                 - packageHeaderRow.spacing
                                                                 - (updateBadge.visible ? updateBadge.width + packageHeaderRow.spacing : 0)
@@ -1123,6 +1205,20 @@ ShellRoot {
                                                             font.bold: true
                                                             wrapMode: Text.NoWrap
                                                             elide: Text.ElideNone
+                                                        }
+
+                                                        Text {
+                                                            id: installedMarker
+
+                                                            visible: root.currentView === "browse" && root.isInstalledPackage(packageCard.pkg)
+                                                            width: visible ? implicitWidth : 0
+                                                            height: 24
+                                                            text: "*"
+                                                            color: root.palette.success
+                                                            font.pixelSize: 18
+                                                            font.bold: true
+                                                            verticalAlignment: Text.AlignVCenter
+                                                            horizontalAlignment: Text.AlignHCenter
                                                         }
 
                                                         Rectangle {
