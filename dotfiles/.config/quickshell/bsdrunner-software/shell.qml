@@ -569,7 +569,7 @@ ShellRoot {
                                     anchors.left: parent.left
                                     anchors.bottom: parent.bottom
                                     anchors.leftMargin: 16
-                                    anchors.bottomMargin: 18
+                                    anchors.bottomMargin: 68
                                     width: 144
                                     height: 34
                                     radius: 12
@@ -580,7 +580,7 @@ ShellRoot {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: root.loadingPackages ? "Refreshing" : "Refresh pkg"
+                                        text: root.loadingPackages ? "Refreshing" : "Refresh Info"
                                         color: root.loadingPackages ? root.palette.accent : root.palette.frameBackground
                                         font.pixelSize: 12
                                         font.bold: true
@@ -601,8 +601,8 @@ ShellRoot {
                                 Rectangle {
                                     visible: root.refreshButtonHovered && !root.loadingPackages
                                     anchors.left: themeRefreshButton.left
-                                    anchors.bottom: themeRefreshButton.top
-                                    anchors.bottomMargin: 8
+                                    anchors.top: themeRefreshButton.bottom
+                                    anchors.topMargin: 8
                                     width: 176
                                     height: 42
                                     radius: 12
