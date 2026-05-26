@@ -58,7 +58,7 @@ ShellRoot {
     property string actionFeedbackDetails: ""
     readonly property var visiblePackages: packageData
     readonly property var selectedPackage: findPackage(selectedPackageName)
-    readonly property string appVersion: "0.0.1"
+    readonly property string appVersion: "1.0.0"
 
     function normalize(value) {
         return (value || "").toLowerCase()
