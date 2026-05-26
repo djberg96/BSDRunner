@@ -40,6 +40,19 @@ ShellRoot {
     property bool snapshotExited: false
     property bool snapshotStdoutFinished: false
     property bool snapshotStderrFinished: false
+    property string pendingActionId: ""
+    property string pendingActionLabel: ""
+    property string pendingActionPackageName: ""
+    property string activeActionId: ""
+    property string activeActionLabel: ""
+    property string activeActionPackageName: ""
+    property bool runningAction: false
+    property int actionExitCode: 0
+    property string actionStdoutText: ""
+    property string actionStderrText: ""
+    property bool actionExited: false
+    property bool actionStdoutFinished: false
+    property bool actionStderrFinished: false
     readonly property var visiblePackages: packageData
     readonly property var selectedPackage: findPackage(selectedPackageName)
 
@@ -101,18 +114,120 @@ ShellRoot {
     }
 
     function setView(nextView) {
-        if (currentView === nextView)
+        if (currentView === nextView || runningAction)
             return
 
+        clearPendingAction()
         currentView = nextView
         pageIndex = 0
         refreshPackages()
     }
 
-    function triggerMockAction(action, pkgName) {
-        var suffix = pkgName ? " for " + pkgName : ""
+    function clearPendingAction() {
+        pendingActionId = ""
+        pendingActionLabel = ""
+        pendingActionPackageName = ""
+    }
+
+    function requestAction(actionId, actionLabel, pkgName) {
+        if (runningAction || !pkgName)
+            return
+
+        pendingActionId = actionId
+        pendingActionLabel = actionLabel
+        pendingActionPackageName = pkgName
+    }
+
+    function confirmationText() {
+        if (!pendingActionPackageName || pendingActionPackageName.length === 0)
+            return ""
+
+        switch (pendingActionId) {
+        case "install":
+            return "Install " + pendingActionPackageName + " from the configured FreeBSD package repositories?"
+        case "reinstall":
+            return "Reinstall " + pendingActionPackageName + " from the configured FreeBSD package repositories?"
+        case "upgrade":
+            return "Upgrade " + pendingActionPackageName + " to the latest available package version?"
+        case "remove":
+            return "Remove " + pendingActionPackageName + " from this system?"
+        default:
+            return ""
+        }
+    }
+
+    function runConfirmedAction() {
+        if (!pendingActionId || !pendingActionPackageName || runningAction)
+            return
+
+        activeActionId = pendingActionId
+        activeActionLabel = pendingActionLabel
+        activeActionPackageName = pendingActionPackageName
+        clearPendingAction()
+
+        runningAction = true
+        actionExitCode = 0
+        actionStdoutText = ""
+        actionStderrText = ""
+        actionExited = false
+        actionStdoutFinished = false
+        actionStderrFinished = false
+
         statusTone = "warning"
-        statusMessage = "Read-only mode: " + action + suffix + " is not wired to mdo-backed actions yet."
+        statusMessage = "Running " + activeActionLabel.toLowerCase() + " for " + activeActionPackageName + "..."
+        actionProcess.running = true
+    }
+
+    function maybeFinalizeAction() {
+        if (!actionExited || !actionStdoutFinished || !actionStderrFinished)
+            return
+
+        applyActionResult(actionStdoutText, actionExitCode, actionStderrText)
+    }
+
+    function applyActionResult(text, exitCode, stderrText) {
+        runningAction = false
+
+        var lines = (text || "").split(/\r?\n/)
+        var compact = []
+        for (var i = 0; i < lines.length; i += 1) {
+            if (lines[i].trim().length > 0)
+                compact.push(lines[i])
+        }
+
+        var payload = null
+        var logText = ""
+        if (compact.length > 0) {
+            var jsonLine = compact[compact.length - 1]
+            logText = compact.slice(0, compact.length - 1).join("\n")
+            try {
+                payload = JSON.parse(jsonLine)
+            } catch (error) {
+                payload = null
+                logText = compact.join("\n")
+            }
+        }
+
+        var detailText = logText
+        if (stderrText && stderrText.trim().length > 0)
+            detailText = detailText.length > 0 ? detailText + "\n" + stderrText.trim() : stderrText.trim()
+
+        if (payload && payload.ok && exitCode === 0) {
+            statusTone = "success"
+            statusMessage = payload.message || (activeActionLabel + " completed for " + activeActionPackageName + ".")
+            refreshPackages(false)
+        } else {
+            statusTone = "error"
+            statusMessage = payload && payload.message
+                ? payload.message
+                : detailText.length > 0
+                    ? detailText
+                    : "Package action failed."
+        }
+
+        activeActionId = ""
+        activeActionLabel = ""
+        activeActionPackageName = ""
     }
 
     function isTruthyFlag(value) {
@@ -167,7 +282,7 @@ ShellRoot {
         return display
     }
 
-    function refreshPackages() {
+    function refreshPackages(clearSelection) {
         if (snapshotProcess.running) {
             pendingRefresh = true
             return
@@ -183,7 +298,8 @@ ShellRoot {
         snapshotExited = false
         snapshotStdoutFinished = false
         snapshotStderrFinished = false
-        selectedPackageName = ""
+        if (clearSelection !== false)
+            selectedPackageName = ""
         snapshotProcess.running = true
     }
 
@@ -334,6 +450,44 @@ ShellRoot {
         }
     }
 
+    Process {
+        id: actionProcess
+        property var controller: root
+
+        command: [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-software-backend.sh",
+            root.activeActionId,
+            root.activeActionPackageName
+        ]
+        stdout: StdioCollector {
+            id: actionStdout
+            waitForEnd: true
+
+            onStreamFinished: {
+                actionProcess.controller.actionStdoutText = text
+                actionProcess.controller.actionStdoutFinished = true
+                actionProcess.controller.maybeFinalizeAction()
+            }
+        }
+        stderr: StdioCollector {
+            id: actionStderr
+            waitForEnd: true
+
+            onStreamFinished: {
+                actionProcess.controller.actionStderrFinished = true
+                actionProcess.controller.actionStderrText = text
+                actionProcess.controller.maybeFinalizeAction()
+            }
+        }
+
+        onExited: function(exitCode, exitStatus) {
+            actionProcess.controller.actionExitCode = exitCode
+            actionProcess.controller.actionExited = true
+            actionProcess.controller.maybeFinalizeAction()
+        }
+    }
+
     Connections {
         target: Quickshell
 
@@ -473,7 +627,8 @@ ShellRoot {
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
+                                            enabled: !root.runningAction
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
                                             onEntered: parent.color = root.palette.cardHover
                                             onExited: parent.color = parent.active ? root.palette.cardHover : root.palette.panelBackground
@@ -588,7 +743,7 @@ ShellRoot {
 
                                     MouseArea {
                                         anchors.fill: parent
-                                        enabled: !root.loadingPackages
+                                        enabled: !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0
                                         hoverEnabled: true
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
@@ -686,8 +841,10 @@ ShellRoot {
                                 font.pixelSize: 16
                                 clip: true
                                 text: root.searchQuery
+                                readOnly: root.runningAction
 
                                 onTextChanged: {
+                                    root.clearPendingAction()
                                     root.searchQuery = text
                                     searchDebounce.restart()
                                 }
@@ -706,7 +863,7 @@ ShellRoot {
                             id: paginationBar
 
                             width: parent.width
-                            height: root.statusTone === "error" || root.statusTone === "warning" ? 78 : 48
+                            height: root.statusTone !== "info" ? 78 : 48
                             radius: 16
                             color: root.palette.cardBackground
                             border.width: 1
@@ -744,6 +901,8 @@ ShellRoot {
                                                 ? root.palette.danger
                                                 : root.statusTone === "warning"
                                                     ? root.palette.warning
+                                                    : root.statusTone === "success"
+                                                        ? root.palette.success
                                                     : root.palette.accent
                                             opacity: root.loadingPackages ? 0.95 : 0.65
                                         }
@@ -751,7 +910,11 @@ ShellRoot {
                                         Text {
                                             width: 218
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: root.loadingPackages ? "Loading..." : root.statusSearchText()
+                                            text: root.loadingPackages
+                                                ? "Loading..."
+                                                : root.runningAction
+                                                    ? "Package action in progress"
+                                                    : root.statusSearchText()
                                             color: root.palette.secondaryText
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
@@ -774,7 +937,7 @@ ShellRoot {
                                         border.color: root.hasPreviousPage && !root.loadingPackages
                                             ? root.palette.primaryText
                                             : root.palette.frameBorder
-                                        opacity: root.hasPreviousPage && !root.loadingPackages ? 1.0 : 0.45
+                                        opacity: root.hasPreviousPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0 ? 1.0 : 0.45
 
                                         Text {
                                             anchors.centerIn: parent
@@ -786,7 +949,7 @@ ShellRoot {
 
                                         MouseArea {
                                             anchors.fill: parent
-                                            enabled: root.hasPreviousPage && !root.loadingPackages
+                                            enabled: root.hasPreviousPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0
                                             hoverEnabled: true
                                             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                             onClicked: {
@@ -800,19 +963,19 @@ ShellRoot {
                                         width: 96
                                         height: 24
                                         radius: 12
-                                        color: root.hasNextPage && !root.loadingPackages
+                                        color: root.hasNextPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0
                                             ? root.palette.accent
                                             : root.palette.panelBackground
-                                        border.width: root.hasNextPage && !root.loadingPackages ? 2 : 1
-                                        border.color: root.hasNextPage && !root.loadingPackages
+                                        border.width: root.hasNextPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0 ? 2 : 1
+                                        border.color: root.hasNextPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0
                                             ? root.palette.accent
                                             : root.palette.frameBorder
-                                        opacity: root.hasNextPage && !root.loadingPackages ? 1.0 : 0.10
+                                        opacity: root.hasNextPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0 ? 1.0 : 0.10
 
                                         Text {
                                             anchors.centerIn: parent
                                             text: "Next"
-                                            color: root.hasNextPage && !root.loadingPackages
+                                            color: root.hasNextPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0
                                                 ? root.palette.accentStrong
                                                 : root.palette.mutedText
                                             font.pixelSize: 12
@@ -821,7 +984,7 @@ ShellRoot {
 
                                         MouseArea {
                                             anchors.fill: parent
-                                            enabled: root.hasNextPage && !root.loadingPackages
+                                            enabled: root.hasNextPage && !root.loadingPackages && !root.runningAction && root.pendingActionId.length === 0
                                             hoverEnabled: true
                                             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                             onClicked: {
@@ -833,13 +996,15 @@ ShellRoot {
                                 }
 
                                 Text {
-                                    visible: root.statusTone === "error" || root.statusTone === "warning"
+                                    visible: root.statusTone !== "info"
                                     width: parent.width
                                     wrapMode: Text.WordWrap
                                     text: root.statusMessage
                                     color: root.statusTone === "error"
                                         ? root.palette.danger
-                                        : root.palette.warning
+                                        : root.statusTone === "warning"
+                                            ? root.palette.warning
+                                            : root.palette.success
                                     font.pixelSize: 12
                                 }
                             }
@@ -1000,8 +1165,9 @@ ShellRoot {
                                                 MouseArea {
                                                     id: packageMouse
                                                     anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
+                                                    enabled: !root.runningAction && root.pendingActionId.length === 0
+                                                    hoverEnabled: enabled
+                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
                                                     onClicked: root.selectedPackageName = parent.modelData.name
                                                 }
@@ -1096,6 +1262,92 @@ ShellRoot {
                                         width: parent.width
                                         spacing: 10
 
+                                        Rectangle {
+                                            visible: root.pendingActionId.length > 0
+                                            width: parent.width
+                                            height: actionConfirmColumn.implicitHeight + 22
+                                            radius: 14
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.palette.warning
+
+                                            Column {
+                                                id: actionConfirmColumn
+
+                                                anchors.fill: parent
+                                                anchors.margins: 11
+                                                spacing: 10
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.pendingActionLabel + " " + root.pendingActionPackageName + "?"
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    wrapMode: Text.WordWrap
+                                                    text: root.confirmationText()
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 12
+                                                }
+
+                                                Row {
+                                                    spacing: 8
+
+                                                    Rectangle {
+                                                        width: 108
+                                                        height: 30
+                                                        radius: 10
+                                                        color: root.palette.warning
+                                                        border.width: 2
+                                                        border.color: root.palette.warning
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "Confirm"
+                                                            color: root.palette.primaryText
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                        }
+
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: root.runConfirmedAction()
+                                                        }
+                                                    }
+
+                                                    Rectangle {
+                                                        width: 88
+                                                        height: 30
+                                                        radius: 10
+                                                        color: root.palette.panelBackground
+                                                        border.width: 1
+                                                        border.color: root.palette.frameBorder
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "Cancel"
+                                                            color: root.palette.secondaryText
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                        }
+
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: root.clearPendingAction()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         Repeater {
                                             model: root.selectedPackage ? [
                                                 {
@@ -1122,7 +1374,7 @@ ShellRoot {
                                                 id: actionButton
 
                                                 required property var modelData
-                                                readonly property bool actionEnabled: modelData.available === true
+                                                readonly property bool actionEnabled: modelData.available === true && !root.runningAction
                                                 readonly property bool hovered: actionMouse.containsMouse
                                                 readonly property color toneColor: modelData.tone === "danger"
                                                     ? root.palette.danger
@@ -1161,7 +1413,7 @@ ShellRoot {
                                                     hoverEnabled: actionButton.actionEnabled
                                                     cursorShape: actionButton.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
-                                                    onClicked: root.triggerMockAction(actionButton.modelData.label, root.selectedPackage.name)
+                                                    onClicked: root.requestAction(actionButton.modelData.id, actionButton.modelData.label, root.selectedPackage.name)
                                                 }
                                             }
                                         }
