@@ -94,7 +94,11 @@ ShellRoot {
         id: wallpaperProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-wallpaper.sh"]
+        command: [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-wallpaper.sh",
+            root.activeTheme
+        ]
         running: true
 
         stdout: StdioCollector {

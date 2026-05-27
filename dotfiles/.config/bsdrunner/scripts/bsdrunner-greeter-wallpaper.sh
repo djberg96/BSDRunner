@@ -5,6 +5,7 @@ set -eu
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 runner_home="$HOME/.config/bsdrunner"
 theme_file="$runner_home/current-theme"
+requested_theme="${1:-}"
 
 if [ ! -d "$runner_home/themes" ]; then
     runner_home="$(CDPATH= cd -- "$script_dir/.." && pwd)"
@@ -12,7 +13,9 @@ if [ ! -d "$runner_home/themes" ]; then
 fi
 
 current_theme() {
-    if [ -f "$theme_file" ]; then
+    if [ -n "$requested_theme" ]; then
+        printf '%s\n' "$requested_theme"
+    elif [ -f "$theme_file" ]; then
         sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$theme_file"
     else
         printf '%s' "default"
