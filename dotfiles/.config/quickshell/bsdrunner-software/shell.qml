@@ -182,7 +182,7 @@ ShellRoot {
 
         actionFeedbackTone = "warning"
         actionFeedbackTitle = "Running " + activeActionLabel + " for " + activeActionPackageName
-        actionFeedbackDetails = "Waiting for pkg output..."
+        actionFeedbackDetails = "Working..."
         actionProcess.running = true
     }
 
@@ -216,9 +216,18 @@ ShellRoot {
             }
         }
 
-        var detailText = logText
-        if (stderrText && stderrText.trim().length > 0)
-            detailText = detailText.length > 0 ? detailText + "\n" + stderrText.trim() : stderrText.trim()
+        var payloadDetails = payload && payload.details ? payload.details.trim() : ""
+        var payloadLogPath = payload && payload.log_path ? payload.log_path.trim() : ""
+        var detailText = ""
+        if (payload) {
+            detailText = payloadDetails
+            if (!payload.ok && detailText.length === 0 && payloadLogPath.length > 0)
+                detailText = "See log: " + payloadLogPath
+        } else {
+            detailText = logText
+            if (stderrText && stderrText.trim().length > 0)
+                detailText = detailText.length > 0 ? detailText + "\n" + stderrText.trim() : stderrText.trim()
+        }
 
         var compactDetail = detailText.trim()
         var firstDetailLine = ""
@@ -228,7 +237,7 @@ ShellRoot {
         if (payload && payload.ok && exitCode === 0) {
             actionFeedbackTone = "success"
             actionFeedbackTitle = payload.message || (activeActionLabel + " completed for " + activeActionPackageName + ".")
-            actionFeedbackDetails = compactDetail.length > 0 ? compactDetail : "The package action completed successfully."
+            actionFeedbackDetails = compactDetail
             applyOptimisticActionState(activeActionId, activeActionPackageName)
             statusTone = "info"
             statusMessage = "Refreshing package metadata..."
