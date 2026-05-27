@@ -11,6 +11,9 @@ if ! command -v qmllint >/dev/null 2>&1; then
 fi
 
 qml_files="
+dotfiles/.config/quickshell/bsdrunner-greeter/shell.qml
+dotfiles/.config/quickshell/bsdrunner-greeter/ThemeLoader.qml
+dotfiles/.config/quickshell/bsdrunner-greeter/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-software/shell.qml
 dotfiles/.config/quickshell/bsdrunner-software/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-software/ThemePalette.qml

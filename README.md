@@ -124,6 +124,22 @@ Waybar also includes a few lightweight control-surface actions:
 
 Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.
 
+## Optional Login Screen
+
+BSDRunner also ships an optional `LightDM` + `lightdm-gtk-greeter` bundle renderer for a graphical login screen with a BSDRunner wallpaper background:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-render-lightdm.sh
+```
+
+The setup steps live in [docs/login-screen.md](docs/login-screen.md).
+
+There is also a native Quickshell greeter UI prototype you can preview manually:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
+```
+
 ## Scope
 
 This starter is targeted at:
