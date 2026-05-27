@@ -108,7 +108,6 @@ run_action() {
     stdout_file="$tmp_dir/stdout.log"
     stderr_file="$tmp_dir/stderr.log"
     log_file="$(log_file_for_action)"
-    shift
 
     if "$@" >"$stdout_file" 2>"$stderr_file"; then
         write_log_file "$log_file" "$stdout_file" "$stderr_file"
