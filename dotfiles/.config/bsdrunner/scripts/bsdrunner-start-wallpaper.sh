@@ -24,7 +24,9 @@ fi
 sleep 1
 
 theme_wallpapers() {
-    find "$wallpaper_dir" -maxdepth 1 -type f | sort
+    find "$wallpaper_dir" -maxdepth 1 -type f \
+        ! -name '*.pre-bsdrunner*' \
+        \( -iname '*.gif' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort
 }
 
 preferred_wallpaper_for_stem() {

@@ -10,6 +10,7 @@ if [ ! -d "$runner_home/themes" ]; then
 fi
 
 find "$runner_home/themes" -path '*/wallpapers/*' -type f \
+    ! -name '*.pre-bsdrunner*' \
     \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | awk '
     BEGIN {
         srand()

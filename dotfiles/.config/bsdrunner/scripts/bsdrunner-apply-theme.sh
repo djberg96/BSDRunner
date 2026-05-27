@@ -239,7 +239,9 @@ fi
 
 theme_wallpaper_dir="$theme_dir/wallpapers"
 
-if [ -d "$theme_wallpaper_dir" ] && find "$theme_wallpaper_dir" -maxdepth 1 -type f | read -r _; then
+if [ -d "$theme_wallpaper_dir" ] && find "$theme_wallpaper_dir" -maxdepth 1 -type f \
+    ! -name '*.pre-bsdrunner*' \
+    | read -r _; then
     selected_wallpaper=""
 
     while IFS= read -r active_wallpaper; do
@@ -250,7 +252,7 @@ if [ -d "$theme_wallpaper_dir" ] && find "$theme_wallpaper_dir" -maxdepth 1 -typ
             selected_wallpaper="$active_wallpaper"
         fi
     done <<EOF
-$(find "$theme_wallpaper_dir" -maxdepth 1 -type f | sort)
+$(find "$theme_wallpaper_dir" -maxdepth 1 -type f ! -name '*.pre-bsdrunner*' | sort)
 EOF
 
     printf '%s\n' "$selected_wallpaper" > "$runner_home/current-wallpaper"
