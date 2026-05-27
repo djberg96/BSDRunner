@@ -38,6 +38,7 @@ If you also want a graphical login manager later, install:
 
 ```sh
 sudo pkg install \
+  xorg-server \
   lightdm \
   lightdm-gtk-greeter
 ```

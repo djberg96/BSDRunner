@@ -159,6 +159,7 @@ EOF
 cat > "$lightdm_conf_d_dir/50-bsdrunner.conf" <<EOF
 [Seat:*]
 greeter-session=bsdrunner-lightdm-gtk-greeter
+xserver-command=$install_prefix/bin/Xorg
 EOF
 
 cat > "$lightdm_etc_dir/lightdm-gtk-greeter.conf" <<EOF

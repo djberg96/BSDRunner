@@ -9,7 +9,7 @@ This is the supported path for FreeBSD right now because both `lightdm` and `lig
 Install:
 
 ```sh
-mdo pkg install lightdm lightdm-gtk-greeter
+mdo pkg install xorg-server lightdm lightdm-gtk-greeter
 ```
 
 ## What It Does
@@ -77,6 +77,12 @@ mdo service lightdm start
 ```
 
 - The LightDM config snippet sets the greeter session to `bsdrunner-lightdm-gtk-greeter`.
+- The LightDM config snippet also points `xserver-command` at FreeBSD’s Xorg path:
+
+```text
+/usr/local/bin/Xorg
+```
+
 - If you want to revert, disable `lightdm` and remove the BSDRunner LightDM config snippet from `/usr/local/etc/lightdm/lightdm.conf.d/`.
 
 ## Why This Stack
