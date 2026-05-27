@@ -13,7 +13,7 @@ fi
 
 current_theme() {
     if [ -f "$theme_file" ]; then
-        tr -d '\n' < "$theme_file"
+        sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$theme_file"
     else
         printf '%s' "default"
     fi
@@ -21,9 +21,10 @@ current_theme() {
 
 wallpaper_candidates() {
     theme_name="$(current_theme)"
+    theme_wallpaper_dir="$runner_home/themes/$theme_name/wallpapers"
 
-    if [ -n "$theme_name" ] && [ "$theme_name" != "default" ] && [ -d "$runner_home/themes/$theme_name/wallpapers" ]; then
-        find "$runner_home/themes/$theme_name/wallpapers" -maxdepth 1 -type f \
+    if [ -n "$theme_name" ] && [ "$theme_name" != "default" ] && [ -d "$theme_wallpaper_dir" ]; then
+        find "$theme_wallpaper_dir" -maxdepth 1 -type f \
             ! -name '*.pre-bsdrunner*' \
             \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort
         return
