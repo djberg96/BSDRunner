@@ -38,6 +38,14 @@ sudo pkg install \
 BSDRunner Files uses `xdg-open` from `xdg-utils` to open files with their
 default applications.
 
+For the supported graphical login path, also install:
+
+```sh
+sudo pkg install \
+  lightdm \
+  lightdm-gtk-greeter
+```
+
 If you want the heavier fallback file manager validated in BSDRunner testing,
 also install:
 
@@ -166,6 +174,27 @@ If you need to launch Waybar manually in the current session, use the same wrapp
 ```sh
 sh ~/.config/bsdrunner/scripts/bsdrunner-start-waybar.sh
 ```
+
+## Graphical Login Screen
+
+BSDRunner uses `LightDM` + `lightdm-gtk-greeter` for a stable graphical login
+and logout lifecycle. Do not launch Hyprland automatically from `.profile`
+when LightDM is enabled.
+
+Render the BSDRunner bundle from your user session:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-render-lightdm.sh
+```
+
+That writes a self-contained LightDM bundle under:
+
+```text
+~/.config/bsdrunner/lightdm/
+```
+
+The full guarded installation and rollback procedure is in
+[login-screen.md](login-screen.md).
 
 For quick theme switching after install, BSDRunner supports:
 

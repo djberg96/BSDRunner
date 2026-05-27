@@ -7,7 +7,7 @@
 
 {
   "label" : "logout",
-  "action" : "sh -c 'sleep 0.2; hyprctl dispatch \"hl.dsp.exit()\"; sleep 0.5; vidcontrol -s 1 < /dev/ttyv0'",
+  "action" : "sh -c 'sleep 0.2; hyprctl dispatch \"hl.dsp.exit()\"'",
   "text" : "Logout",
   "keybind" : "e"
 }
