@@ -41,6 +41,7 @@ The goal is a nice, bootable base session for Hyprland `0.54.x` on FreeBSD.
 - `docs/freebsd-setup.md`
 - `docs/themes.md`
 - `docs/software-center.md`
+- `docs/login-screen.md`
 
 ## Quick Start
 
@@ -123,6 +124,16 @@ Waybar also includes a few lightweight control-surface actions:
 - power menu
 
 Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.
+
+## Optional Login Screen
+
+BSDRunner also ships an optional `greetd` + `ReGreet` bundle renderer for a graphical login screen with a BSDRunner wallpaper background:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-render-greetd.sh
+```
+
+The setup steps live in [docs/login-screen.md](docs/login-screen.md).
 
 ## Scope
 

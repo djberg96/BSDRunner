@@ -160,6 +160,24 @@ If you need to launch Waybar manually in the current session, use the same wrapp
 sh ~/.config/bsdrunner/scripts/bsdrunner-start-waybar.sh
 ```
 
+## Optional Graphical Login Screen
+
+BSDRunner also has an optional `greetd` + `ReGreet` path for a graphical login screen.
+
+Render the BSDRunner bundle from your user session:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-render-greetd.sh
+```
+
+That writes a self-contained greeter bundle under:
+
+```text
+~/.config/bsdrunner/greetd/
+```
+
+The full install steps are in [login-screen.md](login-screen.md).
+
 For quick theme switching after install, BSDRunner supports:
 
 - the Waybar theme button
