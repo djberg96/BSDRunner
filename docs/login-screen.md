@@ -1,119 +1,72 @@
 # Graphical Login Screen
 
-BSDRunner now ships an optional `LightDM` + `lightdm-gtk-greeter` bundle generator for a simple graphical login screen on FreeBSD.
+This branch currently contains a **native BSDRunner greeter UI prototype** built in Quickshell.
 
-This is the supported path for FreeBSD right now because both `lightdm` and `lightdm-gtk-greeter` are available as FreeBSD packages, while the earlier `greetd` path is not reliable for this environment.
+It is intentionally only the front-end layer for now.
 
-BSDRunner also includes a separate native Quickshell greeter UI prototype. That prototype is useful for design and future integration work, but it is not yet a complete login manager.
+## What Exists
 
-## Required Packages
+The prototype includes:
 
-Install:
-
-```sh
-mdo pkg install xorg-server lightdm lightdm-gtk-greeter
-```
-
-## Native Quickshell Greeter UI Prototype
-
-To preview the BSDRunner-native greeter surface:
+- a dedicated Quickshell surface under `dotfiles/.config/quickshell/bsdrunner-greeter/`
+- a small launcher script:
 
 ```sh
 sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
 ```
 
-What it currently does:
+- a wallpaper helper that rerolls a random static BSDRunner wallpaper on launch
+- the active BSDRunner palette and theme name
+- a real login-style layout:
+  - username field
+  - password field
+  - session picker
+  - sign-in button
+  - shutdown and restart placeholders
 
-- loads the active BSDRunner palette
-- rerolls a random static wallpaper from the shipped corp themes
-- shows a real greeter-style username/password/session layout
+## What Does Not Exist Yet
 
-What it does not do yet:
+This is not yet a real login manager.
+
+Missing pieces:
 
 - PAM authentication
 - privileged session startup
-- real shutdown/reboot wiring
+- real power actions
+- seat/session ownership
+- a display-manager backend
 
-So for now, treat it as the native greeter front-end prototype, not the complete login stack.
+So the current greeter is best thought of as:
 
-## What It Does
+- a native BSDRunner login-screen UI prototype
+- a design surface we can iterate on
+- a front-end that can later be attached to a proper backend
 
-The render helper:
+## How To Preview It
 
-- copies the shipped static BSDRunner wallpapers into a LightDM asset bundle
-- writes a BSDRunner LightDM config snippet
-- writes a `lightdm-gtk-greeter.conf`
-- writes a custom xgreeter desktop entry and wrapper
-- rerolls the login wallpaper on each greeter launch
-
-The result is a standard username/password login screen with a random BSDRunner wallpaper background each time the greeter starts.
-
-## Render The Bundle
-
-From a normal user session:
+After installing the dotfiles on a machine with `qs` available:
 
 ```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-render-lightdm.sh
+theme="$(cat ~/.config/bsdrunner/current-theme 2>/dev/null || echo default)"
+./scripts/install-dotfiles.sh --theme "$theme"
+sh ~/.config/bsdrunner/scripts/bsdrunner-apply-theme.sh "$theme"
+sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
 ```
 
-That renders a bundle at:
+## Current Design Goals
 
-```text
-~/.config/bsdrunner/lightdm/
-```
+The prototype is meant to prove:
 
-## Install The Bundle
+- BSDRunner’s theme system works at the greeter layer
+- a random wallpaper background can be rerolled cleanly
+- a login screen can feel like part of BSDRunner rather than a bolted-on system component
 
-On FreeBSD, the generated files are intended for:
+## Future Direction
 
-- `/usr/local/etc/lightdm/`
-- `/usr/local/share/bsdrunner/lightdm/`
-- `/usr/local/share/xgreeters/`
+The likely long-term path is:
 
-Example:
+1. keep this Quickshell surface as the visible greeter UI
+2. add a small privileged authentication/session backend
+3. attach the two through a minimal, well-defined interface
 
-```sh
-mdo mkdir -p /usr/local/etc/lightdm/lightdm.conf.d
-mdo mkdir -p /usr/local/share/bsdrunner/lightdm
-mdo mkdir -p /usr/local/share/xgreeters
-
-mdo cp -R ~/.config/bsdrunner/lightdm/etc/lightdm/. /usr/local/etc/lightdm/
-mdo cp -R ~/.config/bsdrunner/lightdm/share/bsdrunner/lightdm/. /usr/local/share/bsdrunner/lightdm/
-mdo cp -R ~/.config/bsdrunner/lightdm/share/xgreeters/. /usr/local/share/xgreeters/
-```
-
-## Enable LightDM
-
-After the bundle is installed:
-
-```sh
-mdo sysrc lightdm_enable=YES
-mdo service lightdm start
-```
-
-## Notes
-
-- The wallpaper reroll happens in the BSDRunner LightDM greeter wrapper before `lightdm-gtk-greeter` starts.
-- The background asset path is:
-
-```text
-/tmp/bsdrunner-lightdm-current-background
-```
-
-- The LightDM config snippet sets the greeter session to `bsdrunner-lightdm-gtk-greeter`.
-- The LightDM config snippet also points `xserver-command` at FreeBSD’s Xorg path:
-
-```text
-/usr/local/bin/Xorg
-```
-
-- If you want to revert, disable `lightdm` and remove the BSDRunner LightDM config snippet from `/usr/local/etc/lightdm/lightdm.conf.d/`.
-
-## Why This Stack
-
-This stack is the practical FreeBSD fit because:
-
-- `lightdm` is packaged on FreeBSD
-- `lightdm-gtk-greeter` is packaged on FreeBSD
-- the GTK greeter supports a normal wallpaper-backed login flow
-- BSDRunner can wrap the greeter to reroll wallpapers without needing a separate unsupported display-manager stack
+That keeps the design work and the security-sensitive work separate.
