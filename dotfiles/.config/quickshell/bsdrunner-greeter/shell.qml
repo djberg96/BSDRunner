@@ -92,11 +92,14 @@ ShellRoot {
 
     Process {
         id: wallpaperProcess
+        property var controller: root
 
-        command: ["sh", root.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-wallpaper.sh"]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-wallpaper.sh"]
         running: true
 
         stdout: StdioCollector {
+            waitForEnd: true
+
             onStreamFinished: {
                 wallpaperProcess.controller.wallpaperStdoutText = text
                 wallpaperProcess.controller.wallpaperStdoutFinished = true
@@ -104,7 +107,7 @@ ShellRoot {
             }
         }
 
-        onExited: function(exitCode) {
+        onExited: function(exitCode, exitStatus) {
             wallpaperProcess.controller.wallpaperExited = true
             wallpaperProcess.controller.maybeApplyWallpaper()
         }
