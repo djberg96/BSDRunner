@@ -127,10 +127,10 @@ Existing Kitty windows will not fully restyle in place. Open a fresh Kitty windo
 
 ## Optional Login Screen
 
-BSDRunner also ships an optional `greetd` + `ReGreet` bundle renderer for a graphical login screen with a BSDRunner wallpaper background:
+BSDRunner also ships an optional `LightDM` + `lightdm-gtk-greeter` bundle renderer for a graphical login screen with a BSDRunner wallpaper background:
 
 ```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-render-greetd.sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-render-lightdm.sh
 ```
 
 The setup steps live in [docs/login-screen.md](docs/login-screen.md).

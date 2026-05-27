@@ -34,6 +34,14 @@ sudo pkg install \
   playerctl
 ```
 
+If you also want a graphical login manager later, install:
+
+```sh
+sudo pkg install \
+  lightdm \
+  lightdm-gtk-greeter
+```
+
 If you want the file manager currently validated in BSDRunner testing, also install:
 
 ```sh
@@ -162,18 +170,18 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-start-waybar.sh
 
 ## Optional Graphical Login Screen
 
-BSDRunner also has an optional `greetd` + `ReGreet` path for a graphical login screen.
+BSDRunner also has an optional `LightDM` + `lightdm-gtk-greeter` path for a graphical login screen.
 
 Render the BSDRunner bundle from your user session:
 
 ```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-render-greetd.sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-render-lightdm.sh
 ```
 
-That writes a self-contained greeter bundle under:
+That writes a self-contained LightDM bundle under:
 
 ```text
-~/.config/bsdrunner/greetd/
+~/.config/bsdrunner/lightdm/
 ```
 
 The full install steps are in [login-screen.md](login-screen.md).
