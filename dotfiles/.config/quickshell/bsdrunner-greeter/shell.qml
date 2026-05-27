@@ -42,6 +42,14 @@ ShellRoot {
         return "file://" + wallpaperPath
     }
 
+    function wallpaperLabel() {
+        if (!wallpaperPath || wallpaperPath.length === 0)
+            return "No wallpaper selected yet"
+
+        var parts = wallpaperPath.split("/")
+        return parts.length > 0 ? parts[parts.length - 1] : wallpaperPath
+    }
+
     function maybeApplyWallpaper() {
         if (!wallpaperExited || !wallpaperStdoutFinished)
             return
@@ -233,6 +241,14 @@ ShellRoot {
                                     font.pixelSize: 16
                                     wrapMode: Text.WordWrap
                                     lineHeight: 1.14
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "Debug wallpaper: " + root.wallpaperLabel()
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 13
+                                    wrapMode: Text.WordWrap
                                 }
                             }
                         }
