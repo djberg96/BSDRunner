@@ -206,7 +206,10 @@ main(int argc, char **argv)
     }
 
     if (child_pid == 0)
+    {
+        sleep(1);
         _exit(launch_user_session(username, session_name));
+    }
 
     printf("Authentication successful. Launching %s session for %s.\n", session_name, username);
     return 0;

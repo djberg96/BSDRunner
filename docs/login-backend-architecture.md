@@ -28,6 +28,7 @@ Today the repo contains:
 - the Quickshell greeter UI
 - a root-backed auth helper path
 - a root-backed login-and-launch helper path
+- a dedicated minimal Hyprland greeter-session config and launcher
 - a preview action path
 - a session-command scaffold:
 
@@ -57,6 +58,7 @@ The current real-backend path is:
 - Quickshell sends the password over process stdin
 - `bsdrunner-greeter-login.sh` invokes a compiled helper through `mdo` / `doas`
 - `bsdrunner-greeter-login-helper.c` performs PAM auth as root and then launches `bsdrunner-greeter-session.sh` as the requested user
+- `bsdrunner-run-greeter.sh` closes the dedicated greeter compositor after the Quickshell greeter exits
 
 ## Recommended Real Architecture
 
@@ -166,13 +168,14 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-greeter-session.sh BSDRunner
 - Quickshell greeter UI
 - root-backed auth helper path
 - root-backed login-and-launch helper path
+- dedicated Hyprland greeter-session launcher
 - session wrapper scaffold
 
 ### Next
 
-- validate the real-backend helper on the FreeBSD laptop
-- decide how to give that helper a true greeter-owned TTY/session context
-- connect the greeter to a boot/startup path instead of manual launch
+- validate the dedicated greeter-session launcher on the FreeBSD laptop
+- decide how to attach that greeter session to a real boot/login entrypoint
+- replace the remaining “manual launcher” expectation with a true startup path
 
 ### Later
 

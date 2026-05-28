@@ -16,6 +16,10 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
 ```
 
 - a wallpaper helper that rerolls a random static BSDRunner wallpaper on launch
+- a minimal dedicated Hyprland greeter session config:
+  - `~/.config/hypr/bsdrunner-greeter.conf`
+- a dedicated greeter-session launcher:
+  - `sh ~/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh`
 - the active BSDRunner palette and theme name
 - a real login-style layout:
   - username field
@@ -42,6 +46,7 @@ Current interaction status:
   - `Terminal` launches `kitty`
 - If you authenticate as some other user in preview mode, the greeter reports success honestly but refuses to fake a cross-user desktop launch.
 - In `BSDRUNNER_GREETER_REAL_BACKEND=1` mode, `Sign In` switches to a root-backed login helper that authenticates and then launches the selected BSDRunner session as the requested user.
+- The dedicated greeter-session launcher now uses that real-backend mode automatically and exits its own Hyprland greeter compositor after the Quickshell greeter closes.
 - `Shutdown` and `Restart` now call a real backend helper and will use:
   - `mdo` if available
   - otherwise `doas`
@@ -66,8 +71,8 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-build-greeter-backend.sh
 - This gets us a real privileged authentication path without placing the password in argv.
 - The real-backend mode is a serious step forward, but it is still not a full display manager yet:
   - there is still no seat manager or greeter-owned TTY lifecycle
-  - `BSDRunner` is best tested from a dedicated greeter context, not from inside an already-running desktop
-  - `Terminal` is the safest local real-backend smoke test
+  - `BSDRunner` should now be tested from the dedicated greeter-session launcher, not from inside an already-running desktop
+  - `Terminal` is still the safest first real-backend smoke test
 
 So the current greeter is best thought of as:
 
@@ -109,6 +114,14 @@ BSDRUNNER_GREETER_REAL_BACKEND=1 sh ~/.config/bsdrunner/scripts/bsdrunner-greete
 ```
 
 For that mode, prefer testing the `Terminal` session first.
+
+To run the greeter in its own minimal Hyprland session instead of inside your current desktop:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh
+```
+
+That is the current closest thing to a real integrated login path in BSDRunner.
 
 ## Current Design Goals
 

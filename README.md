@@ -132,6 +132,12 @@ BSDRunner now includes a native Quickshell greeter UI prototype you can preview 
 sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
 ```
 
+It also now has a dedicated minimal Hyprland greeter-session launcher:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh
+```
+
 Notes and scope live in [docs/login-screen.md](docs/login-screen.md).
 
 The real backend/session-launch plan lives in
