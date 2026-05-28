@@ -169,6 +169,19 @@ ShellRoot {
                     Item {
                         anchors.fill: parent
 
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            height: 96
+                            radius: 28
+                            color: "transparent"
+                            gradient: Gradient {
+                                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.08) }
+                                GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.0) }
+                            }
+                        }
+
                         Column {
                             width: 460
                             x: 44
@@ -179,8 +192,9 @@ ShellRoot {
                                 width: parent.width
                                 text: "Sign In"
                                 color: root.palette.primaryText
-                                font.pixelSize: 36
+                                font.pixelSize: 34
                                 font.bold: true
+                                font.letterSpacing: 0.4
                             }
 
                             Rectangle {
@@ -189,7 +203,9 @@ ShellRoot {
                                 radius: 18
                                 color: root.palette.cardBackground
                                 border.width: 1
-                                border.color: root.palette.panelBorder
+                                border.color: usernameInput.activeFocus
+                                    ? root.palette.accentStrong
+                                    : root.palette.panelBorder
 
                                 TextInput {
                                     id: usernameInput
@@ -200,6 +216,8 @@ ShellRoot {
                                     selectedTextColor: root.palette.frameBackground
                                     font.pixelSize: 18
                                     text: root.usernameText
+
+                                    Keys.onReturnPressed: passwordInput.forceActiveFocus()
 
                                     onTextChanged: {
                                         root.usernameText = text
@@ -214,7 +232,7 @@ ShellRoot {
                                         visible: parent.text.length === 0
                                         text: "Username"
                                         color: root.palette.mutedText
-                                        font.pixelSize: 18
+                                        font.pixelSize: 17
                                     }
                                 }
                             }
@@ -225,7 +243,9 @@ ShellRoot {
                                 radius: 18
                                 color: root.palette.cardBackground
                                 border.width: 1
-                                border.color: root.palette.panelBorder
+                                border.color: passwordInput.activeFocus
+                                    ? root.palette.accentStrong
+                                    : root.palette.panelBorder
 
                                 TextInput {
                                     id: passwordInput
@@ -253,7 +273,7 @@ ShellRoot {
                                         visible: parent.text.length === 0
                                         text: "Password"
                                         color: root.palette.mutedText
-                                        font.pixelSize: 18
+                                        font.pixelSize: 17
                                     }
                                 }
                             }
@@ -328,8 +348,9 @@ ShellRoot {
                                         anchors.centerIn: parent
                                         text: "Sign In"
                                         color: root.palette.primaryText
-                                        font.pixelSize: 19
+                                        font.pixelSize: 18
                                         font.bold: true
+                                        font.letterSpacing: 0.3
                                     }
 
                                     MouseArea {
@@ -380,7 +401,7 @@ ShellRoot {
                                                 anchors.centerIn: parent
                                                 text: parent.modelData.label
                                                 color: parent.modelData.accent
-                                                font.pixelSize: 16
+                                                font.pixelSize: 15
                                                 font.bold: true
                                             }
 
@@ -410,10 +431,11 @@ ShellRoot {
                                 spacing: 10
 
                                 Text {
-                                    text: "Session"
+                                    text: "SESSION"
                                     color: root.palette.mutedText
-                                    font.pixelSize: 14
+                                    font.pixelSize: 12
                                     font.bold: true
+                                    font.letterSpacing: 1.2
                                 }
 
                                 Rectangle {
@@ -422,7 +444,9 @@ ShellRoot {
                                     radius: 18
                                     color: root.palette.cardBackground
                                     border.width: 1
-                                    border.color: root.palette.panelBorder
+                                    border.color: root.sessionMenuOpen
+                                        ? root.palette.accentStrong
+                                        : root.palette.panelBorder
 
                                     Text {
                                         anchors.left: parent.left
@@ -430,7 +454,7 @@ ShellRoot {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: root.selectedSession
                                         color: root.palette.primaryText
-                                        font.pixelSize: 17
+                                        font.pixelSize: 16
                                         font.bold: true
                                     }
 
