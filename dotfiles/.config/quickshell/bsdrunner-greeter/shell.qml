@@ -363,6 +363,8 @@ ShellRoot {
                         Column {
                             width: 220
                             spacing: 10
+                            anchors.top: parent.top
+                            anchors.topMargin: 6
 
                             Text {
                                 text: "Session"
