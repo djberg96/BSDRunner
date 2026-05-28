@@ -48,7 +48,7 @@ Current interaction status:
 
 Notes:
 
-- This currently uses PAM config `login` from `/etc/pam.d` by default.
+- This currently uses a BSDRunner-specific PAM policy shipped with the greeter under `~/.config/quickshell/bsdrunner-greeter/pam.d/bsdrunner-greeter`.
 - Quickshell’s PAM integration currently covers authentication only; true session startup still needs a display-manager backend.
 
 So the current greeter is best thought of as:

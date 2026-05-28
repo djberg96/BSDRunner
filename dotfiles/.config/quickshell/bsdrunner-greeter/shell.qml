@@ -233,7 +233,8 @@ ShellRoot {
 
     PamContext {
         id: pamContext
-        config: "login"
+        configDirectory: themeLoader.homeDir + "/.config/quickshell/bsdrunner-greeter/pam.d"
+        config: "bsdrunner-greeter"
 
         onPamMessage: {
             if (message && message.length > 0) {
