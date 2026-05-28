@@ -3,23 +3,34 @@
 set -eu
 
 config_path="${1:-}"
+user_id="$(id -u)"
+runtime_dir=""
 
 ensure_runtime_dir() {
-    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "${XDG_RUNTIME_DIR:-}" ]; then
+    candidate="${XDG_RUNTIME_DIR:-}"
+
+    if [ -n "$candidate" ] && [ -d "$candidate" ] && [ -O "$candidate" ] && [ -w "$candidate" ]; then
+        runtime_dir="$candidate"
+        export XDG_RUNTIME_DIR="$runtime_dir"
         return 0
     fi
 
-    runtime_dir="/var/run/user/$(id -u)"
-    if [ ! -d "$runtime_dir" ]; then
-        runtime_dir="/tmp/${USER}-runtime"
-        mkdir -p "$runtime_dir"
-        chmod 700 "$runtime_dir"
+    candidate="/var/run/user/$user_id"
+    if [ -d "$candidate" ] && [ -O "$candidate" ] && [ -w "$candidate" ]; then
+        runtime_dir="$candidate"
+        export XDG_RUNTIME_DIR="$runtime_dir"
+        return 0
     fi
 
+    runtime_dir="/tmp/${USER}-runtime"
+    mkdir -p "$runtime_dir"
+    chmod 700 "$runtime_dir"
     export XDG_RUNTIME_DIR="$runtime_dir"
 }
 
 ensure_runtime_dir
+
+unset DBUS_SESSION_BUS_ADDRESS
 
 export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
 export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-Hyprland}"
