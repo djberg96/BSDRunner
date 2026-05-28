@@ -156,8 +156,9 @@ ShellRoot {
         pamContext.user = requestedUser
         if (!pamContext.start()) {
             feedbackTone = "error"
-            feedbackTitle = "Could Not Start Authentication"
-            feedbackText = "The PAM authentication flow could not be started."
+            feedbackTitle = "Authentication Could Not Begin"
+            feedbackText = "That usually means the account name is invalid or PAM refused to start authentication for it."
+            pendingAuthenticatedUser = ""
         }
     }
 
@@ -292,7 +293,7 @@ ShellRoot {
         onError: function(error) {
             root.feedbackTone = "error"
             root.feedbackTitle = "PAM Error"
-            root.feedbackText = "Authentication could not complete normally."
+            root.feedbackText = "PAM could not complete authentication normally. This is usually different from a simple bad password."
             root.pendingAuthenticatedUser = ""
         }
     }

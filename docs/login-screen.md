@@ -30,7 +30,6 @@ This is not yet a real login manager.
 
 Missing pieces:
 
-- PAM authentication
 - privileged session startup
 - seat/session ownership
 - a display-manager backend
