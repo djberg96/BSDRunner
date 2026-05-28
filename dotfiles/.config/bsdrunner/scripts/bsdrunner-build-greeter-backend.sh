@@ -10,7 +10,7 @@ build_helper() {
     target="$2"
     libs="$3"
 
-    cc -O2 -Wall -Wextra -std=c99 -o "$target" "$src" $libs
+    cc -O2 -Wall -Wextra -std=gnu99 -o "$target" "$src" $libs
     chmod 700 "$target"
     printf '  %s\n' "$target"
 }
