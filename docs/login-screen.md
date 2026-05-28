@@ -36,11 +36,12 @@ Missing pieces:
 
 Current interaction status:
 
-- `Sign In` now performs **real PAM authentication** through Quickshell’s PAM service before any session action is launched.
-- After successful authentication, the prototype currently only launches a **preview action** for the current desktop user:
+- In normal preview mode, `Sign In` performs **real root-backed authentication** through a small BSDRunner helper before any session action is launched.
+- After successful authentication in preview mode, the prototype currently only launches a **preview action** for the current desktop user:
   - `BSDRunner` opens the BSDRunner welcome surface
   - `Terminal` launches `kitty`
-- If you authenticate as some other user, the greeter now reports success honestly but refuses to fake a cross-user desktop launch.
+- If you authenticate as some other user in preview mode, the greeter reports success honestly but refuses to fake a cross-user desktop launch.
+- In `BSDRUNNER_GREETER_REAL_BACKEND=1` mode, `Sign In` switches to a root-backed login helper that authenticates and then launches the selected BSDRunner session as the requested user.
 - `Shutdown` and `Restart` now call a real backend helper and will use:
   - `mdo` if available
   - otherwise `doas`
@@ -48,8 +49,25 @@ Current interaction status:
 
 Notes:
 
-- This currently uses a BSDRunner-specific PAM policy shipped with the greeter under `~/.config/quickshell/bsdrunner-greeter/pam.d/bsdrunner-greeter`.
-- Quickshell’s PAM integration currently covers authentication only; true session startup still needs a display-manager backend.
+- The auth helper is built locally from:
+  - `~/.config/bsdrunner/scripts/bsdrunner-greeter-auth-helper.c`
+- The login-and-launch helper is built locally from:
+  - `~/.config/bsdrunner/scripts/bsdrunner-greeter-login-helper.c`
+- Build it with:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-build-greeter-backend.sh
+```
+
+- The helper is then invoked through:
+  - `mdo` if available
+  - otherwise `doas`
+  - otherwise direct root execution only when already root
+- This gets us a real privileged authentication path without placing the password in argv.
+- The real-backend mode is a serious step forward, but it is still not a full display manager yet:
+  - there is still no seat manager or greeter-owned TTY lifecycle
+  - `BSDRunner` is best tested from a dedicated greeter context, not from inside an already-running desktop
+  - `Terminal` is the safest local real-backend smoke test
 
 So the current greeter is best thought of as:
 
@@ -77,6 +95,20 @@ If you are iterating on just the greeter prototype and want to force-refresh onl
 ```sh
 ./scripts/sync-greeter-prototype.sh
 ```
+
+Then build the auth helper once on the target FreeBSD machine:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-build-greeter-backend.sh
+```
+
+To try the more realistic backend path locally after that, launch the greeter with:
+
+```sh
+BSDRUNNER_GREETER_REAL_BACKEND=1 sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
+```
+
+For that mode, prefer testing the `Terminal` session first.
 
 ## Current Design Goals
 

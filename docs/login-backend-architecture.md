@@ -26,7 +26,8 @@ That keeps the visible interface pleasant to iterate on while keeping the securi
 Today the repo contains:
 
 - the Quickshell greeter UI
-- a local PAM policy for the greeter
+- a root-backed auth helper path
+- a root-backed login-and-launch helper path
 - a preview action path
 - a session-command scaffold:
 
@@ -42,6 +43,20 @@ That session script is the first reusable backend hook. It currently knows how t
   - prefers `dbus-run-session Hyprland` when available
 - `Terminal`
   - launches the user’s login shell
+
+The current auth path is:
+
+- Quickshell collects credentials
+- Quickshell sends the password over process stdin
+- `bsdrunner-greeter-auth.sh` invokes a compiled helper through `mdo` / `doas`
+- `bsdrunner-greeter-auth-helper.c` performs PAM auth as root
+
+The current real-backend path is:
+
+- Quickshell collects credentials
+- Quickshell sends the password over process stdin
+- `bsdrunner-greeter-login.sh` invokes a compiled helper through `mdo` / `doas`
+- `bsdrunner-greeter-login-helper.c` performs PAM auth as root and then launches `bsdrunner-greeter-session.sh` as the requested user
 
 ## Recommended Real Architecture
 
@@ -149,14 +164,15 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-greeter-session.sh BSDRunner
 ### Done
 
 - Quickshell greeter UI
-- PAM auth in preview mode
+- root-backed auth helper path
+- root-backed login-and-launch helper path
 - session wrapper scaffold
 
 ### Next
 
-- replace preview launch with real backend session launch
-- decide which display-manager/backend path is actually available on the laptop
-- connect successful auth to that backend
+- validate the real-backend helper on the FreeBSD laptop
+- decide how to give that helper a true greeter-owned TTY/session context
+- connect the greeter to a boot/startup path instead of manual launch
 
 ### Later
 

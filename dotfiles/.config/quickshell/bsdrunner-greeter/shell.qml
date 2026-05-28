@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import Quickshell
 import Quickshell.Io
-import Quickshell.Services.Pam
 import QtQuick
 
 ShellRoot {
@@ -16,11 +15,20 @@ ShellRoot {
     readonly property string activeTheme: themeLoader.activeTheme
     readonly property string homeDir: themeLoader.homeDir
     readonly property string currentDesktopUser: String(Quickshell.env("USER") || "")
-    readonly property bool busy: actionRunning || pamContext.active
+    readonly property bool realBackendEnabled: String(Quickshell.env("BSDRUNNER_GREETER_REAL_BACKEND") || "") === "1"
+    readonly property bool busy: actionRunning || authRunning
     property string wallpaperPath: ""
     property string wallpaperStdoutText: ""
     property bool wallpaperExited: false
     property bool wallpaperStdoutFinished: false
+    property var authCommand: []
+    property string authStdoutText: ""
+    property string authStderrText: ""
+    property bool authExited: false
+    property bool authStdoutFinished: false
+    property bool authStderrFinished: false
+    property bool authRunning: false
+    property int authExitCode: -1
     property var actionCommand: []
     property string pendingActionId: ""
     property string actionStdoutText: ""
@@ -59,6 +67,77 @@ ShellRoot {
             return
 
         wallpaperPath = wallpaperStdoutText.trim()
+    }
+
+    function maybeFinalizeAuth() {
+        if (!authExited || !authStdoutFinished || !authStderrFinished)
+            return
+
+        authRunning = false
+
+        var stdoutText = authStdoutText.trim()
+        var stderrText = authStderrText.trim()
+        var authenticatedUser = pendingAuthenticatedUser
+
+        if (authExitCode === 0) {
+            if (realBackendEnabled) {
+                feedbackTone = "info"
+                feedbackTitle = "Launching " + selectedSession
+                feedbackText = stdoutText.length > 0
+                    ? stdoutText
+                    : "Credentials were accepted. Launching the selected session."
+                pendingAuthenticatedUser = ""
+                Qt.quit()
+                return
+            }
+
+            if (authenticatedUser !== currentDesktopUser) {
+                feedbackTone = "warning"
+                feedbackTitle = "Credentials Verified"
+                feedbackText = "Authentication succeeded, but this preview can only launch sessions for the current desktop user (" + currentDesktopUser + "). A true multi-user login still needs a display-manager backend."
+                pendingAuthenticatedUser = ""
+                return
+            }
+
+            feedbackTone = "info"
+            feedbackTitle = "Launching " + selectedSession
+            feedbackText = stdoutText.length > 0
+                ? stdoutText
+                : "Credentials were accepted. Launching the selected preview session."
+
+            pendingActionId = "login"
+            actionStdoutText = ""
+            actionStderrText = ""
+            actionExited = false
+            actionStdoutFinished = false
+            actionStderrFinished = false
+            actionExitCode = -1
+            actionCommand = [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh",
+                "login",
+                selectedSession
+            ]
+            actionRunning = true
+        } else {
+            feedbackTone = "error"
+            feedbackTitle = authExitCode === 127
+                ? "Greeter Backend Missing"
+                : authExitCode === 1 || authExitCode === 126
+                    ? "Greeter Backend Not Available"
+                    : authExitCode === 3
+                        ? "Authentication Could Not Begin"
+                        : authExitCode === 5
+                            ? "Account Not Available"
+                            : "Authentication Failed"
+            feedbackText = stderrText.length > 0
+                ? stderrText
+                : stdoutText.length > 0
+                    ? stdoutText
+                    : "The supplied credentials were not accepted."
+        }
+
+        pendingAuthenticatedUser = ""
     }
 
     function maybeFinalizeAction() {
@@ -151,15 +230,31 @@ ShellRoot {
         pendingAuthenticatedUser = requestedUser
         feedbackTone = "info"
         feedbackTitle = "Authenticating " + requestedUser
-        feedbackText = "Checking credentials through PAM before launching the selected session."
+        feedbackText = realBackendEnabled
+            ? "Checking credentials and starting the selected session through the BSDRunner login backend."
+            : "Checking credentials through the BSDRunner greeter backend."
 
-        pamContext.user = requestedUser
-        if (!pamContext.start()) {
-            feedbackTone = "error"
-            feedbackTitle = "Authentication Could Not Begin"
-            feedbackText = "That usually means the account name is invalid or PAM refused to start authentication for it."
-            pendingAuthenticatedUser = ""
-        }
+        authStdoutText = ""
+        authStderrText = ""
+        authExited = false
+        authStdoutFinished = false
+        authStderrFinished = false
+        authExitCode = -1
+        authCommand = realBackendEnabled
+            ? [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-login.sh",
+                requestedUser,
+                selectedSession,
+                "login"
+            ]
+            : [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-auth.sh",
+                requestedUser,
+                "login"
+            ]
+        authRunning = true
     }
 
     Connections {
@@ -198,6 +293,46 @@ ShellRoot {
     }
 
     Process {
+        id: authProcess
+        property var controller: root
+
+        command: root.authCommand
+        running: root.authRunning
+        stdinEnabled: true
+
+        onStarted: {
+            write(root.passwordText + "\n")
+            root.passwordText = ""
+        }
+
+        stdout: StdioCollector {
+            waitForEnd: true
+
+            onStreamFinished: {
+                authProcess.controller.authStdoutText = text
+                authProcess.controller.authStdoutFinished = true
+                authProcess.controller.maybeFinalizeAuth()
+            }
+        }
+
+        stderr: StdioCollector {
+            waitForEnd: true
+
+            onStreamFinished: {
+                authProcess.controller.authStderrText = text
+                authProcess.controller.authStderrFinished = true
+                authProcess.controller.maybeFinalizeAuth()
+            }
+        }
+
+        onExited: function(exitCode, exitStatus) {
+            authProcess.controller.authExitCode = exitCode
+            authProcess.controller.authExited = true
+            authProcess.controller.maybeFinalizeAuth()
+        }
+    }
+
+    Process {
         id: actionProcess
         property var controller: root
 
@@ -228,74 +363,6 @@ ShellRoot {
             actionProcess.controller.actionExitCode = exitCode
             actionProcess.controller.actionExited = true
             actionProcess.controller.maybeFinalizeAction()
-        }
-    }
-
-    PamContext {
-        id: pamContext
-        configDirectory: themeLoader.homeDir + "/.config/quickshell/bsdrunner-greeter/pam.d"
-        config: "bsdrunner-greeter"
-
-        onPamMessage: {
-            if (message && message.length > 0) {
-                root.feedbackTone = messageIsError ? "error" : "info"
-                root.feedbackTitle = messageIsError ? "Authentication Message" : "Authenticating"
-                root.feedbackText = message
-            }
-
-            if (!responseRequired)
-                return
-
-            respond(responseVisible ? root.usernameText : root.passwordText)
-        }
-
-        onCompleted: function(result) {
-            if (result === PamResult.Success) {
-                if (root.pendingAuthenticatedUser !== root.currentDesktopUser) {
-                    root.feedbackTone = "warning"
-                    root.feedbackTitle = "Credentials Verified"
-                    root.feedbackText = "Authentication succeeded, but this preview can only launch sessions for the current desktop user (" + root.currentDesktopUser + "). A true multi-user login still needs a display-manager backend."
-                    root.pendingAuthenticatedUser = ""
-                    return
-                }
-
-                root.feedbackTone = "info"
-                root.feedbackTitle = "Launching " + root.selectedSession
-                root.feedbackText = "Credentials were accepted. Launching the selected preview session."
-
-                root.pendingActionId = "login"
-                root.actionStdoutText = ""
-                root.actionStderrText = ""
-                root.actionExited = false
-                root.actionStdoutFinished = false
-                root.actionStderrFinished = false
-                root.actionExitCode = -1
-                root.actionCommand = [
-                    "sh",
-                    themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh",
-                    "login",
-                    root.selectedSession
-                ]
-                root.actionRunning = true
-                root.pendingAuthenticatedUser = ""
-                return
-            }
-
-            root.feedbackTone = "error"
-            root.feedbackTitle = result === PamResult.MaxTries
-                ? "Too Many Attempts"
-                : "Authentication Failed"
-            root.feedbackText = root.message && root.message.length > 0
-                ? root.message
-                : "The supplied credentials were not accepted."
-            root.pendingAuthenticatedUser = ""
-        }
-
-        onError: function(error) {
-            root.feedbackTone = "error"
-            root.feedbackTitle = "PAM Error"
-            root.feedbackText = "PAM could not complete authentication normally. This is usually different from a simple bad password."
-            root.pendingAuthenticatedUser = ""
         }
     }
 
