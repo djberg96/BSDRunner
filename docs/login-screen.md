@@ -124,6 +124,8 @@ To run the greeter in its own minimal Hyprland session instead of inside your cu
 sh ~/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh
 ```
 
+Run that from a text TTY, not from inside an already-running Hyprland or X session. If you launch it from a terminal inside your current desktop, Hyprland will nest inside that terminal window and the greeter will look wrong.
+
 That is the current closest thing to a real integrated login path in BSDRunner.
 
 ## Current Design Goals

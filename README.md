@@ -138,6 +138,8 @@ It also now has a dedicated minimal Hyprland greeter-session launcher:
 sh ~/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh
 ```
 
+Run that from a text TTY, not from a terminal inside an already-running desktop session.
+
 Notes and scope live in [docs/login-screen.md](docs/login-screen.md).
 
 The real backend/session-launch plan lives in
