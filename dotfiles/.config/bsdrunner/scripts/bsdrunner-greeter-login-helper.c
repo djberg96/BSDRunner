@@ -1,11 +1,11 @@
-#include <security/pam_appl.h>
+#include <sys/types.h>
 
+#include <security/pam_appl.h>
 #include <login_cap.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 struct conv_data {
