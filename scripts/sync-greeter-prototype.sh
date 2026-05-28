@@ -36,6 +36,19 @@ rsync -a --backup --suffix='.pre-bsdrunner' \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh" \
   "$target_script_dir/"
 
+chmod 755 \
+  "$target_script_dir/bsdrunner-build-greeter-backend.sh" \
+  "$target_script_dir/bsdrunner-greeter-auth.sh" \
+  "$target_script_dir/bsdrunner-greeter-login.sh" \
+  "$target_script_dir/bsdrunner-greeter.sh" \
+  "$target_script_dir/bsdrunner-greeter-action.sh" \
+  "$target_script_dir/bsdrunner-greeter-session.sh" \
+  "$target_script_dir/bsdrunner-greeter-wallpaper.sh" \
+  "$target_script_dir/bsdrunner-launch-hyprland.sh" \
+  "$target_script_dir/bsdrunner-run-greeter.sh" \
+  "$target_script_dir/bsdrunner-run-terminal-session.sh" \
+  "$target_script_dir/bsdrunner-start-greeter-session.sh"
+
 printf '%s\n' ":: Synced BSDRunner greeter prototype into ~/.config"
 printf '%s\n' "   Quickshell: $target_quickshell_dir"
 printf '%s\n' "   Hyprland:   $target_hypr_dir"

@@ -233,6 +233,8 @@ cleanup_stale_theme_waybar_configs() {
 rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
 cleanup_stale_theme_waybar_configs
 
+chmod 755 "$HOME/.config/bsdrunner/scripts/"*.sh 2>/dev/null || true
+
 mkdir -p "$HOME/.config/bsdrunner/base"
 mkdir -p "$HOME/.config/hypr"
 mkdir -p "$HOME/.config/rofi"
