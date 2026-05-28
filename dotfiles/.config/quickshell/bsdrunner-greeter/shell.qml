@@ -360,99 +360,103 @@ ShellRoot {
                             }
                         }
 
-                        Column {
+                        Item {
                             width: 220
-                            spacing: 10
-                            anchors.top: parent.top
-                            anchors.topMargin: 6
+                            height: 300
 
-                            Text {
-                                text: "Session"
-                                color: root.palette.mutedText
-                                font.pixelSize: 14
-                                font.bold: true
-                            }
-
-                            Rectangle {
+                            Column {
                                 width: parent.width
-                                height: 58
-                                radius: 18
-                                color: root.palette.cardBackground
-                                border.width: 1
-                                border.color: root.palette.panelBorder
+                                y: 14
+                                spacing: 10
 
                                 Text {
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 18
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.selectedSession
-                                    color: root.palette.primaryText
-                                    font.pixelSize: 17
+                                    text: "Session"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 14
                                     font.bold: true
                                 }
 
-                                Text {
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 18
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.sessionMenuOpen ? "˄" : "˅"
-                                    color: root.palette.accentStrong
-                                    font.pixelSize: 18
-                                    font.bold: true
+                                Rectangle {
+                                    width: parent.width
+                                    height: 58
+                                    radius: 18
+                                    color: root.palette.cardBackground
+                                    border.width: 1
+                                    border.color: root.palette.panelBorder
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 18
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.selectedSession
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 17
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 18
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.sessionMenuOpen ? "˄" : "˅"
+                                        color: root.palette.accentStrong
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.sessionMenuOpen = !root.sessionMenuOpen
+                                    }
                                 }
 
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.sessionMenuOpen = !root.sessionMenuOpen
-                                }
-                            }
+                                Rectangle {
+                                    visible: root.sessionMenuOpen
+                                    width: parent.width
+                                    height: sessionMenuColumn.implicitHeight + 16
+                                    radius: 18
+                                    color: Qt.rgba(0.05, 0.06, 0.08, 0.92)
+                                    border.width: 1
+                                    border.color: root.palette.panelBorder
 
-                            Rectangle {
-                                visible: root.sessionMenuOpen
-                                width: parent.width
-                                height: sessionMenuColumn.implicitHeight + 16
-                                radius: 18
-                                color: Qt.rgba(0.05, 0.06, 0.08, 0.92)
-                                border.width: 1
-                                border.color: root.palette.panelBorder
+                                    Column {
+                                        id: sessionMenuColumn
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        spacing: 6
 
-                                Column {
-                                    id: sessionMenuColumn
-                                    anchors.fill: parent
-                                    anchors.margins: 8
-                                    spacing: 6
+                                        Repeater {
+                                            model: root.sessions
 
-                                    Repeater {
-                                        model: root.sessions
+                                            delegate: Rectangle {
+                                                id: sessionOption
+                                                required property var modelData
+                                                readonly property bool active: root.selectedSession === modelData.label
+                                                width: parent.width
+                                                height: 44
+                                                radius: 12
+                                                color: sessionOption.active ? root.palette.cardHover : "transparent"
+                                                border.width: sessionOption.active ? 1 : 0
+                                                border.color: sessionOption.active ? themeLoader.actionAccent("session") : "transparent"
 
-                                        delegate: Rectangle {
-                                            id: sessionOption
-                                            required property var modelData
-                                            readonly property bool active: root.selectedSession === modelData.label
-                                            width: parent.width
-                                            height: 44
-                                            radius: 12
-                                            color: sessionOption.active ? root.palette.cardHover : "transparent"
-                                            border.width: sessionOption.active ? 1 : 0
-                                            border.color: sessionOption.active ? themeLoader.actionAccent("session") : "transparent"
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: sessionOption.modelData.label
+                                                    color: sessionOption.active ? root.palette.accentStrong : root.palette.primaryText
+                                                    font.pixelSize: 15
+                                                    font.bold: true
+                                                }
 
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: sessionOption.modelData.label
-                                                color: sessionOption.active ? root.palette.accentStrong : root.palette.primaryText
-                                                font.pixelSize: 15
-                                                font.bold: true
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    root.selectedSession = parent.modelData.label
-                                                    root.sessionMenuOpen = false
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        root.selectedSession = parent.modelData.label
+                                                        root.sessionMenuOpen = false
+                                                    }
                                                 }
                                             }
                                         }
