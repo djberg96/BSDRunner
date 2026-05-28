@@ -159,7 +159,7 @@ ShellRoot {
 
                 Rectangle {
                     width: 780
-                    height: 440
+                    height: 424
                     anchors.centerIn: parent
                     radius: 28
                     color: Qt.rgba(0.04, 0.05, 0.06, 0.68)
@@ -173,13 +173,13 @@ ShellRoot {
                             width: 460
                             x: 44
                             anchors.verticalCenter: parent.verticalCenter
-                            spacing: 18
+                            spacing: 14
 
                             Text {
                                 width: parent.width
                                 text: "Sign In"
                                 color: root.palette.primaryText
-                                font.pixelSize: 40
+                                font.pixelSize: 36
                                 font.bold: true
                             }
 
@@ -310,51 +310,89 @@ ShellRoot {
                             Row {
                                 width: parent.width
                                 spacing: 12
+                                height: 66
 
-                                Repeater {
-                                    model: [
-                                        {
-                                            "id": "login",
-                                            "label": "Sign In",
-                                            "accent": themeLoader.actionAccent("login")
-                                        },
-                                        {
-                                            "id": "shutdown",
-                                            "label": "Shutdown",
-                                            "accent": themeLoader.actionAccent("shutdown")
-                                        },
-                                        {
-                                            "id": "restart",
-                                            "label": "Restart",
-                                            "accent": themeLoader.actionAccent("restart")
-                                        }
-                                    ]
+                                Rectangle {
+                                    id: signInButton
+                                    width: 240
+                                    height: parent.height
+                                    radius: 18
+                                    color: Qt.rgba(themeLoader.actionAccent("login").r,
+                                                   themeLoader.actionAccent("login").g,
+                                                   themeLoader.actionAccent("login").b,
+                                                   0.22)
+                                    border.width: 2
+                                    border.color: themeLoader.actionAccent("login")
 
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        width: (parent.width - 24) / 3
-                                        height: 66
-                                        radius: 18
-                                        color: Qt.rgba(0.05, 0.06, 0.08, 0.48)
-                                        border.width: 2
-                                        border.color: modelData.accent
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Sign In"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 19
+                                        font.bold: true
+                                    }
 
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: parent.modelData.label
-                                            color: parent.modelData.accent
-                                            font.pixelSize: 18
-                                            font.bold: true
-                                        }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onEntered: parent.color = Qt.rgba(themeLoader.actionAccent("login").r,
+                                                                           themeLoader.actionAccent("login").g,
+                                                                           themeLoader.actionAccent("login").b,
+                                                                           0.30)
+                                        onExited: parent.color = Qt.rgba(themeLoader.actionAccent("login").r,
+                                                                          themeLoader.actionAccent("login").g,
+                                                                          themeLoader.actionAccent("login").b,
+                                                                          0.22)
+                                        onClicked: root.triggerButton("login")
+                                    }
+                                }
 
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
+                                Row {
+                                    width: parent.width - signInButton.width - parent.spacing
+                                    height: parent.height
+                                    spacing: 12
 
-                                            onEntered: parent.color = root.palette.cardHover
-                                            onExited: parent.color = Qt.rgba(0.05, 0.06, 0.08, 0.48)
-                                            onClicked: root.triggerButton(parent.modelData.id)
+                                    Repeater {
+                                        model: [
+                                            {
+                                                "id": "shutdown",
+                                                "label": "Shutdown",
+                                                "accent": themeLoader.actionAccent("shutdown")
+                                            },
+                                            {
+                                                "id": "restart",
+                                                "label": "Restart",
+                                                "accent": themeLoader.actionAccent("restart")
+                                            }
+                                        ]
+
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            width: (parent.width - 12) / 2
+                                            height: parent.height
+                                            radius: 16
+                                            color: Qt.rgba(0.05, 0.06, 0.08, 0.34)
+                                            border.width: 1
+                                            border.color: modelData.accent
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: parent.modelData.label
+                                                color: parent.modelData.accent
+                                                font.pixelSize: 16
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+
+                                                onEntered: parent.color = Qt.rgba(0.10, 0.12, 0.14, 0.52)
+                                                onExited: parent.color = Qt.rgba(0.05, 0.06, 0.08, 0.34)
+                                                onClicked: root.triggerButton(parent.modelData.id)
+                                            }
                                         }
                                     }
                                 }
