@@ -322,6 +322,14 @@ ShellRoot {
                                     ? root.palette.accentStrong
                                     : root.palette.panelBorder
 
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        usernameInput.forceActiveFocus()
+                                        usernameInput.cursorPosition = usernameInput.text.length
+                                    }
+                                }
+
                                 TextInput {
                                     id: usernameInput
                                     anchors.fill: parent
@@ -332,8 +340,17 @@ ShellRoot {
                                     font.pixelSize: 18
                                     text: root.usernameText
                                     enabled: !root.actionRunning
+                                    activeFocusOnTab: true
 
                                     Keys.onReturnPressed: passwordInput.forceActiveFocus()
+                                    Keys.onTabPressed: function(event) {
+                                        passwordInput.forceActiveFocus()
+                                        event.accepted = true
+                                    }
+                                    Keys.onBacktabPressed: function(event) {
+                                        passwordInput.forceActiveFocus()
+                                        event.accepted = true
+                                    }
 
                                     onTextChanged: {
                                         root.usernameText = text
@@ -363,6 +380,14 @@ ShellRoot {
                                     ? root.palette.accentStrong
                                     : root.palette.panelBorder
 
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        passwordInput.forceActiveFocus()
+                                        passwordInput.cursorPosition = passwordInput.text.length
+                                    }
+                                }
+
                                 TextInput {
                                     id: passwordInput
                                     anchors.fill: parent
@@ -374,6 +399,7 @@ ShellRoot {
                                     echoMode: TextInput.Password
                                     text: root.passwordText
                                     enabled: !root.actionRunning
+                                    activeFocusOnTab: true
 
                                     onTextChanged: {
                                         root.passwordText = text
@@ -384,6 +410,14 @@ ShellRoot {
                                     }
 
                                     Keys.onReturnPressed: root.requestLogin()
+                                    Keys.onTabPressed: function(event) {
+                                        usernameInput.forceActiveFocus()
+                                        event.accepted = true
+                                    }
+                                    Keys.onBacktabPressed: function(event) {
+                                        usernameInput.forceActiveFocus()
+                                        event.accepted = true
+                                    }
 
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
