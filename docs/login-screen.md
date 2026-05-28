@@ -18,6 +18,8 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
 - a wallpaper helper that rerolls a random static BSDRunner wallpaper on launch
 - a minimal dedicated Hyprland greeter session config:
   - `~/.config/hypr/bsdrunner-greeter.conf`
+- a minimal dedicated Hyprland terminal-session config:
+  - `~/.config/hypr/bsdrunner-terminal.conf`
 - a dedicated greeter-session launcher:
   - `sh ~/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh`
 - the active BSDRunner palette and theme name
@@ -72,7 +74,8 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-build-greeter-backend.sh
 - The real-backend mode is a serious step forward, but it is still not a full display manager yet:
   - there is still no seat manager or greeter-owned TTY lifecycle
   - `BSDRunner` should now be tested from the dedicated greeter-session launcher, not from inside an already-running desktop
-  - `Terminal` is still the safest first real-backend smoke test
+- `Terminal` is still the safest first real-backend smoke test
+  - it now launches a minimal Hyprland session whose only intended app is a terminal emulator
 
 So the current greeter is best thought of as:
 

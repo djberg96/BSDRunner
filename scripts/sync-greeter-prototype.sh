@@ -17,6 +17,7 @@ rsync -a --backup --suffix='.pre-bsdrunner' \
 
 rsync -a --backup --suffix='.pre-bsdrunner' \
   "$repo_root/dotfiles/.config/hypr/bsdrunner-greeter.conf" \
+  "$repo_root/dotfiles/.config/hypr/bsdrunner-terminal.conf" \
   "$target_hypr_dir/"
 
 rsync -a --backup --suffix='.pre-bsdrunner' \
@@ -30,6 +31,7 @@ rsync -a --backup --suffix='.pre-bsdrunner' \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-session.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-wallpaper.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-run-greeter.sh" \
+  "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-run-terminal-session.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh" \
   "$target_script_dir/"
 

@@ -18,6 +18,16 @@ launch_hyprland() {
 }
 
 launch_terminal() {
+    terminal_config="$HOME/.config/hypr/bsdrunner-terminal.conf"
+
+    if command -v Hyprland >/dev/null 2>&1 && [ -f "$terminal_config" ]; then
+        if command -v dbus-run-session >/dev/null 2>&1; then
+            exec dbus-run-session Hyprland --config "$terminal_config"
+        fi
+
+        exec Hyprland --config "$terminal_config"
+    fi
+
     exec "${SHELL:-/bin/sh}" -l
 }
 
