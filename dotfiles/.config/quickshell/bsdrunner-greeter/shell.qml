@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Pam
 import QtQuick
 
 ShellRoot {
@@ -14,6 +15,8 @@ ShellRoot {
     readonly property var palette: themeLoader.palette
     readonly property string activeTheme: themeLoader.activeTheme
     readonly property string homeDir: themeLoader.homeDir
+    readonly property string currentDesktopUser: String(Quickshell.env("USER") || "")
+    readonly property bool busy: actionRunning || pamContext.active
     property string wallpaperPath: ""
     property string wallpaperStdoutText: ""
     property bool wallpaperExited: false
@@ -31,6 +34,7 @@ ShellRoot {
     property string passwordText: ""
     property string selectedSession: "BSDRunner"
     property bool sessionMenuOpen: false
+    property string pendingAuthenticatedUser: ""
     property string feedbackTone: "info"
     property string feedbackTitle: ""
     property string feedbackText: ""
@@ -98,7 +102,7 @@ ShellRoot {
     }
 
     function runAction(actionId) {
-        if (actionRunning)
+        if (busy)
             return
 
         sessionMenuOpen = false
@@ -135,6 +139,8 @@ ShellRoot {
     }
 
     function requestLogin() {
+        var requestedUser = usernameText.trim()
+
         if (usernameText.trim().length === 0 || passwordText.length === 0) {
             feedbackTone = "error"
             feedbackTitle = "Missing Credentials"
@@ -142,24 +148,17 @@ ShellRoot {
             return
         }
 
+        pendingAuthenticatedUser = requestedUser
         feedbackTone = "info"
-        feedbackTitle = "Launching " + selectedSession
-        feedbackText = "Preview mode is launching the selected session in the current user session."
+        feedbackTitle = "Authenticating " + requestedUser
+        feedbackText = "Checking credentials through PAM before launching the selected session."
 
-        pendingActionId = "login"
-        actionStdoutText = ""
-        actionStderrText = ""
-        actionExited = false
-        actionStdoutFinished = false
-        actionStderrFinished = false
-        actionExitCode = -1
-        actionCommand = [
-            "sh",
-            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh",
-            "login",
-            selectedSession
-        ]
-        actionRunning = true
+        pamContext.user = requestedUser
+        if (!pamContext.start()) {
+            feedbackTone = "error"
+            feedbackTitle = "Could Not Start Authentication"
+            feedbackText = "The PAM authentication flow could not be started."
+        }
     }
 
     Connections {
@@ -228,6 +227,73 @@ ShellRoot {
             actionProcess.controller.actionExitCode = exitCode
             actionProcess.controller.actionExited = true
             actionProcess.controller.maybeFinalizeAction()
+        }
+    }
+
+    PamContext {
+        id: pamContext
+        config: "login"
+
+        onPamMessage: {
+            if (message && message.length > 0) {
+                root.feedbackTone = messageIsError ? "error" : "info"
+                root.feedbackTitle = messageIsError ? "Authentication Message" : "Authenticating"
+                root.feedbackText = message
+            }
+
+            if (!responseRequired)
+                return
+
+            respond(responseVisible ? root.usernameText : root.passwordText)
+        }
+
+        onCompleted: function(result) {
+            if (result === PamResult.Success) {
+                if (root.pendingAuthenticatedUser !== root.currentDesktopUser) {
+                    root.feedbackTone = "warning"
+                    root.feedbackTitle = "Credentials Verified"
+                    root.feedbackText = "Authentication succeeded, but this preview can only launch sessions for the current desktop user (" + root.currentDesktopUser + "). A true multi-user login still needs a display-manager backend."
+                    root.pendingAuthenticatedUser = ""
+                    return
+                }
+
+                root.feedbackTone = "info"
+                root.feedbackTitle = "Launching " + root.selectedSession
+                root.feedbackText = "Credentials were accepted. Launching the selected preview session."
+
+                root.pendingActionId = "login"
+                root.actionStdoutText = ""
+                root.actionStderrText = ""
+                root.actionExited = false
+                root.actionStdoutFinished = false
+                root.actionStderrFinished = false
+                root.actionExitCode = -1
+                root.actionCommand = [
+                    "sh",
+                    themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh",
+                    "login",
+                    root.selectedSession
+                ]
+                root.actionRunning = true
+                root.pendingAuthenticatedUser = ""
+                return
+            }
+
+            root.feedbackTone = "error"
+            root.feedbackTitle = result === PamResult.MaxTries
+                ? "Too Many Attempts"
+                : "Authentication Failed"
+            root.feedbackText = root.message && root.message.length > 0
+                ? root.message
+                : "The supplied credentials were not accepted."
+            root.pendingAuthenticatedUser = ""
+        }
+
+        onError: function(error) {
+            root.feedbackTone = "error"
+            root.feedbackTitle = "PAM Error"
+            root.feedbackText = "Authentication could not complete normally."
+            root.pendingAuthenticatedUser = ""
         }
     }
 
@@ -339,7 +405,7 @@ ShellRoot {
                                     selectedTextColor: root.palette.frameBackground
                                     font.pixelSize: 18
                                     text: root.usernameText
-                                    enabled: !root.actionRunning
+                                    enabled: !root.busy
                                     activeFocusOnTab: true
 
                                     Keys.onReturnPressed: passwordInput.forceActiveFocus()
@@ -398,7 +464,7 @@ ShellRoot {
                                     font.pixelSize: 18
                                     echoMode: TextInput.Password
                                     text: root.passwordText
-                                    enabled: !root.actionRunning
+                                    enabled: !root.busy
                                     activeFocusOnTab: true
 
                                     onTextChanged: {
@@ -516,7 +582,7 @@ ShellRoot {
                                                                           themeLoader.actionAccent("login").g,
                                                                           themeLoader.actionAccent("login").b,
                                                                           0.22)
-                                        enabled: !root.actionRunning
+                                        enabled: !root.busy
                                         onClicked: root.runAction("login")
                                     }
                                 }
@@ -564,7 +630,7 @@ ShellRoot {
 
                                                 onEntered: parent.color = Qt.rgba(0.10, 0.12, 0.14, 0.52)
                                                 onExited: parent.color = Qt.rgba(0.05, 0.06, 0.08, 0.34)
-                                                enabled: !root.actionRunning
+                                                enabled: !root.busy
                                                 onClicked: root.runAction(parent.modelData.id)
                                             }
                                         }
@@ -625,7 +691,7 @@ ShellRoot {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        enabled: !root.actionRunning
+                                        enabled: !root.busy
                                         onClicked: root.sessionMenuOpen = !root.sessionMenuOpen
                                     }
                                 }
@@ -671,7 +737,7 @@ ShellRoot {
                                                     anchors.fill: parent
                                                     hoverEnabled: true
                                                     cursorShape: Qt.PointingHandCursor
-                                                    enabled: !root.actionRunning
+                                                    enabled: !root.busy
                                                     onClicked: {
                                                         root.selectedSession = parent.modelData.label
                                                         root.sessionMenuOpen = false

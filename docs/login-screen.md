@@ -37,13 +37,20 @@ Missing pieces:
 
 Current interaction status:
 
-- `Sign In` now launches a **preview action** for the selected session in the current logged-in user session:
+- `Sign In` now performs **real PAM authentication** through Quickshell’s PAM service before any session action is launched.
+- After successful authentication, the prototype currently only launches a **preview action** for the current desktop user:
   - `BSDRunner` opens the BSDRunner welcome surface
   - `Terminal` launches `kitty`
+- If you authenticate as some other user, the greeter now reports success honestly but refuses to fake a cross-user desktop launch.
 - `Shutdown` and `Restart` now call a real backend helper and will use:
   - `mdo` if available
   - otherwise `doas`
   - otherwise direct `shutdown` only when already running as root
+
+Notes:
+
+- This currently uses PAM config `login` from `/etc/pam.d` by default.
+- Quickshell’s PAM integration currently covers authentication only; true session startup still needs a display-manager backend.
 
 So the current greeter is best thought of as:
 
