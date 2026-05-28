@@ -134,6 +134,9 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
 
 Notes and scope live in [docs/login-screen.md](docs/login-screen.md).
 
+The real backend/session-launch plan lives in
+[docs/login-backend-architecture.md](docs/login-backend-architecture.md).
+
 ## Scope
 
 This starter is targeted at:

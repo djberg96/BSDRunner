@@ -57,6 +57,10 @@ So the current greeter is best thought of as:
 - a design surface we can iterate on
 - a front-end that can later be attached to a proper backend
 
+For the actual backend split and session-launch plan, see:
+
+- [docs/login-backend-architecture.md](login-backend-architecture.md)
+
 ## How To Preview It
 
 After installing the dotfiles on a machine with `qs` available:
@@ -84,10 +88,6 @@ The prototype is meant to prove:
 
 ## Future Direction
 
-The likely long-term path is:
+The backend architecture is now tracked separately in:
 
-1. keep this Quickshell surface as the visible greeter UI
-2. add a small privileged authentication/session backend
-3. attach the two through a minimal, well-defined interface
-
-That keeps the design work and the security-sensitive work separate.
+- [docs/login-backend-architecture.md](login-backend-architecture.md)
