@@ -22,8 +22,8 @@ ShellRoot {
     property string passwordText: ""
     property string selectedSession: "Hyprland"
     property string feedbackTone: "info"
-    property string feedbackTitle: "Native Greeter UI Prototype"
-    property string feedbackText: "UI only for now. Authentication and session startup backends are not wired yet."
+    property string feedbackTitle: ""
+    property string feedbackText: ""
 
     property var sessions: [
         {
@@ -42,14 +42,6 @@ ShellRoot {
         return "file://" + wallpaperPath
     }
 
-    function wallpaperLabel() {
-        if (!wallpaperPath || wallpaperPath.length === 0)
-            return "No wallpaper selected yet"
-
-        var parts = wallpaperPath.split("/")
-        return parts.length > 0 ? parts[parts.length - 1] : wallpaperPath
-    }
-
     function maybeApplyWallpaper() {
         if (!wallpaperExited || !wallpaperStdoutFinished)
             return
@@ -66,14 +58,14 @@ ShellRoot {
         }
 
         feedbackTone = "warning"
-        feedbackTitle = "Backend Not Wired Yet"
-        feedbackText = "This BSDRunner greeter is a Quickshell UI prototype. PAM authentication and real session launch still need a privileged backend."
+        feedbackTitle = "Sign In Is Not Wired Yet"
+        feedbackText = "Authentication and session startup still need a backend."
     }
 
     function requestPower(actionName) {
         feedbackTone = "info"
-        feedbackTitle = actionName + " Placeholder"
-        feedbackText = "Power controls are not wired into the greeter backend yet."
+        feedbackTitle = actionName + " Is Not Wired Yet"
+        feedbackText = "Power controls still need a backend."
     }
 
     function triggerButton(actionId) {
@@ -129,7 +121,7 @@ ShellRoot {
         id: window
 
         visible: true
-        title: "BSDRunner Greeter"
+        title: "BSDRunner"
         minimumSize: Qt.size(1440, 900)
         maximumSize: Qt.size(1440, 900)
         color: "transparent"
@@ -165,96 +157,25 @@ ShellRoot {
             Row {
                 anchors.fill: parent
                 anchors.margins: 54
-                spacing: 28
+                spacing: 0
 
                 Rectangle {
-                    width: 470
+                    width: parent.width
                     height: parent.height
                     radius: 28
-                    color: Qt.rgba(0.04, 0.05, 0.06, 0.58)
+                    color: Qt.rgba(0.04, 0.05, 0.06, 0.68)
                     border.width: 2
                     border.color: root.palette.frameBorder
 
-                    Column {
+                    Row {
                         anchors.fill: parent
                         anchors.margins: 34
-                        spacing: 22
-
-                        Text {
-                            text: root.palette.eyebrow
-                            color: root.palette.accent
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-
-                        Text {
-                            width: parent.width
-                            text: "BSDRunner Greeter"
-                            color: root.palette.primaryText
-                            font.pixelSize: 44
-                            font.bold: true
-                            wrapMode: Text.WordWrap
-                        }
-
-                        Text {
-                            width: parent.width
-                            text: "A native Quickshell login surface for the " + root.palette.name + " desktop."
-                            color: root.palette.secondaryText
-                            font.pixelSize: 20
-                            wrapMode: Text.WordWrap
-                            lineHeight: 1.18
-                        }
-
-                        Rectangle {
-                            width: parent.width
-                            height: 178
-                            radius: 20
-                            color: Qt.rgba(0.04, 0.05, 0.06, 0.48)
-                            border.width: 1
-                            border.color: root.palette.panelBorder
-
-                            Column {
-                                anchors.fill: parent
-                                anchors.margins: 22
-                                spacing: 12
-
-                                Text {
-                                    text: "Current Theme"
-                                    color: root.palette.mutedText
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    text: root.palette.name
-                                    color: root.palette.primaryText
-                                    font.pixelSize: 28
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    width: parent.width
-                                    text: root.wallpaperPath.length > 0
-                                        ? "Background rerolled from the shipped BSDRunner wallpaper set for this launch."
-                                        : "Waiting for a background wallpaper from the BSDRunner theme library."
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 16
-                                    wrapMode: Text.WordWrap
-                                    lineHeight: 1.14
-                                }
-
-                                Text {
-                                    width: parent.width
-                                    text: "Debug wallpaper: " + root.wallpaperLabel()
-                                    color: root.palette.mutedText
-                                    font.pixelSize: 13
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-                        }
+                        spacing: 34
 
                         Column {
-                            width: parent.width
+                            width: 320
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
                             spacing: 10
 
                             Text {
@@ -307,42 +228,26 @@ ShellRoot {
                                 }
                             }
                         }
-                    }
-                }
 
-                Rectangle {
-                    width: parent.width - 470 - parent.spacing
-                    height: parent.height
-                    radius: 28
-                    color: Qt.rgba(0.05, 0.06, 0.08, 0.80)
-                    border.width: 2
-                    border.color: root.palette.panelBorder
-
-                    Column {
-                        anchors.centerIn: parent
-                        width: 520
-                        spacing: 18
-
-                        Text {
-                            width: parent.width
-                            text: "Sign In"
-                            color: root.palette.primaryText
-                            font.pixelSize: 40
-                            font.bold: true
-                        }
-
-                        Text {
-                            width: parent.width
-                            text: "Typical BSDRunner login layout, ready for a future PAM-backed greeter service."
-                            color: root.palette.secondaryText
-                            font.pixelSize: 18
-                            wrapMode: Text.WordWrap
-                            lineHeight: 1.14
+                        Rectangle {
+                            width: 1
+                            height: parent.height
+                            color: root.palette.panelBorder
+                            opacity: 0.42
                         }
 
                         Column {
-                            width: parent.width
-                            spacing: 12
+                            width: parent.width - 355
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 18
+
+                            Text {
+                                width: parent.width
+                                text: "Sign In"
+                                color: root.palette.primaryText
+                                font.pixelSize: 40
+                                font.bold: true
+                            }
 
                             Text {
                                 text: "Username"
@@ -371,8 +276,10 @@ ShellRoot {
 
                                     onTextChanged: {
                                         root.usernameText = text
-                                        if (text.length > 0)
-                                            root.feedbackText = "UI only for now. Authentication and session startup backends are not wired yet."
+                                        if (text.length > 0 && root.feedbackTone !== "error") {
+                                            root.feedbackTitle = ""
+                                            root.feedbackText = ""
+                                        }
                                     }
 
                                     Text {
@@ -384,11 +291,6 @@ ShellRoot {
                                     }
                                 }
                             }
-                        }
-
-                        Column {
-                            width: parent.width
-                            spacing: 12
 
                             Text {
                                 text: "Password"
@@ -418,8 +320,10 @@ ShellRoot {
 
                                     onTextChanged: {
                                         root.passwordText = text
-                                        if (text.length > 0)
-                                            root.feedbackText = "UI only for now. Authentication and session startup backends are not wired yet."
+                                        if (text.length > 0 && root.feedbackTone !== "error") {
+                                            root.feedbackTitle = ""
+                                            root.feedbackText = ""
+                                        }
                                     }
 
                                     Keys.onReturnPressed: root.requestLogin()
@@ -436,6 +340,7 @@ ShellRoot {
                         }
 
                         Rectangle {
+                            visible: root.feedbackTitle.length > 0 || root.feedbackText.length > 0
                             width: parent.width
                             height: feedbackColumn.implicitHeight + 26
                             radius: 18
