@@ -22,6 +22,8 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
   - `~/.config/hypr/bsdrunner-terminal.conf`
 - a dedicated greeter-session launcher:
   - `sh ~/.config/bsdrunner/scripts/bsdrunner-start-greeter-session.sh`
+- a shared Hyprland launcher helper:
+  - `~/.config/bsdrunner/scripts/bsdrunner-launch-hyprland.sh`
 - the active BSDRunner palette and theme name
 - a real login-style layout:
   - username field
@@ -74,8 +76,9 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-build-greeter-backend.sh
 - The real-backend mode is a serious step forward, but it is still not a full display manager yet:
   - there is still no seat manager or greeter-owned TTY lifecycle
   - `BSDRunner` should now be tested from the dedicated greeter-session launcher, not from inside an already-running desktop
-- `Terminal` is still the safest first real-backend smoke test
+  - `Terminal` is still the safest first real-backend smoke test
   - it now launches a minimal Hyprland session whose only intended app is a terminal emulator
+- The session launchers now prefer `start-hyprland` when it exists, which should better match FreeBSD Hyprland expectations than calling `Hyprland` directly.
 
 So the current greeter is best thought of as:
 

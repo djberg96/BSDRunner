@@ -26,6 +26,7 @@ rsync -a --backup --suffix='.pre-bsdrunner' \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-auth.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-login-helper.c" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-login.sh" \
+  "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-launch-hyprland.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-session.sh" \
