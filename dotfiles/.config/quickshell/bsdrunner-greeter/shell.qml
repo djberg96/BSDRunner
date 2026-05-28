@@ -21,6 +21,7 @@ ShellRoot {
     property string usernameText: ""
     property string passwordText: ""
     property string selectedSession: "BSDRunner"
+    property bool sessionMenuOpen: false
     property string feedbackTone: "info"
     property string feedbackTitle: ""
     property string feedbackText: ""
@@ -152,91 +153,25 @@ ShellRoot {
                 }
             }
 
-            Row {
+            Item {
                 anchors.fill: parent
                 anchors.margins: 54
-                spacing: 0
 
                 Rectangle {
-                    width: parent.width
-                    height: parent.height
+                    width: 780
+                    height: 440
+                    anchors.centerIn: parent
                     radius: 28
                     color: Qt.rgba(0.04, 0.05, 0.06, 0.68)
                     border.width: 2
                     border.color: root.palette.frameBorder
 
                     Row {
-                        anchors.fill: parent
-                        anchors.margins: 34
-                        spacing: 34
+                        anchors.centerIn: parent
+                        spacing: 28
 
                         Column {
-                            width: 260
-                            anchors.top: parent.top
-                            anchors.bottom: parent.bottom
-                            spacing: 10
-
-                            Item {
-                                width: 1
-                                height: Math.max(0, parent.height - sessionStack.implicitHeight - 12)
-                            }
-
-                            Column {
-                                id: sessionStack
-                                width: parent.width
-                                spacing: 10
-
-                                Text {
-                                    text: "Sessions"
-                                    color: root.palette.mutedText
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                }
-
-                                Repeater {
-                                    model: root.sessions
-
-                                    delegate: Rectangle {
-                                        id: sessionCard
-
-                                        required property var modelData
-                                        readonly property bool active: root.selectedSession === modelData.label
-                                        width: parent.width
-                                        height: 52
-                                        radius: 12
-                                        color: sessionCard.active ? root.palette.cardHover : Qt.rgba(0.04, 0.05, 0.06, 0.30)
-                                        border.width: 1
-                                        border.color: sessionCard.active ? themeLoader.actionAccent("session") : root.palette.panelBorder
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: sessionCard.modelData.label
-                                            color: sessionCard.active ? root.palette.accentStrong : root.palette.primaryText
-                                            font.pixelSize: 16
-                                            font.bold: true
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.selectedSession = parent.modelData.label
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            width: 1
-                            height: parent.height
-                            color: root.palette.panelBorder
-                            opacity: 0.42
-                        }
-
-                        Column {
-                            width: 500
-                            anchors.verticalCenter: parent.verticalCenter
+                            width: 460
                             spacing: 18
 
                             Text {
@@ -322,43 +257,51 @@ ShellRoot {
                                 }
                             }
 
-                            Rectangle {
-                                visible: root.feedbackTitle.length > 0 || root.feedbackText.length > 0
+                            Item {
                                 width: parent.width
-                                height: feedbackColumn.implicitHeight + 26
-                                radius: 18
-                                color: root.palette.cardBackground
-                                border.width: 2
-                                border.color: root.feedbackTone === "error"
-                                    ? root.palette.danger
-                                    : root.feedbackTone === "warning"
-                                        ? root.palette.warning
-                                        : root.palette.panelBorder
+                                height: root.feedbackTitle.length > 0 || root.feedbackText.length > 0
+                                    ? feedbackCard.height
+                                    : 0
 
-                                Column {
-                                    id: feedbackColumn
-                                    anchors.fill: parent
-                                    anchors.margins: 18
-                                    spacing: 6
+                                Rectangle {
+                                    id: feedbackCard
+                                    visible: root.feedbackTitle.length > 0 || root.feedbackText.length > 0
+                                    width: parent.width
+                                    height: feedbackColumn.implicitHeight + 26
+                                    radius: 18
+                                    color: root.palette.cardBackground
+                                    border.width: 2
+                                    border.color: root.feedbackTone === "error"
+                                        ? root.palette.danger
+                                        : root.feedbackTone === "warning"
+                                            ? root.palette.warning
+                                            : root.palette.panelBorder
 
-                                    Text {
-                                        text: root.feedbackTitle
-                                        color: root.feedbackTone === "error"
-                                            ? root.palette.danger
-                                            : root.feedbackTone === "warning"
-                                                ? root.palette.warning
-                                                : root.palette.primaryText
-                                        font.pixelSize: 17
-                                        font.bold: true
-                                    }
+                                    Column {
+                                        id: feedbackColumn
+                                        anchors.fill: parent
+                                        anchors.margins: 18
+                                        spacing: 6
 
-                                    Text {
-                                        width: parent.width
-                                        text: root.feedbackText
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: 15
-                                        wrapMode: Text.WordWrap
-                                        lineHeight: 1.12
+                                        Text {
+                                            text: root.feedbackTitle
+                                            color: root.feedbackTone === "error"
+                                                ? root.palette.danger
+                                                : root.feedbackTone === "warning"
+                                                    ? root.palette.warning
+                                                    : root.palette.primaryText
+                                            font.pixelSize: 17
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.feedbackText
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 15
+                                            wrapMode: Text.WordWrap
+                                            lineHeight: 1.12
+                                        }
                                     }
                                 }
                             }
@@ -411,6 +354,105 @@ ShellRoot {
                                             onEntered: parent.color = root.palette.cardHover
                                             onExited: parent.color = Qt.rgba(0.05, 0.06, 0.08, 0.48)
                                             onClicked: root.triggerButton(parent.modelData.id)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Column {
+                            width: 220
+                            spacing: 10
+
+                            Text {
+                                text: "Session"
+                                color: root.palette.mutedText
+                                font.pixelSize: 14
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 58
+                                radius: 18
+                                color: root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 18
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.selectedSession
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 17
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 18
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.sessionMenuOpen ? "˄" : "˅"
+                                    color: root.palette.accentStrong
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.sessionMenuOpen = !root.sessionMenuOpen
+                                }
+                            }
+
+                            Rectangle {
+                                visible: root.sessionMenuOpen
+                                width: parent.width
+                                height: sessionMenuColumn.implicitHeight + 16
+                                radius: 18
+                                color: Qt.rgba(0.05, 0.06, 0.08, 0.92)
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Column {
+                                    id: sessionMenuColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 6
+
+                                    Repeater {
+                                        model: root.sessions
+
+                                        delegate: Rectangle {
+                                            id: sessionOption
+                                            required property var modelData
+                                            readonly property bool active: root.selectedSession === modelData.label
+                                            width: parent.width
+                                            height: 44
+                                            radius: 12
+                                            color: sessionOption.active ? root.palette.cardHover : "transparent"
+                                            border.width: sessionOption.active ? 1 : 0
+                                            border.color: sessionOption.active ? themeLoader.actionAccent("session") : "transparent"
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: sessionOption.modelData.label
+                                                color: sessionOption.active ? root.palette.accentStrong : root.palette.primaryText
+                                                font.pixelSize: 15
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    root.selectedSession = parent.modelData.label
+                                                    root.sessionMenuOpen = false
+                                                }
+                                            }
                                         }
                                     }
                                 }
