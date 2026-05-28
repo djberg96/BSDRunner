@@ -20,19 +20,17 @@ ShellRoot {
     property bool wallpaperStdoutFinished: false
     property string usernameText: ""
     property string passwordText: ""
-    property string selectedSession: "Hyprland"
+    property string selectedSession: "BSDRunner"
     property string feedbackTone: "info"
     property string feedbackTitle: ""
     property string feedbackText: ""
 
     property var sessions: [
         {
-            "label": "Hyprland",
-            "subtitle": "BSDRunner default desktop"
+            "label": "BSDRunner"
         },
         {
-            "label": "Failsafe",
-            "subtitle": "Minimal shell session"
+            "label": "Terminal"
         }
     ]
 
@@ -173,57 +171,57 @@ ShellRoot {
                         spacing: 34
 
                         Column {
-                            width: 320
+                            width: 260
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
                             spacing: 10
 
-                            Text {
-                                text: "Sessions"
-                                color: root.palette.mutedText
-                                font.pixelSize: 14
-                                font.bold: true
+                            Item {
+                                width: 1
+                                height: Math.max(0, parent.height - sessionStack.implicitHeight - 12)
                             }
 
-                            Repeater {
-                                model: root.sessions
+                            Column {
+                                id: sessionStack
+                                width: parent.width
+                                spacing: 10
 
-                                delegate: Rectangle {
-                                    id: sessionCard
+                                Text {
+                                    text: "Sessions"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
 
-                                    required property var modelData
-                                    readonly property bool active: root.selectedSession === modelData.label
-                                    width: parent.width
-                                    height: 64
-                                    radius: 18
-                                    color: sessionCard.active ? root.palette.cardHover : Qt.rgba(0.04, 0.05, 0.06, 0.38)
-                                    border.width: 2
-                                    border.color: sessionCard.active ? themeLoader.actionAccent("session") : root.palette.panelBorder
+                                Repeater {
+                                    model: root.sessions
 
-                                    Column {
-                                        anchors.fill: parent
-                                        anchors.margins: 16
-                                        spacing: 4
+                                    delegate: Rectangle {
+                                        id: sessionCard
+
+                                        required property var modelData
+                                        readonly property bool active: root.selectedSession === modelData.label
+                                        width: parent.width
+                                        height: 52
+                                        radius: 12
+                                        color: sessionCard.active ? root.palette.cardHover : Qt.rgba(0.04, 0.05, 0.06, 0.30)
+                                        border.width: 1
+                                        border.color: sessionCard.active ? themeLoader.actionAccent("session") : root.palette.panelBorder
 
                                         Text {
+                                            anchors.centerIn: parent
                                             text: sessionCard.modelData.label
                                             color: sessionCard.active ? root.palette.accentStrong : root.palette.primaryText
-                                            font.pixelSize: 18
+                                            font.pixelSize: 16
                                             font.bold: true
                                         }
 
-                                        Text {
-                                            text: sessionCard.modelData.subtitle
-                                            color: root.palette.secondaryText
-                                            font.pixelSize: 13
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.selectedSession = parent.modelData.label
                                         }
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.selectedSession = parent.modelData.label
                                     }
                                 }
                             }
@@ -237,7 +235,7 @@ ShellRoot {
                         }
 
                         Column {
-                            width: parent.width - 355
+                            width: 500
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 18
 
@@ -246,13 +244,6 @@ ShellRoot {
                                 text: "Sign In"
                                 color: root.palette.primaryText
                                 font.pixelSize: 40
-                                font.bold: true
-                            }
-
-                            Text {
-                                text: "Username"
-                                color: root.palette.mutedText
-                                font.pixelSize: 14
                                 font.bold: true
                             }
 
@@ -285,18 +276,11 @@ ShellRoot {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         visible: parent.text.length === 0
-                                        text: "Enter your username"
+                                        text: "Username"
                                         color: root.palette.mutedText
                                         font.pixelSize: 18
                                     }
                                 }
-                            }
-
-                            Text {
-                                text: "Password"
-                                color: root.palette.mutedText
-                                font.pixelSize: 14
-                                font.bold: true
                             }
 
                             Rectangle {
@@ -331,103 +315,103 @@ ShellRoot {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         visible: parent.text.length === 0
-                                        text: "Enter your password"
+                                        text: "Password"
                                         color: root.palette.mutedText
                                         font.pixelSize: 18
                                     }
                                 }
                             }
-                        }
 
-                        Rectangle {
-                            visible: root.feedbackTitle.length > 0 || root.feedbackText.length > 0
-                            width: parent.width
-                            height: feedbackColumn.implicitHeight + 26
-                            radius: 18
-                            color: root.palette.cardBackground
-                            border.width: 2
-                            border.color: root.feedbackTone === "error"
-                                ? root.palette.danger
-                                : root.feedbackTone === "warning"
-                                    ? root.palette.warning
-                                    : root.palette.panelBorder
+                            Rectangle {
+                                visible: root.feedbackTitle.length > 0 || root.feedbackText.length > 0
+                                width: parent.width
+                                height: feedbackColumn.implicitHeight + 26
+                                radius: 18
+                                color: root.palette.cardBackground
+                                border.width: 2
+                                border.color: root.feedbackTone === "error"
+                                    ? root.palette.danger
+                                    : root.feedbackTone === "warning"
+                                        ? root.palette.warning
+                                        : root.palette.panelBorder
 
-                            Column {
-                                id: feedbackColumn
-                                anchors.fill: parent
-                                anchors.margins: 18
-                                spacing: 6
-
-                                Text {
-                                    text: root.feedbackTitle
-                                    color: root.feedbackTone === "error"
-                                        ? root.palette.danger
-                                        : root.feedbackTone === "warning"
-                                            ? root.palette.warning
-                                            : root.palette.primaryText
-                                    font.pixelSize: 17
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    width: parent.width
-                                    text: root.feedbackText
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 15
-                                    wrapMode: Text.WordWrap
-                                    lineHeight: 1.12
-                                }
-                            }
-                        }
-
-                        Row {
-                            width: parent.width
-                            spacing: 12
-
-                            Repeater {
-                                model: [
-                                    {
-                                        "id": "login",
-                                        "label": "Sign In",
-                                        "accent": themeLoader.actionAccent("login")
-                                    },
-                                    {
-                                        "id": "shutdown",
-                                        "label": "Shutdown",
-                                        "accent": themeLoader.actionAccent("shutdown")
-                                    },
-                                    {
-                                        "id": "restart",
-                                        "label": "Restart",
-                                        "accent": themeLoader.actionAccent("restart")
-                                    }
-                                ]
-
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    width: (parent.width - 24) / 3
-                                    height: 66
-                                    radius: 18
-                                    color: Qt.rgba(0.05, 0.06, 0.08, 0.48)
-                                    border.width: 2
-                                    border.color: modelData.accent
+                                Column {
+                                    id: feedbackColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 18
+                                    spacing: 6
 
                                     Text {
-                                        anchors.centerIn: parent
-                                        text: parent.modelData.label
-                                        color: parent.modelData.accent
-                                        font.pixelSize: 18
+                                        text: root.feedbackTitle
+                                        color: root.feedbackTone === "error"
+                                            ? root.palette.danger
+                                            : root.feedbackTone === "warning"
+                                                ? root.palette.warning
+                                                : root.palette.primaryText
+                                        font.pixelSize: 17
                                         font.bold: true
                                     }
 
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
+                                    Text {
+                                        width: parent.width
+                                        text: root.feedbackText
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 15
+                                        wrapMode: Text.WordWrap
+                                        lineHeight: 1.12
+                                    }
+                                }
+                            }
 
-                                        onEntered: parent.color = root.palette.cardHover
-                                        onExited: parent.color = Qt.rgba(0.05, 0.06, 0.08, 0.48)
-                                        onClicked: root.triggerButton(parent.modelData.id)
+                            Row {
+                                width: parent.width
+                                spacing: 12
+
+                                Repeater {
+                                    model: [
+                                        {
+                                            "id": "login",
+                                            "label": "Sign In",
+                                            "accent": themeLoader.actionAccent("login")
+                                        },
+                                        {
+                                            "id": "shutdown",
+                                            "label": "Shutdown",
+                                            "accent": themeLoader.actionAccent("shutdown")
+                                        },
+                                        {
+                                            "id": "restart",
+                                            "label": "Restart",
+                                            "accent": themeLoader.actionAccent("restart")
+                                        }
+                                    ]
+
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        width: (parent.width - 24) / 3
+                                        height: 66
+                                        radius: 18
+                                        color: Qt.rgba(0.05, 0.06, 0.08, 0.48)
+                                        border.width: 2
+                                        border.color: modelData.accent
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: parent.modelData.label
+                                            color: parent.modelData.accent
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+
+                                            onEntered: parent.color = root.palette.cardHover
+                                            onExited: parent.color = Qt.rgba(0.05, 0.06, 0.08, 0.48)
+                                            onClicked: root.triggerButton(parent.modelData.id)
+                                        }
                                     }
                                 }
                             }
