@@ -166,12 +166,13 @@ ShellRoot {
                     border.width: 2
                     border.color: root.palette.frameBorder
 
-                    Row {
-                        anchors.centerIn: parent
-                        spacing: 28
+                    Item {
+                        anchors.fill: parent
 
                         Column {
                             width: 460
+                            x: 44
+                            anchors.verticalCenter: parent.verticalCenter
                             spacing: 18
 
                             Text {
@@ -363,10 +364,11 @@ ShellRoot {
                         Item {
                             width: 220
                             height: 300
+                            x: parent.width - width - 34
+                            y: 34
 
                             Column {
                                 width: parent.width
-                                y: 14
                                 spacing: 10
 
                                 Text {
