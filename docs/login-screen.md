@@ -53,6 +53,12 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-apply-theme.sh "$theme"
 sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
 ```
 
+If you are iterating on just the greeter prototype and want to force-refresh only the greeter files into `~/.config`, use:
+
+```sh
+./scripts/sync-greeter-prototype.sh
+```
+
 ## Current Design Goals
 
 The prototype is meant to prove:
