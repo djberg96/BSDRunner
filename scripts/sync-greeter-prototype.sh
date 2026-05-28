@@ -15,6 +15,7 @@ rsync -a --backup --suffix='.pre-bsdrunner' \
 
 rsync -a --backup --suffix='.pre-bsdrunner' \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter.sh" \
+  "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh" \
   "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-greeter-wallpaper.sh" \
   "$target_script_dir/"
 

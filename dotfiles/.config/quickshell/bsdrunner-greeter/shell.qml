@@ -18,6 +18,15 @@ ShellRoot {
     property string wallpaperStdoutText: ""
     property bool wallpaperExited: false
     property bool wallpaperStdoutFinished: false
+    property var actionCommand: []
+    property string pendingActionId: ""
+    property string actionStdoutText: ""
+    property string actionStderrText: ""
+    property bool actionExited: false
+    property bool actionStdoutFinished: false
+    property bool actionStderrFinished: false
+    property bool actionRunning: false
+    property int actionExitCode: -1
     property string usernameText: ""
     property string passwordText: ""
     property string selectedSession: "BSDRunner"
@@ -48,6 +57,83 @@ ShellRoot {
         wallpaperPath = wallpaperStdoutText.trim()
     }
 
+    function maybeFinalizeAction() {
+        if (!actionExited || !actionStdoutFinished || !actionStderrFinished)
+            return
+
+        actionRunning = false
+
+        var stdoutText = actionStdoutText.trim()
+        var stderrText = actionStderrText.trim()
+        var finishedAction = pendingActionId
+
+        if (actionExitCode === 0) {
+            if (finishedAction === "login") {
+                Qt.quit()
+                return
+            }
+
+            feedbackTone = "info"
+            feedbackTitle = finishedAction === "shutdown" ? "Shutdown Requested" : "Restart Requested"
+            feedbackText = stdoutText.length > 0
+                ? stdoutText
+                : "If policy allows it, the system should begin that power action."
+        } else {
+            feedbackTone = "error"
+            feedbackTitle = finishedAction === "login"
+                ? "Could Not Launch Session"
+                : finishedAction === "shutdown"
+                    ? "Could Not Shut Down"
+                    : finishedAction === "restart"
+                        ? "Could Not Restart"
+                        : "Action Failed"
+            feedbackText = stderrText.length > 0
+                ? stderrText
+                : stdoutText.length > 0
+                    ? stdoutText
+                    : "The requested action failed."
+        }
+
+        pendingActionId = ""
+    }
+
+    function runAction(actionId) {
+        if (actionRunning)
+            return
+
+        sessionMenuOpen = false
+
+        if (actionId === "login") {
+            requestLogin()
+            return
+        }
+
+        if (actionId === "shutdown") {
+            feedbackTone = "warning"
+            feedbackTitle = "Attempting Shutdown"
+            feedbackText = "Requesting a system shutdown through the configured privilege helper."
+        } else if (actionId === "restart") {
+            feedbackTone = "warning"
+            feedbackTitle = "Attempting Restart"
+            feedbackText = "Requesting a system restart through the configured privilege helper."
+        }
+
+        pendingActionId = actionId
+        actionStdoutText = ""
+        actionStderrText = ""
+        actionExited = false
+        actionStdoutFinished = false
+        actionStderrFinished = false
+        actionExitCode = -1
+        actionCommand = [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh",
+            actionId,
+            selectedSession
+        ]
+        actionRunning = true
+    }
+
     function requestLogin() {
         if (usernameText.trim().length === 0 || passwordText.length === 0) {
             feedbackTone = "error"
@@ -56,29 +142,24 @@ ShellRoot {
             return
         }
 
-        feedbackTone = "warning"
-        feedbackTitle = "Sign In Is Not Wired Yet"
-        feedbackText = "Authentication and session startup still need a backend."
-    }
-
-    function requestPower(actionName) {
         feedbackTone = "info"
-        feedbackTitle = actionName + " Is Not Wired Yet"
-        feedbackText = "Power controls still need a backend."
-    }
+        feedbackTitle = "Launching " + selectedSession
+        feedbackText = "Preview mode is launching the selected session in the current user session."
 
-    function triggerButton(actionId) {
-        switch (actionId) {
-        case "login":
-            requestLogin()
-            break
-        case "shutdown":
-            requestPower("Shutdown")
-            break
-        case "restart":
-            requestPower("Restart")
-            break
-        }
+        pendingActionId = "login"
+        actionStdoutText = ""
+        actionStderrText = ""
+        actionExited = false
+        actionStdoutFinished = false
+        actionStderrFinished = false
+        actionExitCode = -1
+        actionCommand = [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-greeter-action.sh",
+            "login",
+            selectedSession
+        ]
+        actionRunning = true
     }
 
     Connections {
@@ -113,6 +194,40 @@ ShellRoot {
         onExited: function(exitCode, exitStatus) {
             wallpaperProcess.controller.wallpaperExited = true
             wallpaperProcess.controller.maybeApplyWallpaper()
+        }
+    }
+
+    Process {
+        id: actionProcess
+        property var controller: root
+
+        command: root.actionCommand
+        running: root.actionRunning
+
+        stdout: StdioCollector {
+            waitForEnd: true
+
+            onStreamFinished: {
+                actionProcess.controller.actionStdoutText = text
+                actionProcess.controller.actionStdoutFinished = true
+                actionProcess.controller.maybeFinalizeAction()
+            }
+        }
+
+        stderr: StdioCollector {
+            waitForEnd: true
+
+            onStreamFinished: {
+                actionProcess.controller.actionStderrText = text
+                actionProcess.controller.actionStderrFinished = true
+                actionProcess.controller.maybeFinalizeAction()
+            }
+        }
+
+        onExited: function(exitCode, exitStatus) {
+            actionProcess.controller.actionExitCode = exitCode
+            actionProcess.controller.actionExited = true
+            actionProcess.controller.maybeFinalizeAction()
         }
     }
 
@@ -216,6 +331,7 @@ ShellRoot {
                                     selectedTextColor: root.palette.frameBackground
                                     font.pixelSize: 18
                                     text: root.usernameText
+                                    enabled: !root.actionRunning
 
                                     Keys.onReturnPressed: passwordInput.forceActiveFocus()
 
@@ -257,6 +373,7 @@ ShellRoot {
                                     font.pixelSize: 18
                                     echoMode: TextInput.Password
                                     text: root.passwordText
+                                    enabled: !root.actionRunning
 
                                     onTextChanged: {
                                         root.passwordText = text
@@ -365,7 +482,8 @@ ShellRoot {
                                                                           themeLoader.actionAccent("login").g,
                                                                           themeLoader.actionAccent("login").b,
                                                                           0.22)
-                                        onClicked: root.triggerButton("login")
+                                        enabled: !root.actionRunning
+                                        onClicked: root.runAction("login")
                                     }
                                 }
 
@@ -412,7 +530,8 @@ ShellRoot {
 
                                                 onEntered: parent.color = Qt.rgba(0.10, 0.12, 0.14, 0.52)
                                                 onExited: parent.color = Qt.rgba(0.05, 0.06, 0.08, 0.34)
-                                                onClicked: root.triggerButton(parent.modelData.id)
+                                                enabled: !root.actionRunning
+                                                onClicked: root.runAction(parent.modelData.id)
                                             }
                                         }
                                     }
@@ -472,6 +591,7 @@ ShellRoot {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
+                                        enabled: !root.actionRunning
                                         onClicked: root.sessionMenuOpen = !root.sessionMenuOpen
                                     }
                                 }
@@ -517,6 +637,7 @@ ShellRoot {
                                                     anchors.fill: parent
                                                     hoverEnabled: true
                                                     cursorShape: Qt.PointingHandCursor
+                                                    enabled: !root.actionRunning
                                                     onClicked: {
                                                         root.selectedSession = parent.modelData.label
                                                         root.sessionMenuOpen = false

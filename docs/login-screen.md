@@ -22,7 +22,7 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-greeter.sh
   - password field
   - session picker
   - sign-in button
-  - shutdown and restart placeholders
+  - shutdown and restart controls
 
 ## What Does Not Exist Yet
 
@@ -32,9 +32,18 @@ Missing pieces:
 
 - PAM authentication
 - privileged session startup
-- real power actions
 - seat/session ownership
 - a display-manager backend
+
+Current interaction status:
+
+- `Sign In` now launches a **preview action** for the selected session in the current logged-in user session:
+  - `BSDRunner` opens the BSDRunner welcome surface
+  - `Terminal` launches `kitty`
+- `Shutdown` and `Restart` now call a real backend helper and will use:
+  - `mdo` if available
+  - otherwise `doas`
+  - otherwise direct `shutdown` only when already running as root
 
 So the current greeter is best thought of as:
 
