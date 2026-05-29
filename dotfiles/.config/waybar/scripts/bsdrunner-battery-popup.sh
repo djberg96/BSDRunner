@@ -154,6 +154,7 @@ case "$capacity" in
 esac
 
 if command -v rofi >/dev/null 2>&1; then
+    launcher="${ROFI_CMD:-rofi -dmenu}"
     menu_message="$(printf '%s\nCurrent alert threshold: %s%%\n\nSelect a new threshold:' "$message" "$alert_threshold")"
 
     choice="$(
@@ -163,7 +164,7 @@ if command -v rofi >/dev/null 2>&1; then
             "7%" \
             "10%" \
             "15%" \
-        | rofi -dmenu -i -p "Battery" -mesg "$menu_message"
+        | $launcher -i -p "Battery" -mesg "$menu_message" 2>/dev/null
     )"
 
     [ -n "${choice:-}" ] || exit 0

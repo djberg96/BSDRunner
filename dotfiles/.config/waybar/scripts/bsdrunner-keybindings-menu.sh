@@ -3,6 +3,7 @@
 set -eu
 
 command -v rofi >/dev/null 2>&1 || exit 0
+launcher="${ROFI_CMD:-rofi -dmenu}"
 
 printf '%s\n' \
     'SUPER+Q  Open terminal' \
@@ -22,4 +23,4 @@ printf '%s\n' \
     'SUPER+Right drag  Resize window' \
     'XF86Audio keys  Volume and media controls' \
     'XF86Brightness keys  Screen brightness' \
-    | rofi -dmenu -i -p "BSDRunner Keys" -mesg "Esc to close" >/dev/null
+    | $launcher -i -p "BSDRunner Keys" -mesg "Esc to close" >/dev/null 2>/dev/null
