@@ -99,9 +99,10 @@ show_message() {
     body="$2"
     theme_name="$(read_current_theme)"
     notify_color="$(theme_notify_color "$theme_name")"
+    combined_message="$(printf '%s\n%s' "$title" "$body")"
 
     if command -v hyprctl >/dev/null 2>&1; then
-        hyprctl notify 1 5000 "$notify_color" "${title}\n${body}" >/dev/null 2>&1 || true
+        hyprctl notify 1 5000 "$notify_color" "$combined_message" >/dev/null 2>&1 || true
         exit 0
     fi
 
@@ -167,10 +168,10 @@ case "$state" in
         ;;
 esac
 
-message="Status: $state_label\nCharge: ${capacity}%"
+message="$(printf 'Status: %s\nCharge: %s%%' "$state_label" "$capacity")"
 
 if formatted_time_left="$(format_time_left "$time_left")"; then
-    message="${message}\nRemaining: ${formatted_time_left}"
+    message="$(printf '%s\nRemaining: %s' "$message" "$formatted_time_left")"
 fi
 
 case "$capacity" in
@@ -179,9 +180,9 @@ case "$capacity" in
         ;;
     *)
         if [ "$state" = "discharging" ] && [ "$capacity" -le "$alert_threshold" ]; then
-            message="${message}\nAlert: Critical low battery"
+            message="$(printf '%s\nAlert: Critical low battery' "$message")"
         else
-            message="${message}\nAlert threshold: ${alert_threshold}%"
+            message="$(printf '%s\nAlert threshold: %s%%' "$message" "$alert_threshold")"
         fi
         ;;
 esac
