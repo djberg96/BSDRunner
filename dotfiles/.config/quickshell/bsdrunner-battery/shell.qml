@@ -224,7 +224,7 @@ ShellRoot {
                             }
 
                             Text {
-                                text: root.palette.name + " Power"
+                                text: "Low Battery Alert"
                                 color: root.palette.primaryText
                                 font.pixelSize: 28
                                 font.bold: true
