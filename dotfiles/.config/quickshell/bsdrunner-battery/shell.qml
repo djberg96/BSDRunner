@@ -184,8 +184,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Battery"
-        minimumSize: Qt.size(420, 320)
-        maximumSize: Qt.size(420, 320)
+        minimumSize: Qt.size(420, 368)
+        maximumSize: Qt.size(420, 368)
         color: "transparent"
 
         Rectangle {
@@ -214,19 +214,12 @@ ShellRoot {
 
                         Column {
                             width: parent.width - closeButton.width - 12
-                            spacing: 4
+                            spacing: 0
 
                             Text {
                                 text: "Battery"
                                 color: root.palette.accent
                                 font.pixelSize: 14
-                                font.bold: true
-                            }
-
-                            Text {
-                                text: "Low Battery Alert"
-                                color: root.palette.primaryText
-                                font.pixelSize: 28
                                 font.bold: true
                             }
                         }
@@ -262,7 +255,7 @@ ShellRoot {
 
                     Rectangle {
                         width: parent.width
-                        height: 108
+                        height: 100
                         radius: 16
                         color: root.palette.cardBackground
                         border.width: 1
@@ -320,8 +313,10 @@ ShellRoot {
                             font.bold: true
                         }
 
-                        Row {
-                            spacing: 8
+                        Grid {
+                            columns: 3
+                            columnSpacing: 8
+                            rowSpacing: 8
 
                             Repeater {
                                 model: root.thresholdOptions
@@ -332,7 +327,7 @@ ShellRoot {
                                     required property int modelData
                                     property bool hovered: false
 
-                                    width: 68
+                                    width: 108
                                     height: 46
                                     radius: 12
                                     color: root.thresholdButtonColor(modelData, hovered)
@@ -363,7 +358,7 @@ ShellRoot {
 
                     Rectangle {
                         width: parent.width
-                        height: 58
+                        height: 64
                         radius: 14
                         color: root.statusTone === "critical"
                             ? Qt.rgba(0.82, 0.53, 0.44, 0.12)
