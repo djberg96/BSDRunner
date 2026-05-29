@@ -4,7 +4,6 @@ set -eu
 
 DEFAULT_ALERT_THRESHOLD=5
 ALERT_THRESHOLD_FILE="${HOME}/.config/bsdrunner/battery-alert-threshold"
-THEME_FILE="${HOME}/.config/bsdrunner/current-theme"
 
 trim() {
     printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
@@ -61,50 +60,9 @@ format_time_left() {
     esac
 }
 
-read_current_theme() {
-    if [ -f "$THEME_FILE" ]; then
-        theme="$(cat "$THEME_FILE" 2>/dev/null || true)"
-        theme="$(trim "${theme:-}")"
-        if [ -n "$theme" ]; then
-            printf '%s\n' "$theme"
-            return 0
-        fi
-    fi
-
-    printf 'default\n'
-}
-
-theme_notify_color() {
-    case "$1" in
-        jinteki)
-            printf 'rgb(ff6f83)\n'
-            ;;
-        haas-bioroid)
-            printf 'rgb(8fd3ff)\n'
-            ;;
-        nbn)
-            printf 'rgb(f3c316)\n'
-            ;;
-        weyland)
-            printf 'rgb(5d8c45)\n'
-            ;;
-        *)
-            printf 'rgb(8fb6d9)\n'
-            ;;
-    esac
-}
-
 show_message() {
     title="$1"
     body="$2"
-    theme_name="$(read_current_theme)"
-    notify_color="$(theme_notify_color "$theme_name")"
-    combined_message="$(printf '%s\n%s' "$title" "$body")"
-
-    if command -v hyprctl >/dev/null 2>&1; then
-        hyprctl notify 1 5000 "$notify_color" "$combined_message" >/dev/null 2>&1 || true
-        exit 0
-    fi
 
     if command -v notify-send >/dev/null 2>&1; then
         notify-send "$title" "$body" >/dev/null 2>&1 || true
@@ -112,6 +70,13 @@ show_message() {
     fi
 
     exit 0
+}
+
+save_alert_threshold() {
+    threshold="$1"
+
+    mkdir -p "$(dirname "$ALERT_THRESHOLD_FILE")"
+    printf '%s\n' "$threshold" > "$ALERT_THRESHOLD_FILE"
 }
 
 battery_info="$(acpiconf -i 0 2>/dev/null || true)"
@@ -186,5 +151,27 @@ case "$capacity" in
         fi
         ;;
 esac
+
+if command -v rofi >/dev/null 2>&1; then
+    menu_message="$(printf '%s\nCurrent alert threshold: %s%%\n\nSelect a new threshold:' "$message" "$alert_threshold")"
+
+    choice="$(
+        printf '%s\n' \
+            "3%" \
+            "5%" \
+            "7%" \
+            "10%" \
+            "15%" \
+        | rofi -dmenu -i -p "Battery" -mesg "$menu_message"
+    )"
+
+    [ -n "${choice:-}" ] || exit 0
+
+    selected_threshold="${choice%%%}"
+    save_alert_threshold "$selected_threshold"
+
+    confirmation="$(printf 'Battery alert threshold set to %s%%' "$selected_threshold")"
+    show_message "BSDRunner Battery" "$confirmation"
+fi
 
 show_message "BSDRunner Battery" "$message"
