@@ -12,7 +12,7 @@ ShellRoot {
     }
 
     readonly property var palette: themeLoader.palette
-    readonly property var thresholdOptions: [3, 5, 7, 10, 15]
+    readonly property var thresholdOptions: [3, 5, 7, 10, 15, 20]
     property string batteryState: "unknown"
     property string batteryStateLabel: "Loading..."
     property string batteryCapacity: "--"
