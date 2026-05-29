@@ -356,26 +356,6 @@ ShellRoot {
                         }
                     }
 
-                    Rectangle {
-                        width: parent.width
-                        height: 64
-                        radius: 14
-                        color: root.statusTone === "critical"
-                            ? Qt.rgba(0.82, 0.53, 0.44, 0.12)
-                            : Qt.rgba(0.84, 0.89, 0.92, 0.06)
-                        border.width: 1
-                        border.color: root.statusTone === "critical" ? root.palette.danger : root.palette.panelBorder
-
-                        Text {
-                            anchors.fill: parent
-                            anchors.margins: 12
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
-                            text: root.statusMessage
-                            color: root.statusTone === "critical" ? root.palette.danger : root.palette.secondaryText
-                            font.pixelSize: 13
-                        }
-                    }
                 }
             }
         }
