@@ -247,9 +247,16 @@ sync_waybar_scripts() {
     chmod 755 "$target_dir"/*.sh 2>/dev/null || true
 }
 
+chmod_runner_scripts() {
+    local target_dir="$HOME/.config/bsdrunner/scripts"
+
+    chmod 755 "$target_dir"/*.sh 2>/dev/null || true
+}
+
 rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
 cleanup_stale_theme_waybar_configs
 sync_waybar_scripts
+chmod_runner_scripts
 
 mkdir -p "$HOME/.config/bsdrunner/base"
 mkdir -p "$HOME/.config/hypr"

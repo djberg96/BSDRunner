@@ -114,7 +114,7 @@
       "interval": 30,
       "format": "{}",
       "tooltip": true,
-      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-battery-popup.sh"
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-battery-window.sh"
     },
 
     "clock": {
