@@ -17,7 +17,7 @@ choice="$(
         "haas-bioroid" \
         "nbn" \
         "weyland" \
-    | rofi -dmenu -i -p "Theme" -mesg "Current: $current_theme"
+    | $launcher -i -p "Theme" -mesg "Current: $current_theme" 2>/dev/null
 )"
 
 [ -n "${choice:-}" ] || exit 0

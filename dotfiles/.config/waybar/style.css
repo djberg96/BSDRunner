@@ -137,6 +137,12 @@ tooltip {
     color: #a3be8c;
 }
 
+#custom-battery.low-alert {
+    background: rgba(208, 135, 112, 0.20);
+    color: #fff4ef;
+    border-color: rgba(208, 135, 112, 0.75);
+}
+
 #custom-power {
     color: #eceff4;
     font-weight: 700;
