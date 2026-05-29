@@ -25,8 +25,13 @@ theme_exists() {
 write_hypr_theme() {
     local target="$1"
     local selected_theme="$2"
+    local target_dir
+    local tmp_file
     local active_border=""
     local inactive_border=""
+
+    target_dir="$(dirname "$target")"
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-hypr-theme.XXXXXX")"
 
     case "$selected_theme" in
         jinteki)
@@ -51,10 +56,13 @@ write_hypr_theme() {
             ;;
     esac
 
-    cat > "$target" <<EOF
+    cat > "$tmp_file" <<EOF
 \$bsdrunner_active_border = $active_border
 \$bsdrunner_inactive_border = $inactive_border
 EOF
+
+    mkdir -p "$target_dir"
+    mv "$tmp_file" "$target"
 }
 
 write_wlogout_style() {

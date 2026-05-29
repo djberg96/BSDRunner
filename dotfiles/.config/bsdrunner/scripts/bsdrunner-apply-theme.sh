@@ -25,6 +25,8 @@ EOF
 write_hypr_theme() {
     target="$1"
     selected_theme="$2"
+    target_dir="$(dirname "$target")"
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-hypr-theme.XXXXXX")"
 
     case "$selected_theme" in
         jinteki)
@@ -49,10 +51,13 @@ write_hypr_theme() {
             ;;
     esac
 
-    cat > "$target" <<EOF
+    cat > "$tmp_file" <<EOF
 \$bsdrunner_active_border = $active_border
 \$bsdrunner_inactive_border = $inactive_border
 EOF
+
+    mkdir -p "$target_dir"
+    mv "$tmp_file" "$target"
 }
 
 write_wlogout_style() {
