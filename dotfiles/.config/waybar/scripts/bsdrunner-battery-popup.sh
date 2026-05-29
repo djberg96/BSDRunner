@@ -80,6 +80,17 @@ save_alert_threshold() {
     printf '%s\n' "$threshold" > "$ALERT_THRESHOLD_FILE"
 }
 
+threshold_option_label() {
+    option="$1"
+    current="$2"
+
+    if [ "$option" = "$current" ]; then
+        printf '* %s%%\n' "$option"
+    else
+        printf '%s%%\n' "$option"
+    fi
+}
+
 battery_info="$(acpiconf -i 0 2>/dev/null || true)"
 alert_threshold="$(read_alert_threshold)"
 
@@ -155,21 +166,23 @@ esac
 
 if command -v rofi >/dev/null 2>&1; then
     launcher="${ROFI_CMD:-rofi -dmenu}"
-    menu_message="$(printf '%s\nCurrent alert threshold: %s%%\n\nSelect a new threshold:' "$message" "$alert_threshold")"
+    prompt_label="$(printf 'Battery (%s%%)' "$alert_threshold")"
 
     choice="$(
-        printf '%s\n' \
-            "3%" \
-            "5%" \
-            "7%" \
-            "10%" \
-            "15%" \
-        | $launcher -i -p "Battery" -mesg "$menu_message" 2>/dev/null
+        {
+            threshold_option_label "3" "$alert_threshold"
+            threshold_option_label "5" "$alert_threshold"
+            threshold_option_label "7" "$alert_threshold"
+            threshold_option_label "10" "$alert_threshold"
+            threshold_option_label "15" "$alert_threshold"
+        } \
+        | $launcher -i -p "$prompt_label" 2>/dev/null
     )"
 
     [ -n "${choice:-}" ] || exit 0
 
-    selected_threshold="${choice%%%}"
+    selected_threshold="$(printf '%s\n' "$choice" | tr -cd '0-9')"
+    [ -n "$selected_threshold" ] || exit 0
     save_alert_threshold "$selected_threshold"
 
     confirmation="$(printf 'Battery alert threshold set to %s%%' "$selected_threshold")"
