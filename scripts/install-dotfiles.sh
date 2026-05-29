@@ -238,8 +238,18 @@ cleanup_stale_theme_waybar_configs() {
     done
 }
 
+sync_waybar_scripts() {
+    local source_dir="$repo_root/dotfiles/.config/waybar/scripts"
+    local target_dir="$HOME/.config/waybar/scripts"
+
+    mkdir -p "$target_dir"
+    cp -R "$source_dir/." "$target_dir/"
+    chmod 755 "$target_dir"/*.sh 2>/dev/null || true
+}
+
 rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
 cleanup_stale_theme_waybar_configs
+sync_waybar_scripts
 
 mkdir -p "$HOME/.config/bsdrunner/base"
 mkdir -p "$HOME/.config/hypr"

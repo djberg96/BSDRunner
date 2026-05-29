@@ -177,6 +177,15 @@ button:focus {
 EOF
 }
 
+sync_waybar_scripts() {
+    source_dir="$runner_home/../waybar/scripts"
+    target_dir="$config_home/waybar/scripts"
+
+    mkdir -p "$target_dir"
+    cp -R "$source_dir/." "$target_dir/"
+    chmod 755 "$target_dir"/*.sh 2>/dev/null || true
+}
+
 cleanup() {
     rmdir "$lock_dir" 2>/dev/null || true
 }
@@ -215,6 +224,7 @@ fi
 trap cleanup EXIT INT TERM
 
 mkdir -p "$config_home/hypr" "$config_home/kitty" "$config_home/rofi" "$config_home/waybar" "$config_home/wlogout"
+sync_waybar_scripts
 
 printf '%s\n' "$theme" > "$runner_home/current-theme"
 
