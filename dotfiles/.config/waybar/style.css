@@ -6,6 +6,21 @@
     min-height: 0;
 }
 
+@keyframes bsdrunner-battery-alert {
+    0%,
+    100% {
+        background: rgba(28, 28, 32, 0.92);
+        color: #d08770;
+        border-color: rgba(208, 135, 112, 0.30);
+    }
+
+    50% {
+        background: rgba(208, 135, 112, 0.28);
+        color: #fff4ef;
+        border-color: rgba(208, 135, 112, 0.80);
+    }
+}
+
 window#waybar {
     background: rgba(12, 12, 14, 0.88);
     color: #eceff4;
@@ -135,6 +150,10 @@ tooltip {
 #custom-battery.charging,
 #custom-battery.full {
     color: #a3be8c;
+}
+
+#custom-battery.low-alert {
+    animation: bsdrunner-battery-alert 1s steps(2, end) infinite;
 }
 
 #custom-power {

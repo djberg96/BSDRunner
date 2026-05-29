@@ -2,12 +2,60 @@
 
 set -eu
 
+ALERT_THRESHOLD=5
+ALERT_STATE_FILE="/tmp/bsdrunner-battery-alert-${USER:-user}.state"
+
 escape_json() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
 trim() {
     printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
+play_low_battery_alert() {
+    if command -v canberra-gtk-play >/dev/null 2>&1; then
+        (
+            canberra-gtk-play -i battery-low >/dev/null 2>&1 || true
+        ) &
+        return 0
+    fi
+
+    if command -v notify-send >/dev/null 2>&1; then
+        (
+            notify-send "BSDRunner" "Battery critically low (${1}%)" >/dev/null 2>&1 || true
+        ) &
+        return 0
+    fi
+
+    return 1
+}
+
+update_low_battery_alert() {
+    level="$1"
+    current_state="$2"
+
+    case "$level" in
+        ''|*[!0-9]*)
+            rm -f "$ALERT_STATE_FILE"
+            return 0
+            ;;
+    esac
+
+    if [ "$current_state" = "discharging" ] && [ "$level" -le "$ALERT_THRESHOLD" ]; then
+        previous_state=""
+        if [ -f "$ALERT_STATE_FILE" ]; then
+            previous_state="$(cat "$ALERT_STATE_FILE" 2>/dev/null || true)"
+        fi
+
+        if [ "$previous_state" != "triggered" ]; then
+            play_low_battery_alert "$level" || true
+            printf 'triggered\n' >"$ALERT_STATE_FILE"
+        fi
+        return 0
+    fi
+
+    rm -f "$ALERT_STATE_FILE"
 }
 
 battery_icon() {
@@ -83,6 +131,8 @@ capacity="$(trim "${capacity:-}")"
 state="$(trim "${state:-unknown}")"
 time_left="$(trim "${time_left:-unknown}")"
 
+update_low_battery_alert "$capacity" "$state"
+
 if [ -z "$capacity" ]; then
     capacity="?"
 fi
@@ -110,7 +160,10 @@ case "$capacity" in
         :
         ;;
     *)
-        if [ "$capacity" -le 15 ]; then
+        if [ "$capacity" -le "$ALERT_THRESHOLD" ] && [ "$state" = "discharging" ]; then
+            class="$class critical low-alert"
+            tooltip="$tooltip | Critical low battery"
+        elif [ "$capacity" -le 15 ]; then
             class="$class critical"
         elif [ "$capacity" -le 30 ]; then
             class="$class warning"
