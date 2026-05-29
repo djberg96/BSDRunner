@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 DEFAULT_ALERT_THRESHOLD=5
 ALERT_THRESHOLD_FILE="${HOME}/.config/bsdrunner/battery-alert-threshold"
