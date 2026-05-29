@@ -113,7 +113,8 @@
       "return-type": "json",
       "interval": 30,
       "format": "{}",
-      "tooltip": true
+      "tooltip": true,
+      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-battery-popup.sh"
     },
 
     "clock": {
