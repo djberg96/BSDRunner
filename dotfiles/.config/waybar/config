@@ -111,7 +111,7 @@
     "custom/battery": {
       "exec": "sh ~/.config/waybar/scripts/bsdrunner-battery.sh",
       "return-type": "json",
-      "interval": 30,
+      "interval": 10,
       "format": "{}",
       "tooltip": true,
       "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-battery-window.sh"

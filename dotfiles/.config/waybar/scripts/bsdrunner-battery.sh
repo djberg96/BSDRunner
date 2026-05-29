@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 DEFAULT_ALERT_THRESHOLD=5
 ALERT_STATE_FILE="/tmp/bsdrunner-battery-alert-${USER:-user}.state"
@@ -65,7 +66,23 @@ format_time_left() {
     esac
 }
 
-play_low_battery_alert() {
+play_low_battery_sound() {
+    if command -v paplay >/dev/null 2>&1; then
+        if [ -f /usr/local/share/sounds/freedesktop/stereo/dialog-warning.oga ]; then
+            (
+                paplay /usr/local/share/sounds/freedesktop/stereo/dialog-warning.oga >/dev/null 2>&1 || true
+            ) &
+            return 0
+        fi
+
+        if [ -f /usr/local/share/sounds/freedesktop/stereo/bell.oga ]; then
+            (
+                paplay /usr/local/share/sounds/freedesktop/stereo/bell.oga >/dev/null 2>&1 || true
+            ) &
+            return 0
+        fi
+    fi
+
     if command -v canberra-gtk-play >/dev/null 2>&1; then
         (
             canberra-gtk-play -i battery-low >/dev/null 2>&1 || true
@@ -73,9 +90,23 @@ play_low_battery_alert() {
         return 0
     fi
 
+    return 1
+}
+
+show_low_battery_alert() {
+    level="$1"
+    message="Battery critically low (${level}%). Plug in soon."
+
+    if command -v hyprctl >/dev/null 2>&1; then
+        (
+            hyprctl notify 1 8000 "rgb(d08770)" "$message" >/dev/null 2>&1 || true
+        ) &
+        return 0
+    fi
+
     if command -v notify-send >/dev/null 2>&1; then
         (
-            notify-send "BSDRunner" "Battery critically low (${1}%)" >/dev/null 2>&1 || true
+            notify-send "BSDRunner Battery" "$message" >/dev/null 2>&1 || true
         ) &
         return 0
     fi
@@ -101,7 +132,8 @@ update_low_battery_alert() {
         fi
 
         if [ "$previous_state" != "triggered" ]; then
-            play_low_battery_alert "$level" || true
+            play_low_battery_sound || true
+            show_low_battery_alert "$level" || true
             printf 'triggered\n' >"$ALERT_STATE_FILE"
         fi
         return 0
