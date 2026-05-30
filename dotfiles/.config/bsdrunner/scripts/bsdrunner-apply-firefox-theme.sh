@@ -44,6 +44,44 @@ accent="$(palette_value accent '#6aa9d8')"
 accent_strong="$(palette_value accent_strong '#b7d9f2')"
 warning="$(palette_value warning '#ffb86b')"
 
+case "$theme_name" in
+    jinteki)
+        light_background="#fff5f6"
+        light_surface="#fffafa"
+        light_surface_alt="#fbe3e6"
+        light_text="#271316"
+        light_muted="#735159"
+        ;;
+    haas-bioroid)
+        light_background="#f4fbff"
+        light_surface="#ffffff"
+        light_surface_alt="#e1f3ff"
+        light_text="#10202b"
+        light_muted="#516a78"
+        ;;
+    nbn)
+        light_background="#fff9e8"
+        light_surface="#fffdf5"
+        light_surface_alt="#fff0c7"
+        light_text="#241b08"
+        light_muted="#755d20"
+        ;;
+    weyland)
+        light_background="#f7fbf1"
+        light_surface="#ffffff"
+        light_surface_alt="#e5efd8"
+        light_text="#172214"
+        light_muted="#56664a"
+        ;;
+    *)
+        light_background="#f5f9fc"
+        light_surface="#ffffff"
+        light_surface_alt="#e8f2f8"
+        light_text="#17212a"
+        light_muted="#536473"
+        ;;
+esac
+
 firefox_homes=""
 for candidate in "$HOME/.mozilla/firefox" "$HOME/.config/mozilla/firefox"; do
     if [ -d "$candidate" ]; then
@@ -115,11 +153,13 @@ write_user_chrome() {
  */
 
 :root {
-    --bsdrunner-bg: $background;
-    --bsdrunner-surface: $surface;
-    --bsdrunner-text: $text;
+    --bsdrunner-bg: $light_background;
+    --bsdrunner-surface: $light_surface;
+    --bsdrunner-surface-alt: $light_surface_alt;
+    --bsdrunner-text: $light_text;
+    --bsdrunner-muted: $light_muted;
     --bsdrunner-accent: $accent;
-    --bsdrunner-accent-strong: $accent_strong;
+    --bsdrunner-accent-strong: $accent;
     --bsdrunner-warning: $warning;
 
     --lwt-accent-color: var(--bsdrunner-bg) !important;
@@ -160,7 +200,7 @@ write_user_chrome() {
 
 #TabsToolbar {
     background:
-        linear-gradient(90deg, var(--bsdrunner-accent) 0 4px, transparent 4px),
+        linear-gradient(90deg, var(--bsdrunner-accent) 0 3px, transparent 3px),
         var(--bsdrunner-bg) !important;
 }
 
@@ -181,11 +221,11 @@ write_user_chrome() {
 }
 
 .tabbrowser-tab:hover .tab-background {
-    background-color: color-mix(in srgb, var(--bsdrunner-accent) 18%, var(--bsdrunner-surface)) !important;
+    background-color: var(--bsdrunner-surface-alt) !important;
 }
 
 .tabbrowser-tab:not([selected="true"]) .tab-content {
-    color: color-mix(in srgb, var(--bsdrunner-text) 76%, var(--bsdrunner-bg)) !important;
+    color: var(--bsdrunner-muted) !important;
 }
 
 #urlbar-background,
@@ -223,10 +263,6 @@ panel {
     --panel-color: var(--bsdrunner-text) !important;
     --panel-border-color: var(--bsdrunner-accent) !important;
 }
-
-.browserContainer {
-    background-color: var(--bsdrunner-bg) !important;
-}
 EOF
 }
 
@@ -241,16 +277,16 @@ write_user_content() {
 
 @-moz-document url("about:home"), url("about:newtab"), url("about:privatebrowsing") {
     :root {
-        --newtab-background-color: $background !important;
-        --newtab-background-color-secondary: $surface !important;
-        --newtab-text-primary-color: $text !important;
+        --newtab-background-color: $light_background !important;
+        --newtab-background-color-secondary: $light_surface !important;
+        --newtab-text-primary-color: $light_text !important;
         --newtab-primary-action-background: $accent !important;
     }
 
     body,
     .outer-wrapper {
-        background: $background !important;
-        color: $text !important;
+        background: $light_background !important;
+        color: $light_text !important;
     }
 
     .search-wrapper .search-handoff-button,
@@ -258,8 +294,8 @@ write_user_content() {
     .top-site-outer .tile,
     .card-outer,
     .ds-card {
-        background-color: $surface !important;
-        color: $text !important;
+        background-color: $light_surface !important;
+        color: $light_text !important;
         border-color: $accent !important;
         box-shadow: none !important;
     }
@@ -268,7 +304,7 @@ write_user_content() {
     .search-handoff-button .fake-textbox,
     .context-menu-button,
     .icon {
-        color: $accent_strong !important;
+        color: $accent !important;
         fill: currentColor !important;
     }
 }
