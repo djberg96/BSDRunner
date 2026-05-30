@@ -23,6 +23,7 @@ Each corp theme should eventually be able to style:
 
 - `kitty`
 - `rofi`
+- `firefox`
 - `waybar`
 - optional welcome/control surfaces
 - wallpaper choices
@@ -85,6 +86,7 @@ Each theme folder should be responsible for:
 - `palette.conf`: named colors and semantic accents
 - `kitty.conf`: terminal-specific theme overrides
 - `rofi.rasi`: launcher styling
+- generated Firefox profile chrome/content CSS
 - `waybar.css`: bar-specific color and panel overrides
 - `dolphin.colors`: KDE/Qt color scheme for Dolphin and related Qt apps
 - `qt6ct.conf`: qt6ct palette file for Qt application theming outside Plasma
@@ -110,6 +112,7 @@ Current implementation:
 - `bsdrunner-apply-theme.sh <name>` applies a theme in-session without rerunning the full installer
 - Kitty is rendered from the stable base `kitty.conf` plus the selected theme fragment
 - Rofi is activated by copying the selected `rofi.rasi` to `~/.config/rofi/config.rasi`
+- Firefox is styled by generating `chrome/bsdrunner-userChrome.css` and `chrome/bsdrunner-userContent.css` into initialized Firefox profiles, then importing them from profile-local `userChrome.css` and `userContent.css`
 - Waybar is rendered from the stable base `style.css` plus the selected `waybar.css` fragment
 - Waybar can also use a theme-specific `waybar-config` override when a theme genuinely needs a different layout instead of only different colors
 - if a theme ships `wallpapers/`, install writes a matching `~/.config/bsdrunner/current-wallpaper`
@@ -118,6 +121,14 @@ Current implementation:
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
 - wallpapers are bundled as theme assets and can be activated through `swww` during install
+
+Firefox notes:
+
+- the helper only touches initialized profiles under `~/.mozilla/firefox` or `~/.config/mozilla/firefox`
+- existing `userChrome.css` and `userContent.css` files are preserved; BSDRunner prepends one `@import` line if needed
+- `user.js` is updated to enable `toolkit.legacyUserProfileCustomizations.stylesheets`
+- Firefox must be restarted after changing themes
+- run `sh ~/.config/bsdrunner/scripts/bsdrunner-apply-firefox-theme.sh --status` to see which profiles were patched
 
 Important:
 
