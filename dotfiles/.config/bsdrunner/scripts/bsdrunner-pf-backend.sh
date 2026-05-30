@@ -7,6 +7,7 @@ profile_dir="${HOME}/.config/bsdrunner/pf"
 profile_file="$profile_dir/profile.conf"
 profile_script="${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-profile.sh"
 state_file="$profile_dir/last-result.conf"
+applied_state_file="$profile_dir/applied-profile.conf"
 managed_marker="bsdrunner_pf_profile_version=1"
 
 allow_outbound="yes"
@@ -162,6 +163,8 @@ pf_running_state() {
         printf 'running\n'
     elif printf '%s\n' "$info" | grep -qi 'Status: Disabled'; then
         printf 'stopped\n'
+    elif command -v service >/dev/null 2>&1 && service pf onestatus >/dev/null 2>&1; then
+        printf 'running\n'
     elif printf '%s\n' "$info" | grep -qi 'Failed to open netlink'; then
         printf 'unloaded\n'
     else
@@ -178,10 +181,28 @@ sysrc_value() {
     fi
 }
 
+applied_state_value() {
+    key="$1"
+    [ -f "$applied_state_file" ] || return 0
+    awk -F '=' -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }' "$applied_state_file"
+}
+
+write_applied_state() {
+    checksum="$1"
+    mkdir -p "$profile_dir"
+    {
+        printf 'state=managed\n'
+        printf 'checksum=%s\n' "$checksum"
+        printf 'timestamp=%s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    } >"$applied_state_file"
+}
+
 installed_config_state() {
     if [ ! -f /etc/pf.conf ]; then
         printf 'missing\n'
     elif grep -q "$managed_marker" /etc/pf.conf 2>/dev/null; then
+        printf 'managed\n'
+    elif [ "$(applied_state_value state)" = "managed" ]; then
         printf 'managed\n'
     else
         printf 'external\n'
@@ -190,7 +211,12 @@ installed_config_state() {
 
 installed_config_checksum() {
     [ -f /etc/pf.conf ] || return 0
-    awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' /etc/pf.conf 2>/dev/null || true
+    checksum="$(awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' /etc/pf.conf 2>/dev/null || true)"
+    if [ -n "$checksum" ]; then
+        printf '%s\n' "$checksum"
+    else
+        applied_state_value checksum
+    fi
 }
 
 render_profile_to_file() {
@@ -205,7 +231,19 @@ validate_file() {
         return 127
     fi
 
-    pfctl -vnf "$file_path" 2>&1
+    output="$(pfctl -vnf "$file_path" 2>&1)" && {
+        printf '%s\n' "$output"
+        return 0
+    }
+
+    if command -v mdo >/dev/null 2>&1; then
+        printf '%s\n' "$output"
+        mdo pfctl -vnf "$file_path" 2>&1
+        return $?
+    fi
+
+    printf '%s\n' "$output"
+    return 1
 }
 
 last_result_value() {
@@ -381,6 +419,7 @@ do_apply() {
     fi
 
     if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)"; then
+        write_applied_state "$(profile_checksum)"
         write_last_result "success" "BSDRunner firewall profile applied."
         emit_action_result true "BSDRunner firewall profile applied." "$validation
 $install_output
