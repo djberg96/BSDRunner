@@ -959,15 +959,6 @@ ShellRoot {
                                     }
                                 }
                             }
-
-                            Text {
-                                width: parent.width
-                                visible: root.configState === "external" || root.profileDirty
-                                text: root.configState === "external" ? "These settings edit the BSDRunner profile, but /etc/pf.conf is external until you adopt it." : "Changes are saved to the BSDRunner profile but are not active until Apply Profile succeeds."
-                                color: root.configState === "external" || root.profileDirty ? root.palette.warning : root.palette.mutedText
-                                font.pixelSize: 12
-                                wrapMode: Text.WordWrap
-                            }
                         }
                     }
 
@@ -1072,7 +1063,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 330
+                                height: 340
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1158,7 +1149,7 @@ ShellRoot {
 
                                     Rectangle {
                                         width: parent.width
-                                        height: 256
+                                        height: 266
                                         radius: 6
                                         color: root.palette.cardBackground
                                         border.width: 1
