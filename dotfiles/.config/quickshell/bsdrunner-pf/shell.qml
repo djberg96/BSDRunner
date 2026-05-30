@@ -1178,7 +1178,7 @@ ShellRoot {
                                                 text: root.logText
                                                 color: root.palette.secondaryText
                                                 font.family: "monospace"
-                                                font.pixelSize: 11
+                                                font.pixelSize: 12
                                                 wrapMode: Text.WrapAnywhere
                                             }
 
