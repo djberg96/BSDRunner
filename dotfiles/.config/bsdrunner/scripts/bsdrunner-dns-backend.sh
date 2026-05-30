@@ -1,0 +1,319 @@
+#!/bin/sh
+
+set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
+
+action="${1:-snapshot}"
+state_dir="${HOME}/.config/bsdrunner/dns"
+state_file="$state_dir/last-result.conf"
+
+json_escape() {
+    awk '
+        BEGIN { first = 1 }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            gsub(/\r/, "")
+            if (!first)
+                printf "\\n"
+            printf "%s", $0
+            first = 0
+        }
+    '
+}
+
+bool_json() {
+    case "$1" in
+        yes|YES|true|TRUE|1|on|ON)
+            printf 'true'
+            ;;
+        *)
+            printf 'false'
+            ;;
+    esac
+}
+
+sysrc_value() {
+    name="$1"
+    if command -v sysrc >/dev/null 2>&1; then
+        sysrc -n "$name" 2>/dev/null || printf 'NO\n'
+    else
+        printf 'unknown\n'
+    fi
+}
+
+service_state() {
+    if ! command -v service >/dev/null 2>&1; then
+        printf 'unavailable\n'
+        return
+    fi
+
+    if service local_unbound onestatus >/dev/null 2>&1; then
+        printf 'running\n'
+        return
+    fi
+
+    output="$(service local_unbound onestatus 2>&1 || true)"
+    if printf '%s\n' "$output" | grep -qi 'not running'; then
+        printf 'stopped\n'
+    elif printf '%s\n' "$output" | grep -qi 'does not exist'; then
+        printf 'unavailable\n'
+    else
+        printf 'stopped\n'
+    fi
+}
+
+resolv_nameservers() {
+    [ -r /etc/resolv.conf ] || return 0
+    awk '
+        $1 == "nameserver" && $2 != "" {
+            print $2
+        }
+    ' /etc/resolv.conf
+}
+
+resolv_search() {
+    [ -r /etc/resolv.conf ] || return 0
+    awk '
+        ($1 == "search" || $1 == "domain") {
+            for (i = 2; i <= NF; i++)
+                printf "%s%s", (i == 2 ? "" : " "), $i
+            printf "\n"
+            exit
+        }
+    ' /etc/resolv.conf
+}
+
+local_resolver_active() {
+    if resolv_nameservers | grep -Eq '^(127\.0\.0\.1|::1)$'; then
+        printf 'yes\n'
+    else
+        printf 'no\n'
+    fi
+}
+
+nameservers_json() {
+    first=1
+    printf '['
+    resolv_nameservers | while IFS= read -r server; do
+        [ -n "$server" ] || continue
+        if [ "$first" -eq 0 ]; then
+            printf ','
+        fi
+        first=0
+        printf '"%s"' "$(printf '%s' "$server" | json_escape)"
+    done
+    printf ']'
+}
+
+last_result_value() {
+    key="$1"
+    [ -f "$state_file" ] || return 0
+    awk -F '=' -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }' "$state_file"
+}
+
+write_last_result() {
+    tone="$1"
+    message="$2"
+    mkdir -p "$state_dir"
+    {
+        printf 'tone=%s\n' "$tone"
+        printf 'message=%s\n' "$message"
+        printf 'timestamp=%s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    } >"$state_file"
+}
+
+emit_error() {
+    message="$1"
+    printf '{"ok":false,"message":"%s"}\n' "$(printf '%s' "$message" | json_escape)"
+}
+
+emit_action_result() {
+    ok="$1"
+    message="$2"
+    details="${3:-}"
+    printf '{"ok":%s,"message":"%s","details":"%s"}\n' \
+        "$ok" \
+        "$(printf '%s' "$message" | json_escape)" \
+        "$(printf '%s' "$details" | json_escape)"
+}
+
+run_privileged() {
+    if command -v mdo >/dev/null 2>&1; then
+        mdo "$@"
+    else
+        "$@"
+    fi
+}
+
+emit_snapshot() {
+    state="$(service_state)"
+    boot_value="$(sysrc_value local_unbound_enable)"
+    local_active="$(local_resolver_active)"
+    search_domain="$(resolv_search)"
+    last_tone="$(last_result_value tone)"
+    last_message="$(last_result_value message)"
+    last_timestamp="$(last_result_value timestamp)"
+
+    [ -n "$last_tone" ] || last_tone="info"
+    [ -n "$last_message" ] || last_message="Loaded DNS cache status."
+
+    printf '{'
+    printf '"ok":true,'
+    printf '"message":"%s",' "$(printf '%s' "$last_message" | json_escape)"
+    printf '"profile_name":"Local DNS Cache",'
+    printf '"service":{"name":"local_unbound","state":"%s","running":%s,"available":%s},' \
+        "$(printf '%s' "$state" | json_escape)" \
+        "$(if [ "$state" = "running" ]; then printf true; else printf false; fi)" \
+        "$(if [ "$state" = "unavailable" ]; then printf false; else printf true; fi)"
+    printf '"boot":{"local_unbound_enable":"%s","enabled":%s},' \
+        "$(printf '%s' "$boot_value" | json_escape)" \
+        "$(bool_json "$boot_value")"
+    printf '"resolver":{"local_active":%s,"search":"%s","nameservers":' \
+        "$(bool_json "$local_active")" \
+        "$(printf '%s' "$search_domain" | json_escape)"
+    nameservers_json
+    printf '},'
+    printf '"tools":{"drill":%s,"local_unbound_setup":%s,"local_unbound_control":%s},' \
+        "$(if command -v drill >/dev/null 2>&1; then printf true; else printf false; fi)" \
+        "$(if command -v local-unbound-setup >/dev/null 2>&1; then printf true; else printf false; fi)" \
+        "$(if command -v local-unbound-control >/dev/null 2>&1; then printf true; else printf false; fi)"
+    printf '"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
+        "$(printf '%s' "$last_tone" | json_escape)" \
+        "$(printf '%s' "$last_message" | json_escape)" \
+        "$(printf '%s' "$last_timestamp" | json_escape)"
+    printf '}\n'
+}
+
+do_enable() {
+    if command -v local-unbound-setup >/dev/null 2>&1; then
+        if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged local-unbound-setup 2>&1 && run_privileged service local_unbound start 2>&1)"; then
+            write_last_result "success" "Local DNS cache enabled."
+            emit_action_result true "Local DNS cache enabled." "$output"
+        else
+            write_last_result "error" "Unable to enable local DNS cache."
+            emit_action_result false "Unable to enable local DNS cache." "$output"
+            exit 1
+        fi
+        return
+    fi
+
+    if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged service local_unbound start 2>&1)"; then
+        write_last_result "success" "Local DNS cache enabled."
+        emit_action_result true "Local DNS cache enabled." "$output"
+    else
+        write_last_result "error" "Unable to enable local DNS cache."
+        emit_action_result false "Unable to enable local DNS cache." "$output"
+        exit 1
+    fi
+}
+
+do_disable() {
+    if output="$(run_privileged service local_unbound stop 2>&1 || true; run_privileged sysrc local_unbound_enable=NO 2>&1)"; then
+        write_last_result "warning" "Local DNS cache disabled."
+        emit_action_result true "Local DNS cache disabled." "$output"
+    else
+        write_last_result "error" "Unable to disable local DNS cache."
+        emit_action_result false "Unable to disable local DNS cache." "$output"
+        exit 1
+    fi
+}
+
+do_restart() {
+    if output="$(run_privileged service local_unbound restart 2>&1)"; then
+        write_last_result "success" "Local DNS cache restarted."
+        emit_action_result true "Local DNS cache restarted." "$output"
+    else
+        write_last_result "error" "Unable to restart local DNS cache."
+        emit_action_result false "Unable to restart local DNS cache." "$output"
+        exit 1
+    fi
+}
+
+do_flush() {
+    if command -v local-unbound-control >/dev/null 2>&1; then
+        if output="$(run_privileged local-unbound-control reload 2>&1)"; then
+            write_last_result "success" "DNS cache flushed."
+            emit_action_result true "DNS cache flushed." "$output"
+            return
+        fi
+    fi
+
+    if output="$(run_privileged service local_unbound restart 2>&1)"; then
+        write_last_result "success" "DNS cache restarted to flush cached lookups."
+        emit_action_result true "DNS cache restarted to flush cached lookups." "$output"
+    else
+        write_last_result "error" "Unable to flush DNS cache."
+        emit_action_result false "Unable to flush DNS cache." "$output"
+        exit 1
+    fi
+}
+
+do_test() {
+    host="${1:-freebsd.org}"
+    case "$host" in
+        *[!A-Za-z0-9._-]*|""|.*|*..*)
+            emit_action_result false "Invalid lookup name." "Use a plain hostname such as freebsd.org."
+            exit 1
+            ;;
+    esac
+
+    server_arg=""
+    if [ "$(service_state)" = "running" ]; then
+        server_arg="@127.0.0.1"
+    fi
+
+    if command -v drill >/dev/null 2>&1; then
+        if output="$(drill "$host" $server_arg 2>&1)"; then
+            summary="$(printf '%s\n' "$output" | awk '
+                /^;; ->>HEADER<</ || /^;; Query time:/ || /^;; SERVER:/ || /^[^;].*[[:space:]]IN[[:space:]](A|AAAA|CNAME)[[:space:]]/ {
+                    print
+                }
+            ')"
+            [ -n "$summary" ] || summary="$output"
+            write_last_result "success" "DNS lookup succeeded."
+            emit_action_result true "DNS lookup succeeded." "$summary"
+        else
+            write_last_result "error" "DNS lookup failed."
+            emit_action_result false "DNS lookup failed." "$output"
+            exit 1
+        fi
+    elif command -v host >/dev/null 2>&1; then
+        if output="$(host "$host" 2>&1)"; then
+            write_last_result "success" "DNS lookup succeeded."
+            emit_action_result true "DNS lookup succeeded." "$output"
+        else
+            write_last_result "error" "DNS lookup failed."
+            emit_action_result false "DNS lookup failed." "$output"
+            exit 1
+        fi
+    else
+        emit_action_result false "No DNS lookup tool found." "Install or expose drill/host in PATH."
+        exit 1
+    fi
+}
+
+case "$action" in
+    snapshot)
+        emit_snapshot
+        ;;
+    enable)
+        do_enable
+        ;;
+    disable)
+        do_disable
+        ;;
+    restart)
+        do_restart
+        ;;
+    flush)
+        do_flush
+        ;;
+    test)
+        do_test "${2:-freebsd.org}"
+        ;;
+    *)
+        emit_error "Unknown DNS action: $action"
+        exit 1
+        ;;
+esac
