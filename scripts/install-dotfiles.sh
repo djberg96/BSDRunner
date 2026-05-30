@@ -253,16 +253,24 @@ chmod_runner_scripts() {
     chmod 755 "$target_dir"/*.sh 2>/dev/null || true
 }
 
-rsync -a --backup --suffix='.pre-bsdrunner' "$repo_root/dotfiles/" "$HOME/"
+rsync -a --backup --suffix='.pre-bsdrunner' \
+    --exclude='.config/bsdrunner/pf/profile.conf' \
+    "$repo_root/dotfiles/" "$HOME/"
 cleanup_stale_theme_waybar_configs
 sync_waybar_scripts
 chmod_runner_scripts
 
 mkdir -p "$HOME/.config/bsdrunner/base"
+mkdir -p "$HOME/.config/bsdrunner/pf"
 mkdir -p "$HOME/.config/hypr"
 mkdir -p "$HOME/.config/rofi"
 mkdir -p "$HOME/.config/waybar"
 mkdir -p "$HOME/.config/wlogout"
+
+if [[ ! -f "$HOME/.config/bsdrunner/pf/profile.conf" ]]; then
+    cp "$repo_root/dotfiles/.config/bsdrunner/pf/profile.conf" \
+       "$HOME/.config/bsdrunner/pf/profile.conf"
+fi
 
 printf '%s\n' "$theme" > "$HOME/.config/bsdrunner/current-theme"
 
