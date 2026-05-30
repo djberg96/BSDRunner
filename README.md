@@ -44,6 +44,7 @@ The goal is a nice, bootable base session for Hyprland `0.54.x` on FreeBSD.
 - `docs/themes.md`
 - `docs/software-center.md`
 - `docs/pf.md`
+- `docs/dns.md`
 
 ## Quick Start
 
@@ -138,6 +139,18 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-pf.sh
 ```
 
 The GUI manages a BSDRunner desktop profile, not arbitrary PF syntax. See `docs/pf.md` for the baseline, validation commands, smoke tests, and rollback path.
+
+## DNS Cache
+
+BSDRunner includes a first-pass Quickshell control surface for FreeBSD's base `local_unbound` service.
+
+Launch it after installing the dotfiles:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-dns.sh
+```
+
+The GUI starts in read-only status mode until you choose an action. See `docs/dns.md` for backend commands and manual acceptance checks.
 
 ## Scope
 

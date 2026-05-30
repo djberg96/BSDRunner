@@ -29,6 +29,13 @@ ShellRoot {
             "tone": "success"
         },
         {
+            "action": "dns",
+            "icon": "DNS",
+            "label": "DNS Cache",
+            "detail": "Manage local name lookups",
+            "tone": "info"
+        },
+        {
             "action": "firefox",
             "icon": "WEB",
             "label": "Firefox",
@@ -43,6 +50,8 @@ ShellRoot {
             return palette.success
         case "warning":
             return palette.warning
+        case "info":
+            return palette.accent
         default:
             return themeLoader.actionAccent("apps")
         }
@@ -59,6 +68,11 @@ ShellRoot {
             return [
                 "sh",
                 themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf.sh"
+            ]
+        case "dns":
+            return [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-dns.sh"
             ]
         case "firefox":
             return ["firefox"]
@@ -122,7 +136,7 @@ ShellRoot {
 
         visible: true
         implicitWidth: 330
-        implicitHeight: 222
+        implicitHeight: 292
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 
