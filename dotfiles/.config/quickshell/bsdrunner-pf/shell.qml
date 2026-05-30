@@ -607,7 +607,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Desktop Protection"
+                                    text: "PF Desktop Protection"
                                     color: root.palette.secondaryText
                                     font.pixelSize: 14
                                     font.bold: true

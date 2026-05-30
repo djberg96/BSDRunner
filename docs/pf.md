@@ -224,7 +224,7 @@ mdo -- sysrc pf_enable=NO
 
 ## Notes
 
-This baseline intentionally does not allow inbound SSH. Add that later as an explicit profile or GUI-controlled rule once the source network and privilege flow are clear.
+The documented baseline intentionally does not allow inbound SSH by default. The BSDRunner Firewall GUI can enable the LAN-scoped SSH profile setting; when that profile is applied, the GUI also synchronizes `sshd_enable` and starts or stops the `sshd` service to match the firewall setting.
 
 The rules avoid OpenBSD-specific assumptions where FreeBSD behavior may differ. In particular, they use FreeBSD's modern `set reassemble yes` normalization style and numeric ports for desktop discovery services.
 
