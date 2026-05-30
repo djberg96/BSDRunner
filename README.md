@@ -37,10 +37,12 @@ The goal is a nice, bootable base session for Hyprland `0.54.x` on FreeBSD.
 - `dotfiles/.config/quickshell/`
 - `dotfiles/.config/waybar/`
 - `dotfiles/.config/bsdrunner/themes/`
+- `system/etc/pf.conf`
 - `scripts/install-dotfiles.sh`
 - `docs/freebsd-setup.md`
 - `docs/themes.md`
 - `docs/software-center.md`
+- `docs/pf.md`
 
 ## Quick Start
 
