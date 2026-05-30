@@ -142,6 +142,15 @@ ShellRoot {
         return "Applied"
     }
 
+    function enabledRuleCount() {
+        var count = 0
+        for (var i = 0; i < rules.length; i += 1) {
+            if (rules[i].enabled)
+                count += 1
+        }
+        return count
+    }
+
     function settingValue(key) {
         return !!settings[key]
     }
@@ -623,8 +632,8 @@ ShellRoot {
 
                         Column {
                             anchors.fill: parent
-                            anchors.margins: 16
-                            spacing: 12
+                            anchors.margins: 14
+                            spacing: 8
 
                             Text {
                                 text: "Friendly Controls"
@@ -651,7 +660,7 @@ ShellRoot {
                                     readonly property bool checked: root.settingValue(modelData.key)
 
                                     width: parent.width
-                                    height: 54
+                                    height: 46
                                     radius: 8
                                     color: toggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
                                     border.width: 1
@@ -659,35 +668,35 @@ ShellRoot {
 
                                     Row {
                                         anchors.fill: parent
-                                        anchors.margins: 10
-                                        spacing: 12
+                                        anchors.margins: 8
+                                        spacing: 10
 
                                         Rectangle {
-                                            width: 48
-                                            height: 26
-                                            radius: 13
+                                            width: 42
+                                            height: 22
+                                            radius: 11
                                             y: 4
                                             color: toggleRow.checked ? root.palette.accent : root.palette.frameBorder
 
                                             Rectangle {
-                                                width: 20
-                                                height: 20
-                                                radius: 10
-                                                x: toggleRow.checked ? 24 : 4
+                                                width: 16
+                                                height: 16
+                                                radius: 8
+                                                x: toggleRow.checked ? 22 : 4
                                                 y: 3
                                                 color: toggleRow.checked ? root.palette.frameBackground : root.palette.mutedText
                                             }
                                         }
 
                                         Column {
-                                            width: parent.width - 60
-                                            spacing: 2
+                                            width: parent.width - 52
+                                            spacing: 1
 
                                             Text {
                                                 width: parent.width
                                                 text: toggleRow.modelData.label
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 14
+                                                font.pixelSize: 13
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -696,7 +705,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: toggleRow.modelData.detail
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 11
+                                                font.pixelSize: 10
                                                 elide: Text.ElideRight
                                             }
                                         }
@@ -738,7 +747,7 @@ ShellRoot {
                             spacing: 12
 
                             Text {
-                                text: "Rules Overview"
+                                text: "Profile Summary"
                                 color: root.palette.primaryText
                                 font.pixelSize: 22
                                 font.bold: true
@@ -746,69 +755,87 @@ ShellRoot {
 
                             Text {
                                 width: parent.width
-                                text: "The GUI keeps pf syntax out of the main workflow. These rows are the human version of the generated profile."
+                                text: "The switches on the left are the profile. This side keeps the current state and last action easy to scan."
                                 color: root.palette.mutedText
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
                             }
 
-                            Repeater {
-                                model: root.rules
+                            Row {
+                                width: parent.width
+                                height: 88
+                                spacing: 12
 
-                                delegate: Rectangle {
-                                    required property var modelData
+                                Repeater {
+                                    model: [
+                                        { "label": "Enabled", "value": root.enabledRuleCount() + " / " + root.rules.length, "tone": "success" },
+                                        { "label": "SSH", "value": root.settingValue("allow_ssh_lan") ? "LAN only" : "Off", "tone": root.settingValue("allow_ssh_lan") ? "warning" : "info" },
+                                        { "label": "Discovery", "value": root.settingValue("allow_mdns") ? "On" : "Off", "tone": root.settingValue("allow_mdns") ? "success" : "info" }
+                                    ]
 
-                                    width: parent.width
-                                    height: 58
-                                    radius: 8
-                                    color: root.palette.panelBackground
-                                    border.width: 1
-                                    border.color: modelData.enabled ? root.palette.success : root.palette.frameBorder
+                                    delegate: Rectangle {
+                                        required property var modelData
 
-                                    Row {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 12
-
-                                        Rectangle {
-                                            width: 30
-                                            height: 30
-                                            radius: 15
-                                            y: 2
-                                            color: Qt.alpha(modelData.enabled ? root.palette.success : root.palette.frameBorder, 0.18)
-                                            border.width: 1
-                                            border.color: modelData.enabled ? root.palette.success : root.palette.frameBorder
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: modelData.enabled ? "ON" : "OFF"
-                                                color: modelData.enabled ? root.palette.success : root.palette.mutedText
-                                                font.pixelSize: 16
-                                                font.bold: true
-                                            }
-                                        }
+                                        width: 144
+                                        height: 78
+                                        radius: 8
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.toneColor(modelData.tone)
 
                                         Column {
-                                            width: parent.width - 42
-                                            spacing: 2
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 5
 
                                             Text {
                                                 width: parent.width
                                                 text: modelData.label
-                                                color: root.palette.primaryText
-                                                font.pixelSize: 14
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 10
                                                 font.bold: true
-                                                elide: Text.ElideRight
                                             }
 
                                             Text {
                                                 width: parent.width
-                                                text: modelData.description
-                                                color: root.palette.secondaryText
-                                                font.pixelSize: 11
+                                                text: modelData.value
+                                                color: root.toneColor(modelData.tone)
+                                                font.pixelSize: 16
+                                                font.bold: true
                                                 elide: Text.ElideRight
                                             }
                                         }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 92
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.configState === "external" || root.profileDirty ? root.palette.warning : root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 6
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.configState === "external" ? "External config" : (root.profileDirty ? "Pending changes" : "Ready")
+                                        color: root.configState === "external" || root.profileDirty ? root.palette.warning : root.palette.success
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.configState === "external" ? "Adopt the profile before the GUI can manage /etc/pf.conf." : (root.profileDirty ? "Apply the profile to make the saved settings active." : "The saved profile matches the last applied profile.")
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
                                     }
                                 }
                             }
