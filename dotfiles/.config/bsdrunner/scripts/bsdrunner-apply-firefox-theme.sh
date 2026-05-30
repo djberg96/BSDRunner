@@ -306,6 +306,44 @@ panel {
     --panel-color: var(--bsdrunner-text) !important;
     --panel-border-color: var(--bsdrunner-accent) !important;
 }
+
+menupopup,
+panel,
+panelview,
+panelmultiview,
+.panel-viewstack,
+.panel-subview-body,
+#appMenu-popup,
+#appMenu-mainView {
+    background-color: var(--bsdrunner-surface) !important;
+    color: var(--bsdrunner-text) !important;
+}
+
+menupopup menu,
+menupopup menuitem,
+panel toolbarbutton,
+panel .subviewbutton,
+panel .toolbarbutton-text,
+panel .toolbarbutton-icon,
+panel .toolbarbutton-badge-stack,
+#appMenu-popup toolbarbutton,
+#appMenu-popup .subviewbutton,
+#appMenu-popup .toolbarbutton-text,
+#appMenu-popup .toolbarbutton-icon,
+#appMenu-popup .toolbarbutton-badge-stack {
+    color: var(--bsdrunner-text) !important;
+    fill: currentColor !important;
+}
+
+menupopup menu:hover,
+menupopup menuitem:hover,
+panel toolbarbutton:hover,
+panel .subviewbutton:hover,
+#appMenu-popup toolbarbutton:hover,
+#appMenu-popup .subviewbutton:hover {
+    background-color: var(--bsdrunner-surface-alt) !important;
+    color: var(--bsdrunner-text) !important;
+}
 EOF
 }
 
