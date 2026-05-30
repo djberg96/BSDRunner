@@ -49,7 +49,8 @@ case "$theme_name" in
         light_background="#fff5f6"
         light_surface="#fffafa"
         light_surface_alt="#fbe3e6"
-        light_chrome="#9f2738"
+        light_tab_chrome="#b94a59"
+        light_nav_chrome="#8f2232"
         light_chrome_text="#fff1f3"
         light_text="#271316"
         light_muted="#735159"
@@ -58,7 +59,8 @@ case "$theme_name" in
         light_background="#f4fbff"
         light_surface="#ffffff"
         light_surface_alt="#e1f3ff"
-        light_chrome="#416b86"
+        light_tab_chrome="#5f86a0"
+        light_nav_chrome="#375f78"
         light_chrome_text="#eef7fc"
         light_text="#10202b"
         light_muted="#516a78"
@@ -67,7 +69,8 @@ case "$theme_name" in
         light_background="#fff9e8"
         light_surface="#fffdf5"
         light_surface_alt="#fff0c7"
-        light_chrome="#9b7418"
+        light_tab_chrome="#bd9130"
+        light_nav_chrome="#80600f"
         light_chrome_text="#fff6dd"
         light_text="#241b08"
         light_muted="#755d20"
@@ -76,7 +79,8 @@ case "$theme_name" in
         light_background="#f7fbf1"
         light_surface="#ffffff"
         light_surface_alt="#e5efd8"
-        light_chrome="#596f43"
+        light_tab_chrome="#71885a"
+        light_nav_chrome="#4e613c"
         light_chrome_text="#f2f7e8"
         light_text="#172214"
         light_muted="#56664a"
@@ -85,7 +89,8 @@ case "$theme_name" in
         light_background="#f5f9fc"
         light_surface="#ffffff"
         light_surface_alt="#e8f2f8"
-        light_chrome="#526b7d"
+        light_tab_chrome="#6e8798"
+        light_nav_chrome="#496173"
         light_chrome_text="#eef5fb"
         light_text="#17212a"
         light_muted="#536473"
@@ -164,7 +169,8 @@ write_user_chrome() {
 
 :root {
     --bsdrunner-bg: $light_background;
-    --bsdrunner-chrome-bg: $light_chrome;
+    --bsdrunner-tab-chrome-bg: $light_tab_chrome;
+    --bsdrunner-nav-chrome-bg: $light_nav_chrome;
     --bsdrunner-surface: $light_surface;
     --bsdrunner-surface-alt: $light_surface_alt;
     --bsdrunner-text: $light_text;
@@ -174,10 +180,10 @@ write_user_chrome() {
     --bsdrunner-accent-strong: $accent;
     --bsdrunner-warning: $warning;
 
-    --lwt-accent-color: var(--bsdrunner-chrome-bg) !important;
+    --lwt-accent-color: var(--bsdrunner-tab-chrome-bg) !important;
     --lwt-text-color: var(--bsdrunner-chrome-text) !important;
     --lwt-selected-tab-background-color: var(--bsdrunner-surface) !important;
-    --toolbar-bgcolor: var(--bsdrunner-chrome-bg) !important;
+    --toolbar-bgcolor: var(--bsdrunner-nav-chrome-bg) !important;
     --toolbar-color: var(--bsdrunner-chrome-text) !important;
     --toolbar-field-background-color: var(--bsdrunner-bg) !important;
     --toolbar-field-color: var(--bsdrunner-text) !important;
@@ -195,7 +201,7 @@ write_user_chrome() {
 #main-window,
 #browser,
 #navigator-toolbox {
-    background-color: var(--bsdrunner-chrome-bg) !important;
+    background-color: var(--bsdrunner-nav-chrome-bg) !important;
     color: var(--bsdrunner-chrome-text) !important;
 }
 
@@ -206,14 +212,18 @@ write_user_chrome() {
 #TabsToolbar,
 #nav-bar,
 #PersonalToolbar {
-    background-color: var(--bsdrunner-chrome-bg) !important;
     color: var(--bsdrunner-chrome-text) !important;
 }
 
 #TabsToolbar {
     background:
         linear-gradient(90deg, var(--bsdrunner-accent) 0 3px, transparent 3px),
-        var(--bsdrunner-chrome-bg) !important;
+        var(--bsdrunner-tab-chrome-bg) !important;
+}
+
+#nav-bar,
+#PersonalToolbar {
+    background-color: var(--bsdrunner-nav-chrome-bg) !important;
 }
 
 #nav-bar {
