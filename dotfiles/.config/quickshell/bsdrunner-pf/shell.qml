@@ -73,32 +73,40 @@ ShellRoot {
         }
     }
 
-    function pfStateLabel() {
-        switch (pfState) {
-        case "running":
+    function protectionHeadline() {
+        if (pfRunning)
             return "Protected"
+
+        if (configState === "external")
+            return "External Config"
+
+        if (configState === "managed")
+            return profileDirty ? "Changes Pending" : "Profile Applied"
+
+        switch (pfState) {
         case "stopped":
-            return "PF stopped"
+            return "PF Stopped"
         case "unloaded":
-            return "PF not loaded"
+            return "PF Not Loaded"
         case "unavailable":
-            return "PF unavailable"
+            return "PF Unavailable"
         default:
-            return "Unknown"
+            return "Status Unknown"
         }
     }
 
-    function configStateLabel() {
-        switch (configState) {
-        case "managed":
-            return "BSDRunner managed"
-        case "external":
-            return "External config detected"
-        case "missing":
-            return "No /etc/pf.conf"
-        default:
-            return "Unknown config"
-        }
+    function protectionTone() {
+        if (pfRunning || (configState === "managed" && !profileDirty))
+            return "success"
+
+        if (configState === "external" || profileDirty)
+            return "warning"
+
+        return "warning"
+    }
+
+    function protectionBadgeText() {
+        return protectionTone() === "success" ? "OK" : "!"
     }
 
     function settingValue(key) {
@@ -363,7 +371,7 @@ ShellRoot {
                         radius: 8
                         color: root.palette.cardBackground
                         border.width: 1
-                        border.color: root.toneColor(root.pfRunning ? "success" : "warning")
+                        border.color: root.toneColor(root.protectionTone())
 
                         Row {
                             anchors.fill: parent
@@ -375,14 +383,14 @@ ShellRoot {
                                 height: 48
                                 radius: 24
                                 y: 8
-                                color: Qt.alpha(root.toneColor(root.pfRunning ? "success" : "warning"), 0.18)
+                                color: Qt.alpha(root.toneColor(root.protectionTone()), 0.18)
                                 border.width: 2
-                                border.color: root.toneColor(root.pfRunning ? "success" : "warning")
+                                border.color: root.toneColor(root.protectionTone())
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: root.pfRunning ? "OK" : "!"
-                                    color: root.toneColor(root.pfRunning ? "success" : "warning")
+                                    text: root.protectionBadgeText()
+                                    color: root.toneColor(root.protectionTone())
                                     font.pixelSize: 24
                                     font.bold: true
                                 }
@@ -394,7 +402,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: root.pfStateLabel()
+                                    text: root.protectionHeadline()
                                     color: root.palette.primaryText
                                     font.pixelSize: 28
                                     font.bold: true
@@ -411,7 +419,8 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: root.configStateLabel()
+                                    visible: root.configState === "external" || root.configState === "missing"
+                                    text: root.configState === "external" ? "External config detected" : "No /etc/pf.conf"
                                     color: root.toneColor(root.configState === "external" ? "warning" : "info")
                                     font.pixelSize: 12
                                     elide: Text.ElideRight
