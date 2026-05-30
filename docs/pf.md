@@ -26,6 +26,33 @@ mdo -- pfctl -vnf /etc/pf.conf
 
 `pfctl -vnf` checks syntax without loading the ruleset.
 
+Use the flags here exactly:
+
+- `-n`: parse only; do not load the rules
+- `-f FILE`: read rules from `FILE`
+- `-v`: print the expanded rules so you can see what pf understood
+
+Running `pfctl system/etc/pf.conf` does not validate that file.
+
+If `pfctl -vnf` prints this on FreeBSD 15:
+
+```text
+pfctl: Failed to open netlink: Bad file descriptor
+```
+
+then the PF kernel module/device is probably not loaded yet. Load it without
+starting the firewall ruleset:
+
+```sh
+mdo -- kldload pf
+```
+
+Then run the validation command again:
+
+```sh
+mdo -- pfctl -vnf system/etc/pf.conf
+```
+
 ## Install
 
 Copy the template into place with root ownership and restrictive permissions:
