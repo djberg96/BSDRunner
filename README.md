@@ -37,6 +37,7 @@ The goal is a nice, bootable base session for Hyprland `0.54.x` on FreeBSD.
 - `dotfiles/.config/quickshell/`
 - `dotfiles/.config/waybar/`
 - `dotfiles/.config/bsdrunner/themes/`
+- `dotfiles/.config/bsdrunner/pf/`
 - `system/etc/pf.conf`
 - `scripts/install-dotfiles.sh`
 - `docs/freebsd-setup.md`
@@ -125,6 +126,18 @@ Waybar also includes a few lightweight control-surface actions:
 - power menu
 
 Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.
+
+## Firewall
+
+BSDRunner includes a desktop-focused PF baseline and a first-pass Quickshell firewall control surface.
+
+Launch the graphical firewall after installing the dotfiles:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-pf.sh
+```
+
+The GUI manages a BSDRunner desktop profile, not arbitrary PF syntax. See `docs/pf.md` for the baseline, validation commands, smoke tests, and rollback path.
 
 ## Scope
 
