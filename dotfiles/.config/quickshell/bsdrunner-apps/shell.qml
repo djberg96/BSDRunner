@@ -125,8 +125,6 @@ ShellRoot {
         minimumSize: Qt.size(330, 222)
         maximumSize: Qt.size(330, 222)
         color: "transparent"
-        x: 76
-        y: 38
 
         Item {
             anchors.fill: parent
