@@ -31,7 +31,7 @@ case "$action" in
         exec firefox
         ;;
     apps)
-        exec sh "$home_config/bsdrunner/scripts/bsdrunner-software.sh"
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-apps-menu.sh"
         ;;
     reload)
         exec hyprctl reload
