@@ -49,6 +49,7 @@ case "$theme_name" in
         light_background="#fff5f6"
         light_surface="#fffafa"
         light_surface_alt="#fbe3e6"
+        light_chrome="#f0b7bf"
         light_text="#271316"
         light_muted="#735159"
         ;;
@@ -56,6 +57,7 @@ case "$theme_name" in
         light_background="#f4fbff"
         light_surface="#ffffff"
         light_surface_alt="#e1f3ff"
+        light_chrome="#b8def2"
         light_text="#10202b"
         light_muted="#516a78"
         ;;
@@ -63,6 +65,7 @@ case "$theme_name" in
         light_background="#fff9e8"
         light_surface="#fffdf5"
         light_surface_alt="#fff0c7"
+        light_chrome="#efd37a"
         light_text="#241b08"
         light_muted="#755d20"
         ;;
@@ -70,6 +73,7 @@ case "$theme_name" in
         light_background="#f7fbf1"
         light_surface="#ffffff"
         light_surface_alt="#e5efd8"
+        light_chrome="#c7d8b6"
         light_text="#172214"
         light_muted="#56664a"
         ;;
@@ -77,6 +81,7 @@ case "$theme_name" in
         light_background="#f5f9fc"
         light_surface="#ffffff"
         light_surface_alt="#e8f2f8"
+        light_chrome="#c6ddec"
         light_text="#17212a"
         light_muted="#536473"
         ;;
@@ -154,11 +159,11 @@ write_user_chrome() {
 
 :root {
     --bsdrunner-bg: $light_background;
-    --bsdrunner-chrome-bg: $background;
+    --bsdrunner-chrome-bg: $light_chrome;
     --bsdrunner-surface: $light_surface;
     --bsdrunner-surface-alt: $light_surface_alt;
     --bsdrunner-text: $light_text;
-    --bsdrunner-chrome-text: $text;
+    --bsdrunner-chrome-text: $light_text;
     --bsdrunner-muted: $light_muted;
     --bsdrunner-accent: $accent;
     --bsdrunner-accent-strong: $accent;
