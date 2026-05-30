@@ -100,12 +100,74 @@ For live traffic inspection, FreeBSD's Handbook recommends `pftop` from `sysutil
 After enabling or reloading the ruleset, check:
 
 - web browsing
+
+  Open a few normal sites in Firefox.
+
 - DNS resolution
+
+  ```sh
+  host freebsd.org
+  drill freebsd.org
+  ```
+
+  At least one of those commands should return addresses for `freebsd.org`.
+
 - `pkg` access
+
+  ```sh
+  pkg -N
+  pkg search -Q name firefox
+  ```
+
+  `pkg -N` should confirm that package management is available. The search
+  should return package names without timing out.
+
 - IPv4 ping
-- IPv6 connectivity if enabled
-- reconnecting to Wi-Fi or Ethernet
-- mDNS discovery for printers, casting, or other local devices
+
+  ```sh
+  ping -c 3 1.1.1.1
+  ping -c 3 freebsd.org
+  ```
+
+  The first command checks basic IPv4 reachability. The second checks IPv4
+  plus DNS together.
+
+- IPv6 connectivity, if enabled on your network
+
+  ```sh
+  ping6 -c 3 2606:4700:4700::1111
+  ping6 -c 3 freebsd.org
+  ```
+
+  If your network does not provide IPv6, these may fail even when PF is fine.
+
+- Interface and route state after reconnecting Wi-Fi or Ethernet
+
+  ```sh
+  ifconfig
+  netstat -rn
+  ```
+
+  After reconnecting, your active interface should have an address, and
+  `netstat -rn` should show a default route.
+
+- mDNS listener/discovery sanity check
+
+  ```sh
+  sockstat -4 -6 | grep ':5353'
+  ```
+
+  If you run an mDNS responder such as Avahi or another local discovery
+  service, this should show a process listening on UDP port 5353. If no mDNS
+  service is installed, an empty result is normal.
+
+- PF state table activity
+
+  ```sh
+  mdo -- pfctl -s states
+  ```
+
+  After the tests above, this should show active or recently active states.
 
 ## Roll Back
 
