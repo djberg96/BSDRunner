@@ -154,19 +154,21 @@ write_user_chrome() {
 
 :root {
     --bsdrunner-bg: $light_background;
+    --bsdrunner-chrome-bg: $background;
     --bsdrunner-surface: $light_surface;
     --bsdrunner-surface-alt: $light_surface_alt;
     --bsdrunner-text: $light_text;
+    --bsdrunner-chrome-text: $text;
     --bsdrunner-muted: $light_muted;
     --bsdrunner-accent: $accent;
     --bsdrunner-accent-strong: $accent;
     --bsdrunner-warning: $warning;
 
-    --lwt-accent-color: var(--bsdrunner-bg) !important;
-    --lwt-text-color: var(--bsdrunner-text) !important;
+    --lwt-accent-color: var(--bsdrunner-chrome-bg) !important;
+    --lwt-text-color: var(--bsdrunner-chrome-text) !important;
     --lwt-selected-tab-background-color: var(--bsdrunner-surface) !important;
-    --toolbar-bgcolor: var(--bsdrunner-surface) !important;
-    --toolbar-color: var(--bsdrunner-text) !important;
+    --toolbar-bgcolor: var(--bsdrunner-chrome-bg) !important;
+    --toolbar-color: var(--bsdrunner-chrome-text) !important;
     --toolbar-field-background-color: var(--bsdrunner-bg) !important;
     --toolbar-field-color: var(--bsdrunner-text) !important;
     --toolbar-field-border-color: var(--bsdrunner-accent) !important;
@@ -183,8 +185,8 @@ write_user_chrome() {
 #main-window,
 #browser,
 #navigator-toolbox {
-    background-color: var(--bsdrunner-bg) !important;
-    color: var(--bsdrunner-text) !important;
+    background-color: var(--bsdrunner-chrome-bg) !important;
+    color: var(--bsdrunner-chrome-text) !important;
 }
 
 #navigator-toolbox {
@@ -194,14 +196,14 @@ write_user_chrome() {
 #TabsToolbar,
 #nav-bar,
 #PersonalToolbar {
-    background-color: var(--bsdrunner-bg) !important;
-    color: var(--bsdrunner-text) !important;
+    background-color: var(--bsdrunner-chrome-bg) !important;
+    color: var(--bsdrunner-chrome-text) !important;
 }
 
 #TabsToolbar {
     background:
         linear-gradient(90deg, var(--bsdrunner-accent) 0 3px, transparent 3px),
-        var(--bsdrunner-bg) !important;
+        var(--bsdrunner-chrome-bg) !important;
 }
 
 #nav-bar {
@@ -253,7 +255,7 @@ toolbarbutton,
 .toolbarbutton-icon,
 .urlbar-icon,
 #identity-icon {
-    color: var(--bsdrunner-text) !important;
+    color: var(--bsdrunner-chrome-text) !important;
     fill: currentColor !important;
 }
 
