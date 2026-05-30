@@ -397,7 +397,17 @@ do_logs() {
         output="$(tcpdump -n -e -ttt -r "$log_file" 2>&1 || true)"
     fi
 
-    output="$(printf '%s\n' "$output" | awk 'NF { lines[++count] = $0 } END { start = count - 11; if (start < 1) start = 1; for (i = start; i <= count; i++) print lines[i] }')"
+    output="$(printf '%s\n' "$output" | awk '
+        /^tcpdump: verbose output suppressed/ { next }
+        NF { lines[++count] = $0 }
+        END {
+            start = count - 11
+            if (start < 1)
+                start = 1
+            for (i = start; i <= count; i++)
+                print lines[i]
+        }
+    ')"
 
     if [ -n "$output" ]; then
         emit_action_result true "Loaded recent pflog entries." "$output"

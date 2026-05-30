@@ -63,364 +63,354 @@ ShellRoot {
     property string lastResultMessage: "No firewall action has run yet."
     property string lastResultTimestamp: ""
     property var settings: ({
-        "allow_outbound": true,
-        "block_unsolicited": true,
-        "allow_diagnostics": true,
-        "allow_ipv6": true,
-        "allow_dhcp": true,
-        "allow_mdns": true,
-        "allow_ssh_lan": false,
-        "log_blocked": false
-    })
+            "allow_outbound": true,
+            "block_unsolicited": true,
+            "allow_diagnostics": true,
+            "allow_ipv6": true,
+            "allow_dhcp": true,
+            "allow_mdns": true,
+            "allow_ssh_lan": false,
+            "log_blocked": false
+        })
     property var rules: []
 
     function toneColor(tone) {
         switch (tone) {
         case "success":
-            return palette.success
+            return palette.success;
         case "warning":
-            return palette.warning
+            return palette.warning;
         case "error":
-            return palette.danger
+            return palette.danger;
         default:
-            return palette.accent
+            return palette.accent;
         }
     }
 
     function protectionHeadline() {
         if (pfRunning)
-            return "Protected"
+            return "Protected";
 
         if (configState === "external")
-            return "External Config"
+            return "External Config";
 
         if (configState === "managed")
-            return profileDirty ? "Changes Pending" : "Profile Applied"
+            return profileDirty ? "Changes Pending" : "Profile Applied";
 
         switch (pfState) {
         case "stopped":
-            return "PF Stopped"
+            return "PF Stopped";
         case "unloaded":
-            return "PF Not Loaded"
+            return "PF Not Loaded";
         case "unavailable":
-            return "PF Unavailable"
+            return "PF Unavailable";
         default:
-            return "Status Unknown"
+            return "Status Unknown";
         }
     }
 
     function protectionTone() {
         if (pfRunning || (configState === "managed" && !profileDirty))
-            return "success"
+            return "success";
 
         if (configState === "external" || profileDirty)
-            return "warning"
+            return "warning";
 
-        return "warning"
+        return "warning";
     }
 
     function protectionBadgeText() {
-        return protectionTone() === "success" ? "OK" : "!"
+        return protectionTone() === "success" ? "OK" : "!";
     }
 
     function compactTimestamp(value) {
         if (!value || value.length === 0)
-            return ""
+            return "";
 
-        var parts = value.split(" ")
+        var parts = value.split(" ");
         if (parts.length >= 2)
-            return parts[1].replace(/:[0-9][0-9]$/, "")
+            return parts[1].replace(/:[0-9][0-9]$/, "");
 
-        return value
+        return value;
     }
 
     function firstNonEmptyLine(value) {
         if (!value || value.length === 0)
-            return ""
+            return "";
 
-        var lines = value.split("\n")
+        var lines = value.split("\n");
         for (var i = 0; i < lines.length; i += 1) {
-            var line = lines[i].replace(/^\s+|\s+$/g, "")
+            var line = lines[i].replace(/^\s+|\s+$/g, "");
             if (line.length > 0)
-                return line
+                return line;
         }
 
-        return ""
+        return "";
     }
 
     function statusDetailText() {
         if ((statusTone === "error" || lastResultTone === "error") && actionDetails.length > 0)
-            return firstNonEmptyLine(actionDetails)
+            return firstNonEmptyLine(actionDetails);
 
         if (lastResultTimestamp.length > 0)
-            return "Updated " + compactTimestamp(lastResultTimestamp)
+            return "Updated " + compactTimestamp(lastResultTimestamp);
 
-        return ""
+        return "";
     }
 
     function profileStatusValue() {
         if (configState === "external")
-            return "External"
+            return "External";
         if (profileDirty)
-            return "Pending"
-        return "Current"
+            return "Pending";
+        return "Current";
     }
 
     function profileStatusDetail() {
         if (configState === "external")
-            return "Adoption needed"
+            return "Adoption needed";
 
         if (profileDirty)
-            return lastResultTimestamp.length > 0 ? "Edited " + compactTimestamp(lastResultTimestamp) : "Edited"
+            return lastResultTimestamp.length > 0 ? "Edited " + compactTimestamp(lastResultTimestamp) : "Edited";
 
         if (appliedTimestamp.length > 0)
-            return "Applied " + compactTimestamp(appliedTimestamp)
+            return "Applied " + compactTimestamp(appliedTimestamp);
 
-        return "Applied"
+        return "Applied";
     }
 
     function enabledRuleCount() {
-        var count = 0
+        var count = 0;
         for (var i = 0; i < rules.length; i += 1) {
             if (rules[i].enabled)
-                count += 1
+                count += 1;
         }
-        return count
+        return count;
     }
 
     function settingValue(key) {
-        return !!settings[key]
+        return !!settings[key];
     }
 
     function toggleSetting(key, value) {
         if (runningAction || loading)
-            return
-
-        activeActionId = "set"
-        activeActionArg1 = key
-        activeActionArg2 = value ? "yes" : "no"
-        activeActionLabel = "Updating setting"
-        runActionProcess()
+            return;
+        activeActionId = "set";
+        activeActionArg1 = key;
+        activeActionArg2 = value ? "yes" : "no";
+        activeActionLabel = "Updating setting";
+        runActionProcess();
     }
 
     function requestAction(actionId, label, description) {
         if (runningAction)
-            return
-
-        pendingActionId = actionId
-        pendingActionLabel = label
-        pendingActionDescription = description
+            return;
+        pendingActionId = actionId;
+        pendingActionLabel = label;
+        pendingActionDescription = description;
     }
 
     function clearPendingAction() {
-        pendingActionId = ""
-        pendingActionLabel = ""
-        pendingActionDescription = ""
+        pendingActionId = "";
+        pendingActionLabel = "";
+        pendingActionDescription = "";
     }
 
     function confirmPendingAction() {
         if (!pendingActionId)
-            return
-
-        activeActionId = pendingActionId
-        activeActionArg1 = ""
-        activeActionArg2 = ""
-        activeActionLabel = pendingActionLabel
-        clearPendingAction()
-        runActionProcess()
+            return;
+        activeActionId = pendingActionId;
+        activeActionArg1 = "";
+        activeActionArg2 = "";
+        activeActionLabel = pendingActionLabel;
+        clearPendingAction();
+        runActionProcess();
     }
 
     function runActionProcess() {
-        runningAction = true
-        actionDetails = ""
-        statusTone = "info"
-        statusMessage = activeActionLabel + "..."
-        actionStdoutText = ""
-        actionStderrText = ""
-        actionExitCode = 0
-        actionExited = false
-        actionStdoutFinished = false
-        actionStderrFinished = false
-        actionProcess.running = true
+        runningAction = true;
+        actionDetails = "";
+        statusTone = "info";
+        statusMessage = activeActionLabel + "...";
+        actionStdoutText = "";
+        actionStderrText = "";
+        actionExitCode = 0;
+        actionExited = false;
+        actionStdoutFinished = false;
+        actionStderrFinished = false;
+        actionProcess.running = true;
     }
 
     function refreshSnapshot() {
         if (snapshotProcess.running)
-            return
-
-        loading = true
-        snapshotStdoutText = ""
-        snapshotStderrText = ""
-        snapshotExitCode = 0
-        snapshotExited = false
-        snapshotStdoutFinished = false
-        snapshotStderrFinished = false
-        snapshotProcess.running = true
+            return;
+        loading = true;
+        snapshotStdoutText = "";
+        snapshotStderrText = "";
+        snapshotExitCode = 0;
+        snapshotExited = false;
+        snapshotStdoutFinished = false;
+        snapshotStderrFinished = false;
+        snapshotProcess.running = true;
     }
 
     function maybeFinalizeSnapshot() {
         if (!snapshotExited || !snapshotStdoutFinished || !snapshotStderrFinished)
-            return
-
-        applySnapshot(snapshotStdoutText, snapshotExitCode, snapshotStderrText)
+            return;
+        applySnapshot(snapshotStdoutText, snapshotExitCode, snapshotStderrText);
     }
 
     function maybeFinalizeAction() {
         if (!actionExited || !actionStdoutFinished || !actionStderrFinished)
-            return
-
-        applyActionResult(actionStdoutText, actionExitCode, actionStderrText)
+            return;
+        applyActionResult(actionStdoutText, actionExitCode, actionStderrText);
     }
 
     function refreshLogs() {
         if (logProcess.running || logFollowing || runningAction)
-            return
-
-        logLoading = true
-        logMessage = "Loading pflog..."
-        logStdoutText = ""
-        logStderrText = ""
-        logExitCode = 0
-        logExited = false
-        logStdoutFinished = false
-        logStderrFinished = false
-        logProcess.running = true
+            return;
+        logLoading = true;
+        logMessage = "Loading pflog...";
+        logStdoutText = "";
+        logStderrText = "";
+        logExitCode = 0;
+        logExited = false;
+        logStdoutFinished = false;
+        logStderrFinished = false;
+        logProcess.running = true;
     }
 
     function toggleLogFollow() {
         if (logLoading || runningAction)
-            return
-
+            return;
         if (logFollowing) {
-            stoppingLogFollow = true
-            followLogProcess.running = false
-            logFollowing = false
-            logMessage = "Live pflog follow stopped."
-            return
+            stoppingLogFollow = true;
+            followLogProcess.running = false;
+            logFollowing = false;
+            logMessage = "Live pflog follow stopped.";
+            return;
         }
 
-        stoppingLogFollow = false
-        logFollowing = true
-        logText = ""
-        logMessage = "Following live pflog0 traffic..."
-        followLogProcess.running = true
+        stoppingLogFollow = false;
+        logFollowing = true;
+        logText = "";
+        logMessage = "Following live pflog0 traffic...";
+        followLogProcess.running = true;
     }
 
     function appendLogLine(line) {
         if (!line || line.length === 0)
-            return
-
-        var existing = logText.length > 0 ? logText.split("\n") : []
-        existing.push(line)
+            return;
+        if (line.indexOf("tcpdump: verbose output suppressed") === 0)
+            return;
+        var existing = logText.length > 0 ? logText.split("\n") : [];
+        existing.push(line);
 
         while (existing.length > logLineLimit)
-            existing.shift()
+            existing.shift();
 
-        logText = existing.join("\n")
+        logText = existing.join("\n");
     }
 
     function maybeFinalizeLogs() {
         if (!logExited || !logStdoutFinished || !logStderrFinished)
-            return
-
-        applyLogResult(logStdoutText, logExitCode, logStderrText)
+            return;
+        applyLogResult(logStdoutText, logExitCode, logStderrText);
     }
 
     function applySnapshot(text, exitCode, stderrText) {
-        loading = false
-        var payload = null
+        loading = false;
+        var payload = null;
 
         try {
-            payload = JSON.parse(text || "{}")
+            payload = JSON.parse(text || "{}");
         } catch (error) {
-            statusTone = "error"
-            statusMessage = "The firewall backend returned invalid JSON."
-            actionDetails = stderrText || text || ""
-            return
+            statusTone = "error";
+            statusMessage = "The firewall backend returned invalid JSON.";
+            actionDetails = stderrText || text || "";
+            return;
         }
 
         if (exitCode !== 0 || !payload.ok) {
-            statusTone = "error"
-            statusMessage = payload.message || stderrText || "Unable to load firewall status."
-            return
+            statusTone = "error";
+            statusMessage = payload.message || stderrText || "Unable to load firewall status.";
+            return;
         }
 
-        pfState = payload.pf ? payload.pf.state || "unknown" : "unknown"
-        pfRunning = payload.pf ? !!payload.pf.running : false
-        pfAvailable = payload.pf ? payload.pf.available !== false : true
-        pfBootEnabled = payload.boot ? !!payload.boot.pf_enabled : false
-        pflogBootEnabled = payload.boot ? !!payload.boot.pflog_enabled : false
-        configState = payload.config ? payload.config.state || "unknown" : "unknown"
-        configManaged = payload.config ? !!payload.config.managed : false
-        configMatchesProfile = payload.config ? !!payload.config.matches_profile : false
-        configChecksum = payload.config ? payload.config.checksum || "" : ""
-        appliedTimestamp = payload.config ? payload.config.applied_timestamp || "" : ""
-        settings = payload.settings || settings
-        rules = payload.rules || []
-        profileDirty = configManaged && !configMatchesProfile
-        lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info"
-        lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message
-        lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : ""
-        statusTone = configState === "external" ? "warning" : lastResultTone
-        statusMessage = configState === "external"
-            ? "External /etc/pf.conf detected. Adopt the BSDRunner profile to let this GUI manage it."
-            : payload.message || "Loaded firewall status."
+        pfState = payload.pf ? payload.pf.state || "unknown" : "unknown";
+        pfRunning = payload.pf ? !!payload.pf.running : false;
+        pfAvailable = payload.pf ? payload.pf.available !== false : true;
+        pfBootEnabled = payload.boot ? !!payload.boot.pf_enabled : false;
+        pflogBootEnabled = payload.boot ? !!payload.boot.pflog_enabled : false;
+        configState = payload.config ? payload.config.state || "unknown" : "unknown";
+        configManaged = payload.config ? !!payload.config.managed : false;
+        configMatchesProfile = payload.config ? !!payload.config.matches_profile : false;
+        configChecksum = payload.config ? payload.config.checksum || "" : "";
+        appliedTimestamp = payload.config ? payload.config.applied_timestamp || "" : "";
+        settings = payload.settings || settings;
+        rules = payload.rules || [];
+        profileDirty = configManaged && !configMatchesProfile;
+        lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info";
+        lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message;
+        lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : "";
+        statusTone = configState === "external" ? "warning" : lastResultTone;
+        statusMessage = configState === "external" ? "External /etc/pf.conf detected. Adopt the BSDRunner profile to let this GUI manage it." : payload.message || "Loaded firewall status.";
     }
 
     function applyActionResult(text, exitCode, stderrText) {
-        runningAction = false
-        var payload = null
+        runningAction = false;
+        var payload = null;
 
         try {
-            payload = JSON.parse(text || "{}")
+            payload = JSON.parse(text || "{}");
         } catch (error) {
-            payload = null
+            payload = null;
         }
 
         if (payload && payload.ok && exitCode === 0) {
-            statusTone = activeActionId === "disable" ? "warning" : "success"
-            statusMessage = payload.message || "Firewall action completed."
-            actionDetails = payload.details || ""
+            statusTone = activeActionId === "disable" ? "warning" : "success";
+            statusMessage = payload.message || "Firewall action completed.";
+            actionDetails = payload.details || "";
             if (activeActionId === "set")
-                profileDirty = true
+                profileDirty = true;
             if (activeActionId === "apply" || activeActionId === "adopt")
-                profileDirty = false
+                profileDirty = false;
         } else if (payload) {
-            statusTone = "error"
-            statusMessage = payload.message || "Firewall action failed."
-            actionDetails = payload.details || stderrText || ""
+            statusTone = "error";
+            statusMessage = payload.message || "Firewall action failed.";
+            actionDetails = payload.details || stderrText || "";
         } else {
-            statusTone = "error"
-            statusMessage = "Firewall backend returned invalid JSON."
-            actionDetails = stderrText || text || ""
+            statusTone = "error";
+            statusMessage = "Firewall backend returned invalid JSON.";
+            actionDetails = stderrText || text || "";
         }
 
-        activeActionId = ""
-        activeActionArg1 = ""
-        activeActionArg2 = ""
-        activeActionLabel = ""
-        refreshSnapshot()
+        activeActionId = "";
+        activeActionArg1 = "";
+        activeActionArg2 = "";
+        activeActionLabel = "";
+        refreshSnapshot();
     }
 
     function applyLogResult(text, exitCode, stderrText) {
-        logLoading = false
-        var payload = null
+        logLoading = false;
+        var payload = null;
 
         try {
-            payload = JSON.parse(text || "{}")
+            payload = JSON.parse(text || "{}");
         } catch (error) {
-            payload = null
+            payload = null;
         }
 
         if (payload && payload.ok && exitCode === 0) {
-            logMessage = payload.message || "Loaded recent pflog entries."
-            logText = payload.details && payload.details.length > 0 ? payload.details : "No recent pflog entries."
+            logMessage = payload.message || "Loaded recent pflog entries.";
+            logText = payload.details && payload.details.length > 0 ? payload.details : "No recent pflog entries.";
         } else if (payload) {
-            logMessage = payload.message || "Unable to load pflog."
-            logText = payload.details || stderrText || ""
+            logMessage = payload.message || "Unable to load pflog.";
+            logText = payload.details || stderrText || "";
         } else {
-            logMessage = "Firewall backend returned invalid log JSON."
-            logText = stderrText || text || ""
+            logMessage = "Firewall backend returned invalid log JSON.";
+            logText = stderrText || text || "";
         }
     }
 
@@ -430,31 +420,27 @@ ShellRoot {
         id: snapshotProcess
         property var controller: root
 
-        command: [
-            "sh",
-            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh",
-            "snapshot"
-        ]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh", "snapshot"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                snapshotProcess.controller.snapshotStdoutText = text
-                snapshotProcess.controller.snapshotStdoutFinished = true
-                snapshotProcess.controller.maybeFinalizeSnapshot()
+                snapshotProcess.controller.snapshotStdoutText = text;
+                snapshotProcess.controller.snapshotStdoutFinished = true;
+                snapshotProcess.controller.maybeFinalizeSnapshot();
             }
         }
         stderr: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                snapshotProcess.controller.snapshotStderrText = text
-                snapshotProcess.controller.snapshotStderrFinished = true
-                snapshotProcess.controller.maybeFinalizeSnapshot()
+                snapshotProcess.controller.snapshotStderrText = text;
+                snapshotProcess.controller.snapshotStderrFinished = true;
+                snapshotProcess.controller.maybeFinalizeSnapshot();
             }
         }
-        onExited: function(exitCode, exitStatus) {
-            snapshotProcess.controller.snapshotExitCode = exitCode
-            snapshotProcess.controller.snapshotExited = true
-            snapshotProcess.controller.maybeFinalizeSnapshot()
+        onExited: function (exitCode, exitStatus) {
+            snapshotProcess.controller.snapshotExitCode = exitCode;
+            snapshotProcess.controller.snapshotExited = true;
+            snapshotProcess.controller.maybeFinalizeSnapshot();
         }
     }
 
@@ -462,33 +448,27 @@ ShellRoot {
         id: actionProcess
         property var controller: root
 
-        command: [
-            "sh",
-            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh",
-            root.activeActionId,
-            root.activeActionArg1,
-            root.activeActionArg2
-        ]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh", root.activeActionId, root.activeActionArg1, root.activeActionArg2]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                actionProcess.controller.actionStdoutText = text
-                actionProcess.controller.actionStdoutFinished = true
-                actionProcess.controller.maybeFinalizeAction()
+                actionProcess.controller.actionStdoutText = text;
+                actionProcess.controller.actionStdoutFinished = true;
+                actionProcess.controller.maybeFinalizeAction();
             }
         }
         stderr: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                actionProcess.controller.actionStderrText = text
-                actionProcess.controller.actionStderrFinished = true
-                actionProcess.controller.maybeFinalizeAction()
+                actionProcess.controller.actionStderrText = text;
+                actionProcess.controller.actionStderrFinished = true;
+                actionProcess.controller.maybeFinalizeAction();
             }
         }
-        onExited: function(exitCode, exitStatus) {
-            actionProcess.controller.actionExitCode = exitCode
-            actionProcess.controller.actionExited = true
-            actionProcess.controller.maybeFinalizeAction()
+        onExited: function (exitCode, exitStatus) {
+            actionProcess.controller.actionExitCode = exitCode;
+            actionProcess.controller.actionExited = true;
+            actionProcess.controller.maybeFinalizeAction();
         }
     }
 
@@ -496,31 +476,27 @@ ShellRoot {
         id: logProcess
         property var controller: root
 
-        command: [
-            "sh",
-            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh",
-            "logs"
-        ]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh", "logs"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                logProcess.controller.logStdoutText = text
-                logProcess.controller.logStdoutFinished = true
-                logProcess.controller.maybeFinalizeLogs()
+                logProcess.controller.logStdoutText = text;
+                logProcess.controller.logStdoutFinished = true;
+                logProcess.controller.maybeFinalizeLogs();
             }
         }
         stderr: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                logProcess.controller.logStderrText = text
-                logProcess.controller.logStderrFinished = true
-                logProcess.controller.maybeFinalizeLogs()
+                logProcess.controller.logStderrText = text;
+                logProcess.controller.logStderrFinished = true;
+                logProcess.controller.maybeFinalizeLogs();
             }
         }
-        onExited: function(exitCode, exitStatus) {
-            logProcess.controller.logExitCode = exitCode
-            logProcess.controller.logExited = true
-            logProcess.controller.maybeFinalizeLogs()
+        onExited: function (exitCode, exitStatus) {
+            logProcess.controller.logExitCode = exitCode;
+            logProcess.controller.logExited = true;
+            logProcess.controller.maybeFinalizeLogs();
         }
     }
 
@@ -528,29 +504,25 @@ ShellRoot {
         id: followLogProcess
         property var controller: root
 
-        command: [
-            "sh",
-            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh",
-            "follow-logs"
-        ]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh", "follow-logs"]
         stdout: SplitParser {
-            onRead: function(data) {
-                followLogProcess.controller.appendLogLine(data)
+            onRead: function (data) {
+                followLogProcess.controller.appendLogLine(data);
             }
         }
         stderr: SplitParser {
-            onRead: function(data) {
-                followLogProcess.controller.appendLogLine(data)
+            onRead: function (data) {
+                followLogProcess.controller.appendLogLine(data);
             }
         }
-        onExited: function(exitCode, exitStatus) {
-            followLogProcess.controller.logFollowing = false
+        onExited: function (exitCode, exitStatus) {
+            followLogProcess.controller.logFollowing = false;
             if (followLogProcess.controller.stoppingLogFollow || exitCode === 0) {
-                followLogProcess.controller.logMessage = "Live pflog follow stopped."
+                followLogProcess.controller.logMessage = "Live pflog follow stopped.";
             } else {
-                followLogProcess.controller.logMessage = "Live pflog follow exited."
+                followLogProcess.controller.logMessage = "Live pflog follow exited.";
             }
-            followLogProcess.controller.stoppingLogFollow = false
+            followLogProcess.controller.stoppingLogFollow = false;
         }
     }
 
@@ -559,10 +531,10 @@ ShellRoot {
 
         function onLastWindowClosed() {
             if (followLogProcess.running) {
-                root.stoppingLogFollow = true
-                followLogProcess.running = false
+                root.stoppingLogFollow = true;
+                followLogProcess.running = false;
             }
-            Qt.quit()
+            Qt.quit();
         }
     }
 
@@ -666,9 +638,24 @@ ShellRoot {
 
                             Repeater {
                                 model: [
-                                    { "label": "PF at boot", "value": root.pfBootEnabled ? "Enabled" : "Disabled", "detail": "", "tone": root.pfBootEnabled ? "success" : "warning" },
-                                    { "label": "pflog", "value": root.pflogBootEnabled ? "Enabled" : "Disabled", "detail": "", "tone": root.pflogBootEnabled ? "success" : "warning" },
-                                    { "label": "Profile", "value": root.profileStatusValue(), "detail": root.profileStatusDetail(), "tone": root.configState === "external" ? "warning" : (root.profileDirty ? "warning" : "info") }
+                                    {
+                                        "label": "PF at boot",
+                                        "value": root.pfBootEnabled ? "Enabled" : "Disabled",
+                                        "detail": "",
+                                        "tone": root.pfBootEnabled ? "success" : "warning"
+                                    },
+                                    {
+                                        "label": "pflog",
+                                        "value": root.pflogBootEnabled ? "Enabled" : "Disabled",
+                                        "detail": "",
+                                        "tone": root.pflogBootEnabled ? "success" : "warning"
+                                    },
+                                    {
+                                        "label": "Profile",
+                                        "value": root.profileStatusValue(),
+                                        "detail": root.profileStatusDetail(),
+                                        "tone": root.configState === "external" ? "warning" : (root.profileDirty ? "warning" : "info")
+                                    }
                                 ]
 
                                 delegate: Rectangle {
@@ -768,11 +755,36 @@ ShellRoot {
 
                     Repeater {
                         model: [
-                            { "id": "validate", "label": "Validate", "tone": "info", "text": "Validate the generated BSDRunner firewall profile before loading it." },
-                            { "id": root.configState === "external" ? "adopt" : "apply", "label": root.configState === "external" ? "Adopt Profile" : "Apply Profile", "tone": root.configState === "external" ? "warning" : "success", "text": root.configState === "external" ? "Replace the external /etc/pf.conf with the BSDRunner managed profile." : "Validate, install, and reload the generated BSDRunner firewall profile." },
-                            { "id": "reload", "label": "Reload", "tone": "info", "text": "Reload the current /etc/pf.conf ruleset." },
-                            { "id": "enable", "label": "Enable at Boot", "tone": "success", "text": "Enable PF and pflog services and start them now." },
-                            { "id": "disable", "label": "Disable PF Now", "tone": "warning", "text": "Immediately disable PF without deleting /etc/pf.conf." }
+                            {
+                                "id": "validate",
+                                "label": "Validate",
+                                "tone": "info",
+                                "text": "Validate the generated BSDRunner firewall profile before loading it."
+                            },
+                            {
+                                "id": root.configState === "external" ? "adopt" : "apply",
+                                "label": root.configState === "external" ? "Adopt Profile" : "Apply Profile",
+                                "tone": root.configState === "external" ? "warning" : "success",
+                                "text": root.configState === "external" ? "Replace the external /etc/pf.conf with the BSDRunner managed profile." : "Validate, install, and reload the generated BSDRunner firewall profile."
+                            },
+                            {
+                                "id": "reload",
+                                "label": "Reload",
+                                "tone": "info",
+                                "text": "Reload the current /etc/pf.conf ruleset."
+                            },
+                            {
+                                "id": "enable",
+                                "label": "Enable at Boot",
+                                "tone": "success",
+                                "text": "Enable PF and pflog services and start them now."
+                            },
+                            {
+                                "id": "disable",
+                                "label": "Disable PF Now",
+                                "tone": "warning",
+                                "text": "Immediately disable PF without deleting /etc/pf.conf."
+                            }
                         ]
 
                         delegate: Rectangle {
@@ -813,7 +825,7 @@ ShellRoot {
                     spacing: 14
 
                     Rectangle {
-                        width: 474
+                        width: 420
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -834,14 +846,46 @@ ShellRoot {
 
                             Repeater {
                                 model: [
-                                    { "key": "allow_outbound", "label": "Allow outbound connections", "detail": "Let apps on this laptop start connections." },
-                                    { "key": "block_unsolicited", "label": "Block unsolicited inbound", "detail": "Reject connections this laptop did not start." },
-                                    { "key": "allow_diagnostics", "label": "Allow ping and diagnostics", "detail": "Keep ping and useful network errors working." },
-                                    { "key": "allow_ipv6", "label": "Allow IPv6 essentials", "detail": "Keep IPv6 neighbor discovery and MTU discovery working." },
-                                    { "key": "allow_dhcp", "label": "Allow DHCP address setup", "detail": "Let the network assign addresses and routes." },
-                                    { "key": "allow_mdns", "label": "Allow local discovery", "detail": "Find local printers, casting devices, and .local names." },
-                                    { "key": "allow_ssh_lan", "label": "Allow SSH from local network", "detail": "Open port 22 only to private IPv4 LAN ranges." },
-                                    { "key": "log_blocked", "label": "Log blocked inbound attempts", "detail": "Write blocked packets to pflog for inspection." }
+                                    {
+                                        "key": "allow_outbound",
+                                        "label": "Allow outbound connections",
+                                        "detail": "Let apps on this laptop start connections."
+                                    },
+                                    {
+                                        "key": "block_unsolicited",
+                                        "label": "Block unsolicited inbound",
+                                        "detail": "Reject connections this laptop did not start."
+                                    },
+                                    {
+                                        "key": "allow_diagnostics",
+                                        "label": "Allow ping and diagnostics",
+                                        "detail": "Keep ping and useful network errors working."
+                                    },
+                                    {
+                                        "key": "allow_ipv6",
+                                        "label": "Allow IPv6 essentials",
+                                        "detail": "Keep IPv6 neighbor discovery and MTU discovery working."
+                                    },
+                                    {
+                                        "key": "allow_dhcp",
+                                        "label": "Allow DHCP address setup",
+                                        "detail": "Let the network assign addresses and routes."
+                                    },
+                                    {
+                                        "key": "allow_mdns",
+                                        "label": "Allow local discovery",
+                                        "detail": "Find local printers, casting devices, and .local names."
+                                    },
+                                    {
+                                        "key": "allow_ssh_lan",
+                                        "label": "Allow SSH from local network",
+                                        "detail": "Open port 22 only to private IPv4 LAN ranges."
+                                    },
+                                    {
+                                        "key": "log_blocked",
+                                        "label": "Log blocked inbound attempts",
+                                        "detail": "Write blocked packets to pflog for inspection."
+                                    }
                                 ]
 
                                 delegate: Rectangle {
@@ -925,7 +969,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 474 - 14
+                        width: parent.width - 420 - 14
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -956,21 +1000,33 @@ ShellRoot {
                                 id: summaryMetricRow
 
                                 width: parent.width
-                                height: 44
+                                height: 38
                                 spacing: 12
 
                                 Repeater {
                                     model: [
-                                        { "label": "Enabled", "value": root.enabledRuleCount() + " / " + root.rules.length, "tone": "success" },
-                                        { "label": "SSH", "value": root.settingValue("allow_ssh_lan") ? "LAN only" : "Off", "tone": root.settingValue("allow_ssh_lan") ? "warning" : "info" },
-                                        { "label": "Logging", "value": root.settingValue("log_blocked") ? "On" : "Off", "tone": root.settingValue("log_blocked") ? "warning" : "info" }
+                                        {
+                                            "label": "Enabled",
+                                            "value": root.enabledRuleCount() + " / " + root.rules.length,
+                                            "tone": "success"
+                                        },
+                                        {
+                                            "label": "SSH",
+                                            "value": root.settingValue("allow_ssh_lan") ? "LAN only" : "Off",
+                                            "tone": root.settingValue("allow_ssh_lan") ? "warning" : "info"
+                                        },
+                                        {
+                                            "label": "Logging",
+                                            "value": root.settingValue("log_blocked") ? "On" : "Off",
+                                            "tone": root.settingValue("log_blocked") ? "warning" : "info"
+                                        }
                                     ]
 
                                     delegate: Rectangle {
                                         required property var modelData
 
                                         width: (summaryMetricRow.width - summaryMetricRow.spacing * 2) / 3
-                                        height: 40
+                                        height: 34
                                         radius: 8
                                         color: root.palette.panelBackground
                                         border.width: 1
@@ -980,8 +1036,8 @@ ShellRoot {
                                             anchors.fill: parent
                                             anchors.leftMargin: 10
                                             anchors.rightMargin: 10
-                                            anchors.topMargin: 8
-                                            anchors.bottomMargin: 8
+                                            anchors.topMargin: 7
+                                            anchors.bottomMargin: 7
                                             spacing: 8
 
                                             Text {
@@ -1013,7 +1069,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 310
+                                height: 330
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1099,7 +1155,7 @@ ShellRoot {
 
                                     Rectangle {
                                         width: parent.width
-                                        height: 236
+                                        height: 256
                                         radius: 6
                                         color: root.palette.cardBackground
                                         border.width: 1
@@ -1118,7 +1174,7 @@ ShellRoot {
 
                                             onContentHeightChanged: {
                                                 if (root.logFollowing)
-                                                    contentY = Math.max(0, contentHeight - height)
+                                                    contentY = Math.max(0, contentHeight - height);
                                             }
 
                                             Text {
@@ -1128,7 +1184,7 @@ ShellRoot {
                                                 text: root.logText
                                                 color: root.palette.secondaryText
                                                 font.family: "monospace"
-                                                font.pixelSize: 10
+                                                font.pixelSize: 11
                                                 wrapMode: Text.WrapAnywhere
                                             }
 
