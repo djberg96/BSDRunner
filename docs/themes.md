@@ -124,10 +124,11 @@ Current implementation:
 
 Firefox notes:
 
-- the helper only touches initialized profiles under `~/.mozilla/firefox`
+- the helper only touches initialized profiles under `~/.mozilla/firefox` or `~/.config/mozilla/firefox`
 - existing `userChrome.css` and `userContent.css` files are preserved; BSDRunner prepends one `@import` line if needed
 - `user.js` is updated to enable `toolkit.legacyUserProfileCustomizations.stylesheets`
 - Firefox must be restarted after changing themes
+- run `sh ~/.config/bsdrunner/scripts/bsdrunner-apply-firefox-theme.sh --status` to see which profiles were patched
 
 Important:
 
