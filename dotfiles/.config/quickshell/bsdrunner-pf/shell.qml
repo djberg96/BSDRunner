@@ -396,7 +396,7 @@ ShellRoot {
 
                 Row {
                     width: parent.width
-                    height: 96
+                    height: 108
                     spacing: 14
 
                     Rectangle {
@@ -473,7 +473,7 @@ ShellRoot {
 
                         Row {
                             anchors.fill: parent
-                            anchors.margins: 16
+                            anchors.margins: 14
                             spacing: 12
 
                             Repeater {
@@ -487,7 +487,7 @@ ShellRoot {
                                     required property var modelData
 
                                     width: 116
-                                    height: 64
+                                    height: 78
                                     radius: 8
                                     color: root.palette.panelBackground
                                     border.width: 1
@@ -495,14 +495,14 @@ ShellRoot {
 
                                     Column {
                                         anchors.fill: parent
-                                        anchors.margins: 10
-                                        spacing: 4
+                                        anchors.margins: 9
+                                        spacing: 3
 
                                         Text {
                                             width: parent.width
                                             text: modelData.label
                                             color: root.palette.mutedText
-                                            font.pixelSize: 11
+                                            font.pixelSize: 10
                                             font.bold: true
                                         }
 
@@ -510,7 +510,7 @@ ShellRoot {
                                             width: parent.width
                                             text: modelData.value
                                             color: root.toneColor(modelData.tone)
-                                            font.pixelSize: 15
+                                            font.pixelSize: 14
                                             font.bold: true
                                             elide: Text.ElideRight
                                         }
@@ -520,7 +520,7 @@ ShellRoot {
                                             width: parent.width
                                             text: modelData.detail
                                             color: root.palette.mutedText
-                                            font.pixelSize: 10
+                                            font.pixelSize: 9
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -610,7 +610,7 @@ ShellRoot {
 
                 Row {
                     width: parent.width
-                    height: parent.height - 96 - 46 - 28
+                    height: parent.height - 108 - 46 - 28
                     spacing: 14
 
                     Rectangle {
