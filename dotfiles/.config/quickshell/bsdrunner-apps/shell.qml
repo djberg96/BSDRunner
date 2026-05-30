@@ -122,8 +122,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Apps"
-        minimumSize: Qt.size(330, 222)
-        maximumSize: Qt.size(330, 222)
+        implicitWidth: 330
+        implicitHeight: 222
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 
