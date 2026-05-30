@@ -351,6 +351,103 @@ write_user_content() {
         fill: currentColor !important;
     }
 }
+
+@-moz-document url-prefix("about:preferences"), url-prefix("about:addons") {
+    :root {
+        --in-content-page-background: $light_background !important;
+        --in-content-page-color: $light_text !important;
+        --in-content-text-color: $light_text !important;
+        --in-content-deemphasized-text: $light_muted !important;
+        --in-content-box-background: $light_surface !important;
+        --in-content-box-background-odd: $light_background !important;
+        --in-content-box-border-color: $light_surface_alt !important;
+        --in-content-border-color: $light_surface_alt !important;
+        --in-content-link-color: $accent !important;
+        --in-content-accent-color: $accent !important;
+        --in-content-primary-button-background: $accent !important;
+        --in-content-primary-button-background-hover: $accent_strong !important;
+        --in-content-button-background: $light_surface !important;
+        --in-content-button-background-hover: $light_surface_alt !important;
+        --in-content-item-hover: $light_surface_alt !important;
+        --in-content-item-selected: color-mix(in srgb, $accent 18%, $light_surface) !important;
+    }
+
+    body,
+    main,
+    groupbox,
+    deck,
+    richlistbox,
+    tree,
+    .main-content,
+    .main-content-container,
+    .pane-container,
+    .content-blocking-category,
+    .subcategory,
+    .card,
+    .addon-card {
+        background-color: $light_background !important;
+        color: $light_text !important;
+    }
+
+    h1,
+    h2,
+    h3,
+    label,
+    description,
+    legend,
+    caption,
+    checkbox,
+    radio,
+    menulist,
+    richlistitem,
+    .text-link,
+    .sidebar-footer-label,
+    .category-name,
+    .addon-name,
+    .addon-description {
+        color: $light_text !important;
+    }
+
+    .category,
+    .navigation,
+    .sidebar,
+    .sidebar-footer-list,
+    .sidebar-footer-link,
+    .sticky-container,
+    .search-container {
+        background-color: $light_surface !important;
+        color: $light_text !important;
+    }
+
+    .category[selected],
+    .category:hover,
+    richlistitem[selected],
+    richlistitem:hover {
+        background-color: color-mix(in srgb, $accent 16%, $light_surface) !important;
+        color: $light_text !important;
+    }
+
+    input,
+    textarea,
+    search-textbox,
+    menulist,
+    select,
+    button {
+        background-color: $light_surface !important;
+        color: $light_text !important;
+        border-color: color-mix(in srgb, $accent 45%, $light_surface_alt) !important;
+    }
+
+    input:focus,
+    textarea:focus,
+    search-textbox:focus,
+    menulist:focus,
+    select:focus,
+    button:focus {
+        border-color: $accent !important;
+        box-shadow: 0 0 0 2px color-mix(in srgb, $accent 24%, transparent) !important;
+    }
+}
 EOF
 }
 
