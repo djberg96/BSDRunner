@@ -221,19 +221,23 @@ write_user_chrome() {
 }
 
 .tabbrowser-tab .tab-background {
-    border-radius: 7px 7px 0 0 !important;
-    margin-block: 4px 0 !important;
+    border-radius: 8px 8px 0 0 !important;
+    margin-block: 5px 0 !important;
+    margin-inline: 2px !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
 }
 
 .tabbrowser-tab[selected="true"] .tab-background {
     background-color: var(--bsdrunner-surface) !important;
-    border-top: 3px solid var(--bsdrunner-accent-strong) !important;
-    outline: 1px solid color-mix(in srgb, var(--bsdrunner-accent) 65%, transparent) !important;
+    border-top: 3px solid var(--bsdrunner-accent) !important;
+    outline: 1px solid color-mix(in srgb, var(--bsdrunner-accent) 42%, transparent) !important;
     outline-offset: -1px !important;
+    box-shadow: 0 -1px 0 color-mix(in srgb, #ffffff 35%, transparent) inset !important;
 }
 
 .tabbrowser-tab:hover .tab-background {
-    background-color: var(--bsdrunner-surface-alt) !important;
+    background-color: color-mix(in srgb, var(--bsdrunner-surface) 62%, transparent) !important;
 }
 
 .tabbrowser-tab .tab-label,
@@ -250,13 +254,14 @@ write_user_chrome() {
 #urlbar-background,
 #searchbar {
     background-color: var(--bsdrunner-surface) !important;
-    border: 2px solid var(--bsdrunner-accent) !important;
+    border: 1px solid color-mix(in srgb, var(--bsdrunner-accent) 50%, var(--bsdrunner-surface-alt)) !important;
+    border-radius: 8px !important;
     box-shadow: none !important;
 }
 
 #urlbar[focused="true"] #urlbar-background {
     border-color: var(--bsdrunner-accent-strong) !important;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bsdrunner-accent) 60%, transparent) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bsdrunner-accent) 28%, transparent) !important;
 }
 
 #urlbar-input,
