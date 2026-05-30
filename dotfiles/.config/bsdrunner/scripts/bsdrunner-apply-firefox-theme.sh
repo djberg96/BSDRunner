@@ -236,8 +236,15 @@ write_user_chrome() {
     background-color: var(--bsdrunner-surface-alt) !important;
 }
 
+.tabbrowser-tab .tab-label,
+.tabbrowser-tab .tab-secondary-label,
+.tabbrowser-tab[selected="true"] .tab-label,
+.tabbrowser-tab[selected="true"] .tab-secondary-label {
+    color: var(--bsdrunner-text) !important;
+}
+
 .tabbrowser-tab:not([selected="true"]) .tab-content {
-    color: var(--bsdrunner-muted) !important;
+    color: var(--bsdrunner-text) !important;
 }
 
 #urlbar-background,
