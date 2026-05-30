@@ -46,6 +46,7 @@ ShellRoot {
     property bool configManaged: false
     property bool configMatchesProfile: false
     property string configChecksum: ""
+    property string appliedTimestamp: ""
     property string lastResultTone: "info"
     property string lastResultMessage: "No firewall action has run yet."
     property string lastResultTimestamp: ""
@@ -107,6 +108,38 @@ ShellRoot {
 
     function protectionBadgeText() {
         return protectionTone() === "success" ? "OK" : "!"
+    }
+
+    function compactTimestamp(value) {
+        if (!value || value.length === 0)
+            return ""
+
+        var parts = value.split(" ")
+        if (parts.length >= 2)
+            return parts[1].replace(/:[0-9][0-9]$/, "")
+
+        return value
+    }
+
+    function profileStatusValue() {
+        if (configState === "external")
+            return "External"
+        if (profileDirty)
+            return "Pending"
+        return "Current"
+    }
+
+    function profileStatusDetail() {
+        if (configState === "external")
+            return "Adoption needed"
+
+        if (profileDirty)
+            return lastResultTimestamp.length > 0 ? "Edited " + compactTimestamp(lastResultTimestamp) : "Edited"
+
+        if (appliedTimestamp.length > 0)
+            return "Applied " + compactTimestamp(appliedTimestamp)
+
+        return "Applied"
     }
 
     function settingValue(key) {
@@ -221,6 +254,7 @@ ShellRoot {
         configManaged = payload.config ? !!payload.config.managed : false
         configMatchesProfile = payload.config ? !!payload.config.matches_profile : false
         configChecksum = payload.config ? payload.config.checksum || "" : ""
+        appliedTimestamp = payload.config ? payload.config.applied_timestamp || "" : ""
         settings = payload.settings || settings
         rules = payload.rules || []
         profileDirty = configManaged && !configMatchesProfile
@@ -444,9 +478,9 @@ ShellRoot {
 
                             Repeater {
                                 model: [
-                                    { "label": "PF at boot", "value": root.pfBootEnabled ? "Enabled" : "Disabled", "tone": root.pfBootEnabled ? "success" : "warning" },
-                                    { "label": "pflog", "value": root.pflogBootEnabled ? "Enabled" : "Disabled", "tone": root.pflogBootEnabled ? "success" : "warning" },
-                                    { "label": "Profile", "value": root.configState === "external" ? "External" : (root.profileDirty ? "Pending" : "Current"), "tone": root.configState === "external" ? "warning" : (root.profileDirty ? "warning" : "info") }
+                                    { "label": "PF at boot", "value": root.pfBootEnabled ? "Enabled" : "Disabled", "detail": "", "tone": root.pfBootEnabled ? "success" : "warning" },
+                                    { "label": "pflog", "value": root.pflogBootEnabled ? "Enabled" : "Disabled", "detail": "", "tone": root.pflogBootEnabled ? "success" : "warning" },
+                                    { "label": "Profile", "value": root.profileStatusValue(), "detail": root.profileStatusDetail(), "tone": root.configState === "external" ? "warning" : (root.profileDirty ? "warning" : "info") }
                                 ]
 
                                 delegate: Rectangle {
@@ -476,8 +510,17 @@ ShellRoot {
                                             width: parent.width
                                             text: modelData.value
                                             color: root.toneColor(modelData.tone)
-                                            font.pixelSize: 16
+                                            font.pixelSize: 15
                                             font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            visible: modelData.detail.length > 0
+                                            width: parent.width
+                                            text: modelData.detail
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 10
                                             elide: Text.ElideRight
                                         }
                                     }

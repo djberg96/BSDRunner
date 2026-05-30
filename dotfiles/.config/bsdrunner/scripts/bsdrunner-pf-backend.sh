@@ -283,6 +283,7 @@ emit_snapshot() {
     config_state="$(installed_config_state)"
     checksum="$(installed_config_checksum)"
     current_profile_checksum="$(profile_checksum)"
+    applied_timestamp="$(applied_state_value timestamp)"
     last_tone="$(last_result_value tone)"
     last_message="$(last_result_value message)"
     last_timestamp="$(last_result_value timestamp)"
@@ -303,12 +304,13 @@ emit_snapshot() {
         "$(printf '%s' "$pflog_enable" | json_escape)" \
         "$(bool_json "$pf_enable")" \
         "$(bool_json "$pflog_enable")"
-    printf '"config":{"state":"%s","managed":%s,"checksum":"%s","profile_checksum":"%s","matches_profile":%s},' \
+    printf '"config":{"state":"%s","managed":%s,"checksum":"%s","profile_checksum":"%s","matches_profile":%s,"applied_timestamp":"%s"},' \
         "$config_state" \
         "$(if [ "$config_state" = "managed" ]; then printf true; else printf false; fi)" \
         "$(printf '%s' "$checksum" | json_escape)" \
         "$(printf '%s' "$current_profile_checksum" | json_escape)" \
-        "$(if [ "$config_state" = "managed" ] && [ "$checksum" = "$current_profile_checksum" ]; then printf true; else printf false; fi)"
+        "$(if [ "$config_state" = "managed" ] && [ "$checksum" = "$current_profile_checksum" ]; then printf true; else printf false; fi)" \
+        "$(printf '%s' "$applied_timestamp" | json_escape)"
     printf '"settings":{'
     printf '"allow_outbound":%s,' "$(bool_json "$allow_outbound")"
     printf '"block_unsolicited":%s,' "$(bool_json "$block_unsolicited")"
