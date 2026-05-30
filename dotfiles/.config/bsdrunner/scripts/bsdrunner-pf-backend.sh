@@ -402,6 +402,19 @@ do_logs() {
     fi
 }
 
+do_follow_logs() {
+    if ! command -v tcpdump >/dev/null 2>&1; then
+        printf 'tcpdump is not installed or is not in PATH.\n'
+        exit 127
+    fi
+
+    if command -v mdo >/dev/null 2>&1; then
+        exec mdo tcpdump -l -n -e -ttt -i pflog0
+    fi
+
+    exec tcpdump -l -n -e -ttt -i pflog0
+}
+
 do_validate() {
     load_profile
     write_profile
@@ -532,6 +545,9 @@ case "$action" in
         ;;
     logs)
         do_logs
+        ;;
+    follow-logs)
+        do_follow_logs
         ;;
     validate)
         do_validate

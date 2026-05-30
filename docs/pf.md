@@ -31,11 +31,20 @@ adoption action before replacing it.
 
 The app also includes a small `pflog` viewer. PF only logs packets for rules
 that include `log`, so the viewer is useful after enabling the friendly
-`Log blocked inbound attempts` control and applying the profile. The backend
-reads recent entries from `/var/log/pflog` with:
+`Log blocked inbound attempts` control and applying the profile.
+
+`/var/log/pflog` is a binary packet-capture file, so it is not useful to
+literal `tail -f` it. The backend decodes recent entries with:
 
 ```sh
 tcpdump -n -e -ttt -r /var/log/pflog
+```
+
+For the live Follow button, the backend listens to the `pflog0` interface with
+line-buffered output:
+
+```sh
+tcpdump -l -n -e -ttt -i pflog0
 ```
 
 ## Validate

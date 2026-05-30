@@ -31,8 +31,11 @@ ShellRoot {
     property bool actionStdoutFinished: false
     property bool actionStderrFinished: false
     property bool logLoading: false
+    property bool logFollowing: false
+    property bool stoppingLogFollow: false
     property string logMessage: "PF logs are loaded on demand."
     property string logText: "Enable blocked-attempt logging, apply the profile, then refresh logs after blocked traffic occurs."
+    property int logLineLimit: 7
     property string logStdoutText: ""
     property string logStderrText: ""
     property int logExitCode: 0
@@ -246,7 +249,7 @@ ShellRoot {
     }
 
     function refreshLogs() {
-        if (logProcess.running || runningAction)
+        if (logProcess.running || logFollowing || runningAction)
             return
 
         logLoading = true
@@ -258,6 +261,38 @@ ShellRoot {
         logStdoutFinished = false
         logStderrFinished = false
         logProcess.running = true
+    }
+
+    function toggleLogFollow() {
+        if (logLoading || runningAction)
+            return
+
+        if (logFollowing) {
+            stoppingLogFollow = true
+            followLogProcess.running = false
+            logFollowing = false
+            logMessage = "Live pflog follow stopped."
+            return
+        }
+
+        stoppingLogFollow = false
+        logFollowing = true
+        logText = ""
+        logMessage = "Following live pflog0 traffic..."
+        followLogProcess.running = true
+    }
+
+    function appendLogLine(line) {
+        if (!line || line.length === 0)
+            return
+
+        var existing = logText.length > 0 ? logText.split("\n") : []
+        existing.push(line)
+
+        while (existing.length > logLineLimit)
+            existing.shift()
+
+        logText = existing.join("\n")
     }
 
     function maybeFinalizeLogs() {
@@ -465,10 +500,44 @@ ShellRoot {
         }
     }
 
+    Process {
+        id: followLogProcess
+        property var controller: root
+
+        command: [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh",
+            "follow-logs"
+        ]
+        stdout: SplitParser {
+            onRead: function(data) {
+                followLogProcess.controller.appendLogLine(data)
+            }
+        }
+        stderr: SplitParser {
+            onRead: function(data) {
+                followLogProcess.controller.appendLogLine(data)
+            }
+        }
+        onExited: function(exitCode, exitStatus) {
+            followLogProcess.controller.logFollowing = false
+            if (followLogProcess.controller.stoppingLogFollow || exitCode === 0) {
+                followLogProcess.controller.logMessage = "Live pflog follow stopped."
+            } else {
+                followLogProcess.controller.logMessage = "Live pflog follow exited."
+            }
+            followLogProcess.controller.stoppingLogFollow = false
+        }
+    }
+
     Connections {
         target: Quickshell
 
         function onLastWindowClosed() {
+            if (followLogProcess.running) {
+                root.stoppingLogFollow = true
+                followLogProcess.running = false
+            }
             Qt.quit()
         }
     }
@@ -842,7 +911,7 @@ ShellRoot {
 
                             Text {
                                 width: parent.width
-                                text: "Logging is quiet until a rule with log matches traffic. Enable blocked-attempt logging, apply, then refresh."
+                                text: "Logging is quiet until a rule with log matches traffic. Enable blocked-attempt logging, apply, then refresh or follow."
                                 color: root.palette.mutedText
                                 font.pixelSize: 11
                                 wrapMode: Text.WordWrap
@@ -915,7 +984,7 @@ ShellRoot {
                                         spacing: 10
 
                                         Text {
-                                            width: parent.width - 112
+                                            width: parent.width - 188
                                             text: "pflog Viewer"
                                             color: root.settingValue("log_blocked") ? root.palette.warning : root.palette.primaryText
                                             font.pixelSize: 14
@@ -924,7 +993,7 @@ ShellRoot {
                                         }
 
                                         Rectangle {
-                                            width: 102
+                                            width: 86
                                             height: 28
                                             radius: 8
                                             color: root.logLoading ? root.palette.cardBackground : root.palette.cardHover
@@ -942,9 +1011,34 @@ ShellRoot {
 
                                             MouseArea {
                                                 anchors.fill: parent
-                                                enabled: !root.logLoading && !root.runningAction
+                                                enabled: !root.logLoading && !root.logFollowing && !root.runningAction
                                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                                 onClicked: root.refreshLogs()
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 82
+                                            height: 28
+                                            radius: 8
+                                            color: root.logFollowing ? Qt.alpha(root.palette.warning, 0.18) : root.palette.cardHover
+                                            border.width: 1
+                                            border.color: root.logFollowing ? root.palette.warning : root.palette.frameBorder
+                                            opacity: root.logLoading || root.runningAction ? 0.62 : 1.0
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: root.logFollowing ? "Stop" : "Follow"
+                                                color: root.logFollowing ? root.palette.warning : root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: !root.logLoading && !root.runningAction
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.toggleLogFollow()
                                             }
                                         }
                                     }
