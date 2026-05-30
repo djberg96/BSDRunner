@@ -35,7 +35,7 @@ ShellRoot {
     property bool stoppingLogFollow: false
     property string logMessage: "PF logs are loaded on demand."
     property string logText: "Enable blocked-attempt logging, apply the profile, then refresh logs after blocked traffic occurs."
-    property int logLineLimit: 12
+    property int logLineLimit: 200
     property string logStdoutText: ""
     property string logStderrText: ""
     property int logExitCode: 0
@@ -953,8 +953,10 @@ ShellRoot {
                             }
 
                             Row {
+                                id: summaryMetricRow
+
                                 width: parent.width
-                                height: 76
+                                height: 44
                                 spacing: 12
 
                                 Repeater {
@@ -967,32 +969,41 @@ ShellRoot {
                                     delegate: Rectangle {
                                         required property var modelData
 
-                                        width: 144
-                                        height: 66
+                                        width: (summaryMetricRow.width - summaryMetricRow.spacing * 2) / 3
+                                        height: 40
                                         radius: 8
                                         color: root.palette.panelBackground
                                         border.width: 1
                                         border.color: root.toneColor(modelData.tone)
 
-                                        Column {
+                                        Row {
                                             anchors.fill: parent
-                                            anchors.margins: 10
-                                            spacing: 5
+                                            anchors.leftMargin: 10
+                                            anchors.rightMargin: 10
+                                            anchors.topMargin: 8
+                                            anchors.bottomMargin: 8
+                                            spacing: 8
 
                                             Text {
-                                                width: parent.width
+                                                width: 68
+                                                height: parent.height
                                                 text: modelData.label
                                                 color: root.palette.mutedText
                                                 font.pixelSize: 10
                                                 font.bold: true
+                                                verticalAlignment: Text.AlignVCenter
+                                                elide: Text.ElideRight
                                             }
 
                                             Text {
-                                                width: parent.width
+                                                width: parent.width - 76
+                                                height: parent.height
                                                 text: modelData.value
                                                 color: root.toneColor(modelData.tone)
-                                                font.pixelSize: 16
+                                                font.pixelSize: 14
                                                 font.bold: true
+                                                horizontalAlignment: Text.AlignRight
+                                                verticalAlignment: Text.AlignVCenter
                                                 elide: Text.ElideRight
                                             }
                                         }
@@ -1002,7 +1013,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 260
+                                height: 310
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1088,22 +1099,60 @@ ShellRoot {
 
                                     Rectangle {
                                         width: parent.width
-                                        height: 186
+                                        height: 236
                                         radius: 6
                                         color: root.palette.cardBackground
                                         border.width: 1
                                         border.color: root.palette.frameBorder
 
-                                        Text {
+                                        Flickable {
+                                            id: logFlickable
+
                                             anchors.fill: parent
                                             anchors.margins: 8
-                                            text: root.logText
-                                            color: root.palette.secondaryText
-                                            font.family: "monospace"
-                                            font.pixelSize: 10
-                                            wrapMode: Text.WrapAnywhere
-                                            maximumLineCount: 12
-                                            elide: Text.ElideRight
+                                            contentWidth: width
+                                            contentHeight: logTextContent.paintedHeight
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            clip: true
+                                            interactive: contentHeight > height
+
+                                            onContentHeightChanged: {
+                                                if (root.logFollowing)
+                                                    contentY = Math.max(0, contentHeight - height)
+                                            }
+
+                                            Text {
+                                                id: logTextContent
+
+                                                width: logFlickable.width - 12
+                                                text: root.logText
+                                                color: root.palette.secondaryText
+                                                font.family: "monospace"
+                                                font.pixelSize: 10
+                                                wrapMode: Text.WrapAnywhere
+                                            }
+
+                                            Rectangle {
+                                                id: logScrollbar
+
+                                                visible: logFlickable.contentHeight > logFlickable.height
+                                                anchors.top: parent.top
+                                                anchors.right: parent.right
+                                                anchors.bottom: parent.bottom
+                                                width: 6
+                                                radius: 3
+                                                color: root.palette.frameBorder
+                                                opacity: 0.32
+
+                                                Rectangle {
+                                                    width: parent.width
+                                                    radius: 3
+                                                    color: root.palette.accent
+                                                    opacity: 0.78
+                                                    height: Math.max(28, parent.height * (logFlickable.height / Math.max(logFlickable.contentHeight, 1)))
+                                                    y: (parent.height - height) * (logFlickable.contentY / Math.max(logFlickable.contentHeight - logFlickable.height, 1))
+                                                }
+                                            }
                                         }
                                     }
                                 }
