@@ -400,8 +400,8 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: root.localResolverActive ? "Resolver points at localhost" : "Resolver uses external DNS"
-                                    color: root.localResolverActive ? root.palette.mutedText : root.palette.warning
+                                    text: "Unbound local resolver"
+                                    color: root.palette.mutedText
                                     font.pixelSize: 12
                                     elide: Text.ElideRight
                                 }
