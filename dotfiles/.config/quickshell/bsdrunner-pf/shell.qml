@@ -30,6 +30,15 @@ ShellRoot {
     property bool actionExited: false
     property bool actionStdoutFinished: false
     property bool actionStderrFinished: false
+    property bool logLoading: false
+    property string logMessage: "PF logs are loaded on demand."
+    property string logText: "Enable blocked-attempt logging, apply the profile, then refresh logs after blocked traffic occurs."
+    property string logStdoutText: ""
+    property string logStderrText: ""
+    property int logExitCode: 0
+    property bool logExited: false
+    property bool logStdoutFinished: false
+    property bool logStderrFinished: false
     property string activeActionId: ""
     property string activeActionArg1: ""
     property string activeActionArg2: ""
@@ -57,7 +66,8 @@ ShellRoot {
         "allow_ipv6": true,
         "allow_dhcp": true,
         "allow_mdns": true,
-        "allow_ssh_lan": false
+        "allow_ssh_lan": false,
+        "log_blocked": false
     })
     property var rules: []
 
@@ -235,6 +245,28 @@ ShellRoot {
         applyActionResult(actionStdoutText, actionExitCode, actionStderrText)
     }
 
+    function refreshLogs() {
+        if (logProcess.running || runningAction)
+            return
+
+        logLoading = true
+        logMessage = "Loading pflog..."
+        logStdoutText = ""
+        logStderrText = ""
+        logExitCode = 0
+        logExited = false
+        logStdoutFinished = false
+        logStderrFinished = false
+        logProcess.running = true
+    }
+
+    function maybeFinalizeLogs() {
+        if (!logExited || !logStdoutFinished || !logStderrFinished)
+            return
+
+        applyLogResult(logStdoutText, logExitCode, logStderrText)
+    }
+
     function applySnapshot(text, exitCode, stderrText) {
         loading = false
         var payload = null
@@ -311,6 +343,28 @@ ShellRoot {
         refreshSnapshot()
     }
 
+    function applyLogResult(text, exitCode, stderrText) {
+        logLoading = false
+        var payload = null
+
+        try {
+            payload = JSON.parse(text || "{}")
+        } catch (error) {
+            payload = null
+        }
+
+        if (payload && payload.ok && exitCode === 0) {
+            logMessage = payload.message || "Loaded recent pflog entries."
+            logText = payload.details && payload.details.length > 0 ? payload.details : "No recent pflog entries."
+        } else if (payload) {
+            logMessage = payload.message || "Unable to load pflog."
+            logText = payload.details || stderrText || ""
+        } else {
+            logMessage = "Firewall backend returned invalid log JSON."
+            logText = stderrText || text || ""
+        }
+    }
+
     Component.onCompleted: refreshSnapshot()
 
     Process {
@@ -376,6 +430,38 @@ ShellRoot {
             actionProcess.controller.actionExitCode = exitCode
             actionProcess.controller.actionExited = true
             actionProcess.controller.maybeFinalizeAction()
+        }
+    }
+
+    Process {
+        id: logProcess
+        property var controller: root
+
+        command: [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh",
+            "logs"
+        ]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                logProcess.controller.logStdoutText = text
+                logProcess.controller.logStdoutFinished = true
+                logProcess.controller.maybeFinalizeLogs()
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                logProcess.controller.logStderrText = text
+                logProcess.controller.logStderrFinished = true
+                logProcess.controller.maybeFinalizeLogs()
+            }
+        }
+        onExited: function(exitCode, exitStatus) {
+            logProcess.controller.logExitCode = exitCode
+            logProcess.controller.logExited = true
+            logProcess.controller.maybeFinalizeLogs()
         }
     }
 
@@ -633,7 +719,7 @@ ShellRoot {
                         Column {
                             anchors.fill: parent
                             anchors.margins: 14
-                            spacing: 8
+                            spacing: 6
 
                             Text {
                                 text: "Friendly Controls"
@@ -650,7 +736,8 @@ ShellRoot {
                                     { "key": "allow_ipv6", "label": "Allow IPv6 essentials", "detail": "Keep IPv6 neighbor discovery and MTU discovery working." },
                                     { "key": "allow_dhcp", "label": "Allow DHCP address setup", "detail": "Let the network assign addresses and routes." },
                                     { "key": "allow_mdns", "label": "Allow local discovery", "detail": "Find local printers, casting devices, and .local names." },
-                                    { "key": "allow_ssh_lan", "label": "Allow SSH from local network", "detail": "Open port 22 only to private IPv4 LAN ranges." }
+                                    { "key": "allow_ssh_lan", "label": "Allow SSH from local network", "detail": "Open port 22 only to private IPv4 LAN ranges." },
+                                    { "key": "log_blocked", "label": "Log blocked inbound attempts", "detail": "Write blocked packets to pflog for inspection." }
                                 ]
 
                                 delegate: Rectangle {
@@ -660,7 +747,7 @@ ShellRoot {
                                     readonly property bool checked: root.settingValue(modelData.key)
 
                                     width: parent.width
-                                    height: 46
+                                    height: 40
                                     radius: 8
                                     color: toggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
                                     border.width: 1
@@ -668,7 +755,7 @@ ShellRoot {
 
                                     Row {
                                         anchors.fill: parent
-                                        anchors.margins: 8
+                                        anchors.margins: 7
                                         spacing: 10
 
                                         Rectangle {
@@ -696,7 +783,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: toggleRow.modelData.label
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 13
+                                                font.pixelSize: 12
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -705,7 +792,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: toggleRow.modelData.detail
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 10
+                                                font.pixelSize: 9
                                                 elide: Text.ElideRight
                                             }
                                         }
@@ -743,41 +830,41 @@ ShellRoot {
 
                         Column {
                             anchors.fill: parent
-                            anchors.margins: 16
-                            spacing: 12
+                            anchors.margins: 14
+                            spacing: 8
 
                             Text {
                                 text: "Profile Summary"
                                 color: root.palette.primaryText
-                                font.pixelSize: 22
+                                font.pixelSize: 21
                                 font.bold: true
                             }
 
                             Text {
                                 width: parent.width
-                                text: "The switches on the left are the profile. This side keeps the current state and last action easy to scan."
+                                text: "Logging is quiet until a rule with log matches traffic. Enable blocked-attempt logging, apply, then refresh."
                                 color: root.palette.mutedText
-                                font.pixelSize: 12
+                                font.pixelSize: 11
                                 wrapMode: Text.WordWrap
                             }
 
                             Row {
                                 width: parent.width
-                                height: 88
+                                height: 76
                                 spacing: 12
 
                                 Repeater {
                                     model: [
                                         { "label": "Enabled", "value": root.enabledRuleCount() + " / " + root.rules.length, "tone": "success" },
                                         { "label": "SSH", "value": root.settingValue("allow_ssh_lan") ? "LAN only" : "Off", "tone": root.settingValue("allow_ssh_lan") ? "warning" : "info" },
-                                        { "label": "Discovery", "value": root.settingValue("allow_mdns") ? "On" : "Off", "tone": root.settingValue("allow_mdns") ? "success" : "info" }
+                                        { "label": "Logging", "value": root.settingValue("log_blocked") ? "On" : "Off", "tone": root.settingValue("log_blocked") ? "warning" : "info" }
                                     ]
 
                                     delegate: Rectangle {
                                         required property var modelData
 
                                         width: 144
-                                        height: 78
+                                        height: 66
                                         radius: 8
                                         color: root.palette.panelBackground
                                         border.width: 1
@@ -811,38 +898,91 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 92
+                                height: 184
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.configState === "external" || root.profileDirty ? root.palette.warning : root.palette.frameBorder
+                                border.color: root.settingValue("log_blocked") ? root.palette.warning : root.palette.frameBorder
 
                                 Column {
                                     anchors.fill: parent
                                     anchors.margins: 12
-                                    spacing: 6
+                                    spacing: 8
 
-                                    Text {
+                                    Row {
                                         width: parent.width
-                                        text: root.configState === "external" ? "External config" : (root.profileDirty ? "Pending changes" : "Ready")
-                                        color: root.configState === "external" || root.profileDirty ? root.palette.warning : root.palette.success
-                                        font.pixelSize: 14
-                                        font.bold: true
+                                        height: 28
+                                        spacing: 10
+
+                                        Text {
+                                            width: parent.width - 112
+                                            text: "pflog Viewer"
+                                            color: root.settingValue("log_blocked") ? root.palette.warning : root.palette.primaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Rectangle {
+                                            width: 102
+                                            height: 28
+                                            radius: 8
+                                            color: root.logLoading ? root.palette.cardBackground : root.palette.cardHover
+                                            border.width: 1
+                                            border.color: root.palette.frameBorder
+                                            opacity: root.logLoading || root.runningAction ? 0.62 : 1.0
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: root.logLoading ? "Loading" : "Refresh"
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: !root.logLoading && !root.runningAction
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.refreshLogs()
+                                            }
+                                        }
                                     }
 
                                     Text {
                                         width: parent.width
-                                        text: root.configState === "external" ? "Adopt the profile before the GUI can manage /etc/pf.conf." : (root.profileDirty ? "Apply the profile to make the saved settings active." : "The saved profile matches the last applied profile.")
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: 12
-                                        wrapMode: Text.WordWrap
+                                        text: root.logMessage
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 10
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 110
+                                        radius: 6
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            text: root.logText
+                                            color: root.palette.secondaryText
+                                            font.family: "monospace"
+                                            font.pixelSize: 10
+                                            wrapMode: Text.WrapAnywhere
+                                            maximumLineCount: 7
+                                            elide: Text.ElideRight
+                                        }
                                     }
                                 }
                             }
 
                             Rectangle {
                                 width: parent.width
-                                height: 84
+                                height: 68
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1

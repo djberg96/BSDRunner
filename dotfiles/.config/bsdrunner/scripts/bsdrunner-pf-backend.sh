@@ -17,6 +17,7 @@ allow_ipv6="yes"
 allow_dhcp="yes"
 allow_mdns="yes"
 allow_ssh_lan="no"
+log_blocked="no"
 
 json_escape() {
     awk '
@@ -84,6 +85,9 @@ load_profile() {
             allow_ssh_lan)
                 allow_ssh_lan="$(normalize_bool "$value")"
                 ;;
+            log_blocked)
+                log_blocked="$(normalize_bool "$value")"
+                ;;
         esac
     done <"$profile_file"
 }
@@ -98,6 +102,7 @@ write_profile() {
         printf 'allow_dhcp=%s\n' "$allow_dhcp"
         printf 'allow_mdns=%s\n' "$allow_mdns"
         printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
+        printf 'log_blocked=%s\n' "$log_blocked"
     } >"$profile_file"
 }
 
@@ -109,6 +114,7 @@ emit_settings() {
     printf 'allow_dhcp=%s\n' "$allow_dhcp"
     printf 'allow_mdns=%s\n' "$allow_mdns"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
+    printf 'log_blocked=%s\n' "$log_blocked"
 }
 
 profile_checksum() {
@@ -140,6 +146,9 @@ set_setting_value() {
             ;;
         allow_ssh_lan)
             allow_ssh_lan="$value"
+            ;;
+        log_blocked)
+            log_blocked="$value"
             ;;
         *)
             emit_error "Unknown firewall setting: $key"
@@ -272,6 +281,7 @@ rules_summary_json() {
     printf ',{"id":"dhcp","label":"DHCP address assignment","description":"DHCP and DHCPv6 replies are allowed.","enabled":%s}' "$(bool_json "$allow_dhcp")"
     printf ',{"id":"mdns","label":"Local discovery","description":"mDNS discovery for local devices is allowed.","enabled":%s}' "$(bool_json "$allow_mdns")"
     printf ',{"id":"ssh","label":"SSH from local network","description":"SSH is limited to private IPv4 LAN ranges.","enabled":%s}' "$(bool_json "$allow_ssh_lan")"
+    printf ',{"id":"logging","label":"Blocked attempt logging","description":"Blocked packets are written to pflog.","enabled":%s}' "$(bool_json "$log_blocked")"
     printf ']'
 }
 
@@ -318,7 +328,8 @@ emit_snapshot() {
     printf '"allow_ipv6":%s,' "$(bool_json "$allow_ipv6")"
     printf '"allow_dhcp":%s,' "$(bool_json "$allow_dhcp")"
     printf '"allow_mdns":%s,' "$(bool_json "$allow_mdns")"
-    printf '"allow_ssh_lan":%s' "$(bool_json "$allow_ssh_lan")"
+    printf '"allow_ssh_lan":%s,' "$(bool_json "$allow_ssh_lan")"
+    printf '"log_blocked":%s' "$(bool_json "$log_blocked")"
     printf '},'
     printf '"rules":'
     rules_summary_json
@@ -361,6 +372,34 @@ do_preview() {
         "$valid" \
         "$(json_escape <"$rendered")" \
         "$(printf '%s' "$validation" | json_escape)"
+}
+
+do_logs() {
+    log_file="/var/log/pflog"
+
+    if ! command -v tcpdump >/dev/null 2>&1; then
+        emit_action_result false "tcpdump is not installed or is not in PATH." ""
+        exit 1
+    fi
+
+    if [ ! -e "$log_file" ]; then
+        emit_action_result true "No pflog file found yet." "PF only writes log entries for rules that include log. Enable blocked-attempt logging, apply the profile, then refresh after traffic is blocked."
+        return
+    fi
+
+    if command -v mdo >/dev/null 2>&1; then
+        output="$(mdo tcpdump -n -e -ttt -r "$log_file" 2>&1 || true)"
+    else
+        output="$(tcpdump -n -e -ttt -r "$log_file" 2>&1 || true)"
+    fi
+
+    output="$(printf '%s\n' "$output" | awk 'NF { lines[++count] = $0 } END { start = count - 11; if (start < 1) start = 1; for (i = start; i <= count; i++) print lines[i] }')"
+
+    if [ -n "$output" ]; then
+        emit_action_result true "Loaded recent pflog entries." "$output"
+    else
+        emit_action_result true "No pflog entries to show." "PF logging is quiet until a rule with log matches traffic."
+    fi
 }
 
 do_validate() {
@@ -490,6 +529,9 @@ case "$action" in
         ;;
     preview)
         do_preview
+        ;;
+    logs)
+        do_logs
         ;;
     validate)
         do_validate

@@ -11,6 +11,7 @@ allow_ipv6="yes"
 allow_dhcp="yes"
 allow_mdns="yes"
 allow_ssh_lan="no"
+log_blocked="no"
 
 normalize_bool() {
     case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
@@ -52,6 +53,9 @@ load_profile() {
             allow_ssh_lan)
                 allow_ssh_lan="$(normalize_bool "$value")"
                 ;;
+            log_blocked)
+                log_blocked="$(normalize_bool "$value")"
+                ;;
         esac
     done <"$profile_file"
 }
@@ -64,6 +68,7 @@ emit_settings() {
     printf 'allow_dhcp=%s\n' "$allow_dhcp"
     printf 'allow_mdns=%s\n' "$allow_mdns"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
+    printf 'log_blocked=%s\n' "$log_blocked"
 }
 
 profile_checksum() {
@@ -105,10 +110,18 @@ set reassemble yes
 EOF
 
     if [ "$block_unsolicited" = "yes" ]; then
-        cat <<'EOF'
+        if [ "$log_blocked" = "yes" ]; then
+            cat <<'EOF'
+# Block everything unless an allow rule below says otherwise.
+# Log blocked packets to pflog.
+block log all
+EOF
+        else
+            cat <<'EOF'
 # Block everything unless an allow rule below says otherwise.
 block all
 EOF
+        fi
     else
         cat <<'EOF'
 # Desktop protection is relaxed: PF is not blocking unsolicited inbound traffic.
