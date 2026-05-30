@@ -840,7 +840,7 @@ ShellRoot {
                             spacing: 6
 
                             Text {
-                                text: "Friendly Controls"
+                                text: "Settings"
                                 color: root.palette.primaryText
                                 font.pixelSize: 22
                                 font.bold: true
@@ -962,7 +962,8 @@ ShellRoot {
 
                             Text {
                                 width: parent.width
-                                text: root.configState === "external" ? "These controls edit the BSDRunner profile, but /etc/pf.conf is external until you adopt it." : (root.profileDirty ? "Changes are saved to the BSDRunner profile but are not active until Apply Profile succeeds." : "These controls describe the active BSDRunner profile.")
+                                visible: root.configState === "external" || root.profileDirty
+                                text: root.configState === "external" ? "These settings edit the BSDRunner profile, but /etc/pf.conf is external until you adopt it." : "Changes are saved to the BSDRunner profile but are not active until Apply Profile succeeds."
                                 color: root.configState === "external" || root.profileDirty ? root.palette.warning : root.palette.mutedText
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
