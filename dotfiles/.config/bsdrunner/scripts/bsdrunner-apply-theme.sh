@@ -235,6 +235,8 @@ printf '%s\n' "$theme" > "$runner_home/current-theme"
 
 write_hypr_theme "$config_home/hypr/bsdrunner-theme.conf" "$theme"
 write_wlogout_style "$config_home/wlogout/style.css" "$theme"
+sh "$runner_home/scripts/bsdrunner-apply-firefox-theme.sh" "$theme" || \
+    echo ":: Firefox theme skipped" >&2
 
 cat \
     "$base_dir/kitty.conf" \

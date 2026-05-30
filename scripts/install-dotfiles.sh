@@ -285,6 +285,8 @@ cp "$repo_root/dotfiles/.config/waybar/config" \
 
 write_hypr_theme "$HOME/.config/hypr/bsdrunner-theme.conf" "$theme"
 write_wlogout_style "$HOME/.config/wlogout/style.css" "$theme"
+sh "$HOME/.config/bsdrunner/scripts/bsdrunner-apply-firefox-theme.sh" "$theme" || \
+    echo ":: Firefox theme skipped" >&2
 
 cat \
     "$HOME/.config/bsdrunner/base/kitty.conf" \

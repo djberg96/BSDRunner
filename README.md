@@ -69,6 +69,7 @@ Each implemented corp theme currently ships:
 
 - a Kitty theme fragment
 - a Rofi theme
+- a generated Firefox profile theme
 - Waybar styling
 - bundled wallpapers for `swww`
 - a Kitty watermark asset
@@ -116,6 +117,7 @@ Both paths call the same theme apply script and update:
 
 - Kitty config for new windows
 - Rofi theme
+- Firefox profile chrome/content CSS
 - Waybar config and style
 - wallpaper selection and `swww` rotation
 - Hyprland border colors
@@ -126,7 +128,7 @@ Waybar also includes a few lightweight control-surface actions:
 - apps launcher
 - power menu
 
-Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes.
+Existing Kitty windows will not fully restyle in place. Open a fresh Kitty window after switching themes. Firefox reads profile chrome CSS on startup, so restart Firefox after switching BSDRunner themes.
 
 ## Firewall
 
