@@ -161,6 +161,14 @@ run_capture() {
     "$@" 2>&1
 }
 
+run_privileged() {
+    if command -v mdo >/dev/null 2>&1; then
+        mdo "$@"
+    else
+        "$@"
+    fi
+}
+
 pf_running_state() {
     if ! command -v pfctl >/dev/null 2>&1; then
         printf 'unavailable\n'
@@ -308,7 +316,7 @@ emit_snapshot() {
     printf '{'
     printf '"ok":true,'
     printf '"message":"%s",' "$(printf '%s' "$last_message" | json_escape)"
-    printf '"profile_name":"Desktop Protection",'
+    printf '"profile_name":"PF Desktop Protection",'
     printf '"pf":{"state":"%s","running":%s,"available":%s},' \
         "$(printf '%s' "$pf_state" | json_escape)" \
         "$(if [ "$pf_state" = "running" ]; then printf true; else printf false; fi)" \
@@ -457,10 +465,30 @@ install_rendered_profile() {
 }
 
 reload_pf() {
-    if command -v mdo >/dev/null 2>&1; then
-        mdo service pf reload
+    run_privileged service pf reload
+}
+
+sync_sshd_with_profile() {
+    if ! command -v sysrc >/dev/null 2>&1 || ! command -v service >/dev/null 2>&1; then
+        printf 'sysrc or service is unavailable; sshd_enable was not changed.\n'
+        return 0
+    fi
+
+    if [ "$allow_ssh_lan" = "yes" ]; then
+        run_privileged sysrc sshd_enable=YES
+        if service sshd onestatus >/dev/null 2>&1; then
+            printf 'sshd is already running.\n'
+        else
+            run_privileged service sshd start
+        fi
+        return
+    fi
+
+    run_privileged sysrc sshd_enable=NO
+    if service sshd onestatus >/dev/null 2>&1; then
+        run_privileged service sshd stop
     else
-        service pf reload
+        printf 'sshd was not running.\n'
     fi
 }
 
@@ -489,36 +517,46 @@ do_apply() {
     fi
 
     if [ "$mode" != "adopt" ] && [ "$config_state" = "managed" ] && [ "$installed_checksum" = "$current_profile_checksum" ]; then
+        if ! sshd_output="$(sync_sshd_with_profile 2>&1)"; then
+            write_last_result "error" "Firewall profile is applied, but sshd could not be synchronized."
+            emit_action_result false "Firewall profile is applied, but sshd could not be synchronized." "$validation
+$sshd_output"
+            exit 1
+        fi
         write_applied_state "$current_profile_checksum"
         write_last_result "success" "BSDRunner firewall profile is already applied."
-        emit_action_result true "BSDRunner firewall profile is already applied." "$validation"
+        emit_action_result true "BSDRunner firewall profile is already applied." "$validation
+$sshd_output"
         return
     fi
 
-    if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)"; then
+    if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)" && sshd_output="$(sync_sshd_with_profile 2>&1)"; then
         write_applied_state "$current_profile_checksum"
         write_last_result "success" "BSDRunner firewall profile applied."
         emit_action_result true "BSDRunner firewall profile applied." "$validation
 $install_output
-$reload_output"
+$reload_output
+$sshd_output"
     else
-        write_last_result "error" "Unable to install or reload the firewall profile."
-        emit_action_result false "Unable to install or reload the firewall profile." "$validation
+        write_last_result "error" "Unable to install, reload, or synchronize the firewall profile."
+        emit_action_result false "Unable to install, reload, or synchronize the firewall profile." "$validation
 ${install_output:-}
-${reload_output:-}"
+${reload_output:-}
+${sshd_output:-}"
         exit 1
     fi
 }
 
 do_enable() {
+    load_profile
     if command -v mdo >/dev/null 2>&1; then
-        output="$(mdo sysrc pf_enable=YES 2>&1 && mdo sysrc pflog_enable=YES 2>&1 && mdo service pf start 2>&1 && mdo service pflog start 2>&1)" || {
+        output="$(mdo sysrc pf_enable=YES 2>&1 && mdo sysrc pflog_enable=YES 2>&1 && mdo service pf start 2>&1 && mdo service pflog start 2>&1 && sync_sshd_with_profile 2>&1)" || {
             write_last_result "error" "Unable to enable firewall services."
             emit_action_result false "Unable to enable firewall services." "$output"
             exit 1
         }
     else
-        output="$(sysrc pf_enable=YES 2>&1 && sysrc pflog_enable=YES 2>&1 && service pf start 2>&1 && service pflog start 2>&1)" || {
+        output="$(sysrc pf_enable=YES 2>&1 && sysrc pflog_enable=YES 2>&1 && service pf start 2>&1 && service pflog start 2>&1 && sync_sshd_with_profile 2>&1)" || {
             write_last_result "error" "Unable to enable firewall services."
             emit_action_result false "Unable to enable firewall services." "$output"
             exit 1
