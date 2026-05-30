@@ -117,7 +117,7 @@ ShellRoot {
         }
     }
 
-    FloatingWindow {
+    PanelWindow {
         id: window
 
         visible: true
@@ -125,6 +125,17 @@ ShellRoot {
         minimumSize: Qt.size(330, 222)
         maximumSize: Qt.size(330, 222)
         color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+
+        anchors {
+            top: true
+            left: true
+        }
+
+        margins {
+            top: 52
+            left: 76
+        }
 
         Item {
             anchors.fill: parent
