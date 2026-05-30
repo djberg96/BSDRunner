@@ -599,8 +599,10 @@ ShellRoot {
                                     text: root.protectionHeadline()
                                     color: root.palette.primaryText
                                     font.pixelSize: 28
+                                    minimumPixelSize: 20
+                                    fontSizeMode: Text.HorizontalFit
                                     font.bold: true
-                                    elide: Text.ElideRight
+                                    elide: Text.ElideNone
                                 }
 
                                 Text {
