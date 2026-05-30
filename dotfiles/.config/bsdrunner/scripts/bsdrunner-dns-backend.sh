@@ -13,6 +13,7 @@ json_escape() {
         {
             gsub(/\\/, "\\\\")
             gsub(/"/, "\\\"")
+            gsub(/\t/, "\\t")
             gsub(/\r/, "")
             if (!first)
                 printf "\\n"
@@ -265,9 +266,37 @@ do_test() {
 
     if command -v drill >/dev/null 2>&1; then
         if output="$(drill "$host" $server_arg 2>&1)"; then
-            summary="$(printf '%s\n' "$output" | awk '
-                /^;; ->>HEADER<</ || /^;; Query time:/ || /^;; SERVER:/ || /^[^;].*[[:space:]]IN[[:space:]](A|AAAA|CNAME)[[:space:]]/ {
-                    print
+            summary="$(printf '%s\n' "$output" | awk -v host="$host" '
+                BEGIN {
+                    print "Lookup: " host
+                }
+                /^;; ->>HEADER<</ {
+                    for (i = 1; i <= NF; i++) {
+                        if ($i ~ /^rcode:/) {
+                            value = $(i + 1)
+                            gsub(/,/, "", value)
+                            print "Status: " value
+                        }
+                    }
+                }
+                /^[^;].*[[:space:]]IN[[:space:]](A|AAAA|CNAME)[[:space:]]/ {
+                    type = ""
+                    value = ""
+                    for (i = 1; i <= NF; i++) {
+                        if ($i == "IN" && i + 2 <= NF) {
+                            type = $(i + 1)
+                            value = $(i + 2)
+                            break
+                        }
+                    }
+                    if (type != "" && value != "")
+                        print type ": " value
+                }
+                /^;; Query time:/ {
+                    print "Query time: " $4 " " $5
+                }
+                /^;; SERVER:/ {
+                    print "Server: " $3
                 }
             ')"
             [ -n "$summary" ] || summary="$output"
