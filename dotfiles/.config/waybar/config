@@ -62,8 +62,8 @@
     "custom/apps": {
       "format": "APPS",
       "tooltip": true,
-      "tooltip-format": "Open BSDRunner Software",
-      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-software.sh"
+      "tooltip-format": "Open BSDRunner apps",
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-apps-menu.sh"
     },
 
     "cpu": {

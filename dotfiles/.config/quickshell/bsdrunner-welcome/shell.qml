@@ -81,7 +81,7 @@ ShellRoot {
             },
             {
                 "title": "Open Apps",
-                "subtitle": "Launch BSDRunner Software",
+                "subtitle": "Open the app launcher",
                 "action": "apps"
             },
             {
