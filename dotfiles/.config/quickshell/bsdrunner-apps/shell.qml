@@ -121,7 +121,6 @@ ShellRoot {
         id: window
 
         visible: true
-        title: "BSDRunner Apps"
         implicitWidth: 330
         implicitHeight: 222
         color: "transparent"
