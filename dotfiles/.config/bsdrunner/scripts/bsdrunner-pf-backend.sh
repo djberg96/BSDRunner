@@ -246,9 +246,13 @@ validate_file() {
     }
 
     if command -v mdo >/dev/null 2>&1; then
-        printf '%s\n' "$output"
-        mdo pfctl -vnf "$file_path" 2>&1
-        return $?
+        privileged_output="$(mdo pfctl -vnf "$file_path" 2>&1)" && {
+            printf '%s\n' "$privileged_output"
+            return 0
+        }
+
+        printf '%s\n%s\n' "$output" "$privileged_output"
+        return 1
     fi
 
     printf '%s\n' "$output"
@@ -455,6 +459,8 @@ do_apply() {
     load_profile
     write_profile
     config_state="$(installed_config_state)"
+    current_profile_checksum="$(profile_checksum)"
+    installed_checksum="$(installed_config_checksum)"
 
     if [ "$config_state" = "external" ] && [ "$mode" != "adopt" ]; then
         emit_action_result false "External /etc/pf.conf detected." "Use Adopt BSDRunner Profile if you want the GUI to replace the existing file."
@@ -472,8 +478,15 @@ do_apply() {
         exit 1
     fi
 
+    if [ "$mode" != "adopt" ] && [ "$config_state" = "managed" ] && [ "$installed_checksum" = "$current_profile_checksum" ]; then
+        write_applied_state "$current_profile_checksum"
+        write_last_result "success" "BSDRunner firewall profile is already applied."
+        emit_action_result true "BSDRunner firewall profile is already applied." "$validation"
+        return
+    fi
+
     if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)"; then
-        write_applied_state "$(profile_checksum)"
+        write_applied_state "$current_profile_checksum"
         write_last_result "success" "BSDRunner firewall profile applied."
         emit_action_result true "BSDRunner firewall profile applied." "$validation
 $install_output

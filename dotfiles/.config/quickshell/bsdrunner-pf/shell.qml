@@ -35,7 +35,7 @@ ShellRoot {
     property bool stoppingLogFollow: false
     property string logMessage: "PF logs are loaded on demand."
     property string logText: "Enable blocked-attempt logging, apply the profile, then refresh logs after blocked traffic occurs."
-    property int logLineLimit: 7
+    property int logLineLimit: 12
     property string logStdoutText: ""
     property string logStderrText: ""
     property int logExitCode: 0
@@ -132,6 +132,30 @@ ShellRoot {
             return parts[1].replace(/:[0-9][0-9]$/, "")
 
         return value
+    }
+
+    function firstNonEmptyLine(value) {
+        if (!value || value.length === 0)
+            return ""
+
+        var lines = value.split("\n")
+        for (var i = 0; i < lines.length; i += 1) {
+            var line = lines[i].replace(/^\s+|\s+$/g, "")
+            if (line.length > 0)
+                return line
+        }
+
+        return ""
+    }
+
+    function statusDetailText() {
+        if ((statusTone === "error" || lastResultTone === "error") && actionDetails.length > 0)
+            return firstNonEmptyLine(actionDetails)
+
+        if (lastResultTimestamp.length > 0)
+            return "Updated " + compactTimestamp(lastResultTimestamp)
+
+        return ""
     }
 
     function profileStatusValue() {
@@ -337,7 +361,7 @@ ShellRoot {
         lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info"
         lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message
         lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : ""
-        statusTone = configState === "external" ? "warning" : "info"
+        statusTone = configState === "external" ? "warning" : lastResultTone
         statusMessage = configState === "external"
             ? "External /etc/pf.conf detected. Adopt the BSDRunner profile to let this GUI manage it."
             : payload.message || "Loaded firewall status."
@@ -707,7 +731,7 @@ ShellRoot {
                             spacing: 6
 
                             Text {
-                                text: "Last Result"
+                                text: "Status"
                                 color: root.palette.mutedText
                                 font.pixelSize: 11
                                 font.bold: true
@@ -719,7 +743,18 @@ ShellRoot {
                                 color: root.palette.primaryText
                                 font.pixelSize: 14
                                 wrapMode: Text.WordWrap
-                                maximumLineCount: 3
+                                maximumLineCount: root.statusDetailText().length > 0 ? 2 : 3
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                width: parent.width
+                                visible: root.statusDetailText().length > 0
+                                text: root.statusDetailText()
+                                color: root.palette.mutedText
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 2
                                 elide: Text.ElideRight
                             }
                         }
@@ -967,7 +1002,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 184
+                                height: 260
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1053,7 +1088,7 @@ ShellRoot {
 
                                     Rectangle {
                                         width: parent.width
-                                        height: 110
+                                        height: 186
                                         radius: 6
                                         color: root.palette.cardBackground
                                         border.width: 1
@@ -1067,41 +1102,9 @@ ShellRoot {
                                             font.family: "monospace"
                                             font.pixelSize: 10
                                             wrapMode: Text.WrapAnywhere
-                                            maximumLineCount: 7
+                                            maximumLineCount: 12
                                             elide: Text.ElideRight
                                         }
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                width: parent.width
-                                height: 68
-                                radius: 8
-                                color: root.palette.panelBackground
-                                border.width: 1
-                                border.color: root.toneColor(root.lastResultTone)
-
-                                Column {
-                                    anchors.fill: parent
-                                    anchors.margins: 12
-                                    spacing: 5
-
-                                    Text {
-                                        text: "Backend Detail"
-                                        color: root.toneColor(root.lastResultTone)
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                    }
-
-                                    Text {
-                                        width: parent.width
-                                        text: root.actionDetails.length > 0 ? root.actionDetails : root.lastResultMessage
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: 11
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 3
-                                        elide: Text.ElideRight
                                     }
                                 }
                             }
