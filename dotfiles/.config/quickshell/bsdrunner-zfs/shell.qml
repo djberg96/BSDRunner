@@ -881,6 +881,19 @@ ShellRoot {
                                 }
                             }
 
+                            Item {
+                                width: parent.width
+                                height: 14
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: 1
+                                    color: Qt.alpha(root.palette.panelBorder, 0.55)
+                                }
+                            }
+
                             Rectangle {
                                 width: parent.width
                                 height: 164
