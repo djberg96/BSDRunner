@@ -571,7 +571,7 @@ ShellRoot {
                                 height: parent.height - 30
                                 clip: true
                                 model: root.datasets
-                                spacing: 8
+                                spacing: 6
 
                                 delegate: Rectangle {
                                     id: datasetRow
@@ -580,7 +580,7 @@ ShellRoot {
                                     readonly property bool selected: root.selectedDatasetName === modelData.name
 
                                     width: ListView.view.width
-                                    height: 68
+                                    height: 52
                                     radius: 8
                                     color: selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.panelBackground
                                     border.width: 1
@@ -588,14 +588,14 @@ ShellRoot {
 
                                     Column {
                                         anchors.fill: parent
-                                        anchors.margins: 10
-                                        spacing: 4
+                                        anchors.margins: 8
+                                        spacing: 2
 
                                         Text {
                                             width: parent.width
                                             text: modelData.name
                                             color: root.palette.primaryText
-                                            font.pixelSize: 13
+                                            font.pixelSize: 15
                                             font.bold: true
                                             elide: Text.ElideRight
                                         }
@@ -604,7 +604,7 @@ ShellRoot {
                                             width: parent.width
                                             text: modelData.used + " used | " + modelData.mountpoint
                                             color: root.palette.mutedText
-                                            font.pixelSize: 11
+                                            font.pixelSize: 12
                                             elide: Text.ElideRight
                                         }
                                     }
