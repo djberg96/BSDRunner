@@ -987,7 +987,7 @@ ShellRoot {
                 Rectangle {
                     anchors.centerIn: parent
                     width: 360
-                    height: root.pendingActionId === "create-snapshot" ? 238 : 190
+                    height: root.pendingActionId === "create-snapshot" ? 214 : 190
                     radius: 8
                     color: root.palette.cardBackground
                     border.width: 1
@@ -1071,7 +1071,7 @@ ShellRoot {
 
                         Rectangle {
                             visible: root.pendingActionId === "create-snapshot"
-                            width: 210
+                            width: 310
                             height: visible ? 34 : 0
                             radius: 8
                             color: recursiveMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
