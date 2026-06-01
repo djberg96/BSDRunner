@@ -931,7 +931,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.selectedSnapshot ? root.selectedSnapshot.name : "No snapshot selected"
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 12
+                                                font.pixelSize: 15
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
