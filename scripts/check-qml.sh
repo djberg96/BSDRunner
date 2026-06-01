@@ -29,6 +29,9 @@ dotfiles/.config/quickshell/bsdrunner-apps/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-dns/shell.qml
 dotfiles/.config/quickshell/bsdrunner-dns/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-dns/ThemePalette.qml
+dotfiles/.config/quickshell/bsdrunner-zfs/shell.qml
+dotfiles/.config/quickshell/bsdrunner-zfs/ThemeLoader.qml
+dotfiles/.config/quickshell/bsdrunner-zfs/ThemePalette.qml
 "
 
 printf 'Running qmllint...\n'
