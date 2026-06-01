@@ -22,9 +22,11 @@ ShellRoot {
     property string activeActionArg1: ""
     property string activeActionArg2: ""
     property string activeActionLabel: ""
+    property string activeActionArg3: ""
     property string pendingActionId: ""
     property string pendingActionLabel: ""
     property string pendingActionDescription: ""
+    property bool pendingSnapshotRecursive: false
     property string snapshotName: ""
     property string selectedDatasetName: ""
     property string selectedSnapshotName: ""
@@ -156,12 +158,14 @@ ShellRoot {
         pendingActionId = actionId
         pendingActionLabel = label
         pendingActionDescription = description
+        pendingSnapshotRecursive = false
     }
 
     function clearPendingAction() {
         pendingActionId = ""
         pendingActionLabel = ""
         pendingActionDescription = ""
+        pendingSnapshotRecursive = false
     }
 
     function confirmPendingAction() {
@@ -172,6 +176,7 @@ ShellRoot {
         activeActionLabel = pendingActionLabel
         activeActionArg1 = pendingActionId === "create-snapshot" ? selectedDatasetName : selectedSnapshotName
         activeActionArg2 = pendingActionId === "create-snapshot" ? snapshotName : ""
+        activeActionArg3 = pendingActionId === "create-snapshot" && pendingSnapshotRecursive ? "recursive" : ""
         clearPendingAction()
         runActionProcess()
     }
@@ -282,6 +287,7 @@ ShellRoot {
         activeActionId = ""
         activeActionArg1 = ""
         activeActionArg2 = ""
+        activeActionArg3 = ""
         activeActionLabel = ""
         refreshSnapshot()
     }
@@ -320,7 +326,7 @@ ShellRoot {
         id: actionProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-zfs-backend.sh", root.activeActionId, root.activeActionArg1, root.activeActionArg2]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-zfs-backend.sh", root.activeActionId, root.activeActionArg1, root.activeActionArg2, root.activeActionArg3]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -981,7 +987,7 @@ ShellRoot {
                 Rectangle {
                     anchors.centerIn: parent
                     width: 460
-                    height: 190
+                    height: root.pendingActionId === "create-snapshot" ? 238 : 190
                     radius: 8
                     color: root.palette.cardBackground
                     border.width: 1
@@ -1005,6 +1011,60 @@ ShellRoot {
                             color: root.palette.secondaryText
                             font.pixelSize: 13
                             wrapMode: Text.WordWrap
+                        }
+
+                        Rectangle {
+                            visible: root.pendingActionId === "create-snapshot"
+                            width: parent.width
+                            height: visible ? 42 : 0
+                            radius: 8
+                            color: recursiveMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                            border.width: 1
+                            border.color: root.pendingSnapshotRecursive ? root.palette.accent : root.palette.frameBorder
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 10
+
+                                Rectangle {
+                                    width: 20
+                                    height: 20
+                                    radius: 4
+                                    color: root.pendingSnapshotRecursive ? root.palette.accent : root.palette.cardBackground
+                                    border.width: 1
+                                    border.color: root.pendingSnapshotRecursive ? root.palette.accentStrong : root.palette.frameBorder
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: root.pendingSnapshotRecursive
+                                        text: "X"
+                                        color: root.palette.frameBackground
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width - 30
+                                    height: parent.height
+                                    text: "Recursive snapshot"
+                                    color: root.pendingSnapshotRecursive ? root.palette.primaryText : root.palette.secondaryText
+                                    font.pixelSize: 13
+                                    font.bold: root.pendingSnapshotRecursive
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            MouseArea {
+                                id: recursiveMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.pendingSnapshotRecursive = !root.pendingSnapshotRecursive
+                            }
                         }
 
                         Row {

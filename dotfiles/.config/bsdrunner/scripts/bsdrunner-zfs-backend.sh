@@ -198,6 +198,7 @@ emit_snapshot() {
 do_create_snapshot() {
     dataset="$1"
     label="${2:-}"
+    recursive="${3:-}"
 
     valid_dataset "$dataset" || {
         emit_action_result false "Invalid dataset name." "Select a filesystem or volume from the list."
@@ -215,7 +216,25 @@ do_create_snapshot() {
 
     snapshot_name="${dataset}@${label}"
 
-    if output="$(run_privileged zfs snapshot "$snapshot_name" 2>&1)"; then
+    case "$recursive" in
+        ""|recursive)
+            ;;
+        *)
+            emit_action_result false "Invalid recursive option." "Use the confirmation checkbox to create recursive snapshots."
+            exit 1
+            ;;
+    esac
+
+    if [ "$recursive" = "recursive" ]; then
+        if output="$(run_privileged zfs snapshot -r "$snapshot_name" 2>&1)"; then
+            write_last_result "success" "Created recursive snapshot ${snapshot_name}."
+            emit_action_result true "Created recursive snapshot ${snapshot_name}." "$output"
+        else
+            write_last_result "error" "Unable to create recursive snapshot."
+            emit_action_result false "Unable to create recursive snapshot." "$output"
+            exit 1
+        fi
+    elif output="$(run_privileged zfs snapshot "$snapshot_name" 2>&1)"; then
         write_last_result "success" "Created snapshot ${snapshot_name}."
         emit_action_result true "Created snapshot ${snapshot_name}." "$output"
     else
@@ -264,7 +283,7 @@ case "$action" in
         emit_snapshot
         ;;
     create-snapshot)
-        do_create_snapshot "${2:-}" "${3:-}"
+        do_create_snapshot "${2:-}" "${3:-}" "${4:-}"
         ;;
     destroy-snapshot)
         do_destroy_snapshot "${2:-}"
