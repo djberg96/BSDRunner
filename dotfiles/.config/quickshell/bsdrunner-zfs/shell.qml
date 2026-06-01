@@ -889,8 +889,8 @@ ShellRoot {
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    height: 1
-                                    color: Qt.alpha(root.palette.panelBorder, 0.55)
+                                    height: 2
+                                    color: Qt.alpha(root.palette.accent, 0.72)
                                 }
                             }
 
