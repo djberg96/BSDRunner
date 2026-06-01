@@ -724,151 +724,11 @@ ShellRoot {
                         Column {
                             anchors.fill: parent
                             anchors.margins: 14
-                            spacing: 12
-
-                            Text {
-                                text: "Snapshot Actions"
-                                color: root.palette.accent
-                                font.pixelSize: 15
-                                font.bold: true
-                            }
-
-                            Text {
-                                width: parent.width
-                                text: root.selectedDatasetName || "No dataset selected"
-                                color: root.palette.primaryText
-                                font.pixelSize: 18
-                                minimumPixelSize: 12
-                                fontSizeMode: Text.HorizontalFit
-                                font.bold: true
-                            }
-
-                            Text {
-                                width: parent.width
-                                text: root.selectedDatasetDetail()
-                                color: root.palette.mutedText
-                                font.pixelSize: 12
-                                elide: Text.ElideRight
-                            }
+                            spacing: 10
 
                             Rectangle {
                                 width: parent.width
-                                height: 44
-                                radius: 8
-                                color: root.palette.panelBackground
-                                border.width: 1
-                                border.color: snapshotInput.activeFocus ? root.palette.accent : root.palette.frameBorder
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton
-                                    onClicked: snapshotInput.forceActiveFocus()
-                                }
-
-                                TextInput {
-                                    id: snapshotInput
-
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    text: root.snapshotName
-                                    color: root.palette.primaryText
-                                    selectionColor: root.palette.accent
-                                    selectedTextColor: root.palette.frameBackground
-                                    font.pixelSize: 14
-                                    clip: true
-                                    onTextChanged: root.snapshotName = text
-
-                                    Text {
-                                        anchors.fill: parent
-                                        visible: snapshotInput.text.length === 0 && !snapshotInput.activeFocus
-                                        text: "snapshot label (optional)"
-                                        color: root.palette.mutedText
-                                        font.pixelSize: 14
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                }
-                            }
-
-                            Row {
-                                width: parent.width
-                                spacing: 6
-
-                                Repeater {
-                                    model: root.snapshotPresets
-
-                                    Rectangle {
-                                        id: presetChip
-
-                                        required property string modelData
-
-                                        width: Math.floor((parent.width - 12) / 3)
-                                        height: 28
-                                        radius: 7
-                                        color: presetMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
-                                        border.width: 1
-                                        border.color: root.snapshotName === modelData ? root.palette.accent : root.palette.frameBorder
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            width: parent.width - 10
-                                            text: presetChip.modelData
-                                            color: root.snapshotName === presetChip.modelData ? root.palette.accent : root.palette.secondaryText
-                                            font.pixelSize: 11
-                                            font.bold: root.snapshotName === presetChip.modelData
-                                            horizontalAlignment: Text.AlignHCenter
-                                            elide: Text.ElideRight
-                                        }
-
-                                        MouseArea {
-                                            id: presetMouse
-
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                root.snapshotName = presetChip.modelData
-                                                snapshotInput.forceActiveFocus()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                width: parent.width
-                                height: 44
-                                radius: 8
-                                color: createMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.12)
-                                border.width: 1
-                                border.color: root.palette.success
-                                opacity: root.selectedDatasetName && !root.runningAction ? 1 : 0.45
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "Create Snapshot"
-                                    color: root.palette.success
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                }
-
-                                MouseArea {
-                                    id: createMouse
-
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    enabled: root.selectedDatasetName && !root.runningAction
-                                    onClicked: root.requestAction(
-                                        "create-snapshot",
-                                        "Creating snapshot",
-                                        "Create a snapshot of " + root.selectedDatasetName + " named " + root.createSnapshotLabel() + "?"
-                                    )
-                                }
-                            }
-
-                            Rectangle {
-                                width: parent.width
-                                height: 88
+                                height: 226
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -877,72 +737,249 @@ ShellRoot {
                                 Column {
                                     anchors.fill: parent
                                     anchors.margins: 10
-                                    spacing: 5
+                                    spacing: 8
 
                                     Text {
-                                        width: parent.width
-                                        text: root.selectedSnapshot ? root.selectedSnapshot.name : "No snapshot selected"
-                                        color: root.palette.primaryText
-                                        font.pixelSize: 12
+                                        text: "Create Snapshot"
+                                        color: root.palette.accent
+                                        font.pixelSize: 15
                                         font.bold: true
-                                        elide: Text.ElideRight
                                     }
 
                                     Text {
                                         width: parent.width
-                                        text: root.selectedSnapshotDetail()
+                                        text: root.selectedDatasetName || "No dataset selected"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 17
+                                        minimumPixelSize: 12
+                                        fontSizeMode: Text.HorizontalFit
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.selectedDatasetDetail()
                                         color: root.palette.mutedText
-                                        font.pixelSize: 11
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 2
+                                        font.pixelSize: 12
                                         elide: Text.ElideRight
                                     }
-                                }
-                            }
 
-                            Row {
-                                spacing: 8
-
-                                Repeater {
-                                    model: [
-                                        {"label": "Rollback", "action": "rollback-snapshot", "tone": "warning"},
-                                        {"label": "Destroy", "action": "destroy-snapshot", "tone": "error"}
-                                    ]
-
-                                    delegate: Rectangle {
-                                        id: actionButton
-
-                                        required property var modelData
-                                        readonly property color accent: root.toneColor(modelData.tone)
-
-                                        width: 122
+                                    Rectangle {
+                                        width: parent.width
                                         height: 42
                                         radius: 8
-                                        color: actionMouse.containsMouse ? root.palette.cardHover : Qt.alpha(accent, 0.10)
+                                        color: root.palette.cardBackground
                                         border.width: 1
-                                        border.color: accent
-                                        opacity: root.selectedSnapshotName && !root.runningAction ? 1 : 0.45
+                                        border.color: snapshotInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            acceptedButtons: Qt.LeftButton
+                                            onClicked: snapshotInput.forceActiveFocus()
+                                        }
+
+                                        TextInput {
+                                            id: snapshotInput
+
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            text: root.snapshotName
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.frameBackground
+                                            font.pixelSize: 14
+                                            clip: true
+                                            onTextChanged: root.snapshotName = text
+
+                                            Text {
+                                                anchors.fill: parent
+                                                visible: snapshotInput.text.length === 0 && !snapshotInput.activeFocus
+                                                text: "snapshot label (optional)"
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 14
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+
+                                    Row {
+                                        width: parent.width
+                                        spacing: 6
+
+                                        Repeater {
+                                            model: root.snapshotPresets
+
+                                            Rectangle {
+                                                id: presetChip
+
+                                                required property string modelData
+
+                                                width: Math.floor((parent.width - 12) / 3)
+                                                height: 28
+                                                radius: 7
+                                                color: presetMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                                border.width: 1
+                                                border.color: root.snapshotName === modelData ? root.palette.accent : root.palette.frameBorder
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    width: parent.width - 10
+                                                    text: presetChip.modelData
+                                                    color: root.snapshotName === presetChip.modelData ? root.palette.accent : root.palette.secondaryText
+                                                    font.pixelSize: 11
+                                                    font.bold: root.snapshotName === presetChip.modelData
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                MouseArea {
+                                                    id: presetMouse
+
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        root.snapshotName = presetChip.modelData
+                                                        snapshotInput.forceActiveFocus()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 40
+                                        radius: 8
+                                        color: createMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.12)
+                                        border.width: 1
+                                        border.color: root.palette.success
+                                        opacity: root.selectedDatasetName && !root.runningAction ? 1 : 0.45
 
                                         Text {
                                             anchors.centerIn: parent
-                                            text: modelData.label
-                                            color: actionButton.accent
-                                            font.pixelSize: 13
+                                            text: "Create Snapshot"
+                                            color: root.palette.success
+                                            font.pixelSize: 14
                                             font.bold: true
                                         }
 
                                         MouseArea {
-                                            id: actionMouse
+                                            id: createMouse
 
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            enabled: root.selectedSnapshotName && !root.runningAction
+                                            enabled: root.selectedDatasetName && !root.runningAction
                                             onClicked: root.requestAction(
-                                                modelData.action,
-                                                modelData.label + " snapshot",
-                                                modelData.label + " " + root.selectedSnapshotName + "?"
+                                                "create-snapshot",
+                                                "Creating snapshot",
+                                                "Create a snapshot of " + root.selectedDatasetName + " named " + root.createSnapshotLabel() + "?"
                                             )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 164
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 8
+
+                                    Text {
+                                        text: "Current Selection"
+                                        color: root.palette.accent
+                                        font.pixelSize: 15
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 74
+                                        radius: 8
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            spacing: 4
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.selectedSnapshot ? root.selectedSnapshot.name : "No snapshot selected"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.selectedSnapshotDetail()
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+
+                                    Row {
+                                        spacing: 8
+
+                                        Repeater {
+                                            model: [
+                                                {"label": "Rollback", "action": "rollback-snapshot", "tone": "warning"},
+                                                {"label": "Destroy", "action": "destroy-snapshot", "tone": "error"}
+                                            ]
+
+                                            delegate: Rectangle {
+                                                id: actionButton
+
+                                                required property var modelData
+                                                readonly property color accent: root.toneColor(modelData.tone)
+
+                                                width: 122
+                                                height: 36
+                                                radius: 8
+                                                color: actionMouse.containsMouse ? root.palette.cardHover : Qt.alpha(accent, 0.10)
+                                                border.width: 1
+                                                border.color: accent
+                                                opacity: root.selectedSnapshotName && !root.runningAction ? 1 : 0.45
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: modelData.label
+                                                    color: actionButton.accent
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    id: actionMouse
+
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    enabled: root.selectedSnapshotName && !root.runningAction
+                                                    onClicked: root.requestAction(
+                                                        modelData.action,
+                                                        modelData.label + " snapshot",
+                                                        modelData.label + " " + root.selectedSnapshotName + "?"
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
