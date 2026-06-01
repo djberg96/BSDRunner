@@ -986,7 +986,7 @@ ShellRoot {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 460
+                    width: 360
                     height: root.pendingActionId === "create-snapshot" ? 238 : 190
                     radius: 8
                     color: root.palette.cardBackground
@@ -1011,60 +1011,6 @@ ShellRoot {
                             color: root.palette.secondaryText
                             font.pixelSize: 13
                             wrapMode: Text.WordWrap
-                        }
-
-                        Rectangle {
-                            visible: root.pendingActionId === "create-snapshot"
-                            width: parent.width
-                            height: visible ? 42 : 0
-                            radius: 8
-                            color: recursiveMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
-                            border.width: 1
-                            border.color: root.pendingSnapshotRecursive ? root.palette.accent : root.palette.frameBorder
-
-                            Row {
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 10
-
-                                Rectangle {
-                                    width: 20
-                                    height: 20
-                                    radius: 4
-                                    color: root.pendingSnapshotRecursive ? root.palette.accent : root.palette.cardBackground
-                                    border.width: 1
-                                    border.color: root.pendingSnapshotRecursive ? root.palette.accentStrong : root.palette.frameBorder
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        visible: root.pendingSnapshotRecursive
-                                        text: "X"
-                                        color: root.palette.frameBackground
-                                        font.pixelSize: 14
-                                        font.bold: true
-                                    }
-                                }
-
-                                Text {
-                                    width: parent.width - 30
-                                    height: parent.height
-                                    text: "Recursive snapshot"
-                                    color: root.pendingSnapshotRecursive ? root.palette.primaryText : root.palette.secondaryText
-                                    font.pixelSize: 13
-                                    font.bold: root.pendingSnapshotRecursive
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            MouseArea {
-                                id: recursiveMouse
-
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.pendingSnapshotRecursive = !root.pendingSnapshotRecursive
-                            }
                         }
 
                         Row {
@@ -1120,6 +1066,60 @@ ShellRoot {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: root.clearPendingAction()
                                 }
+                            }
+                        }
+
+                        Rectangle {
+                            visible: root.pendingActionId === "create-snapshot"
+                            width: 210
+                            height: visible ? 34 : 0
+                            radius: 8
+                            color: recursiveMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                            border.width: 1
+                            border.color: root.pendingSnapshotRecursive ? root.palette.accent : root.palette.frameBorder
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 8
+
+                                Rectangle {
+                                    width: 18
+                                    height: 18
+                                    radius: 4
+                                    color: root.pendingSnapshotRecursive ? root.palette.accent : root.palette.cardBackground
+                                    border.width: 1
+                                    border.color: root.pendingSnapshotRecursive ? root.palette.accentStrong : root.palette.frameBorder
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: root.pendingSnapshotRecursive
+                                        text: "X"
+                                        color: root.palette.frameBackground
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width - 26
+                                    height: parent.height
+                                    text: "Recursive snapshot"
+                                    color: root.pendingSnapshotRecursive ? root.palette.primaryText : root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: root.pendingSnapshotRecursive
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            MouseArea {
+                                id: recursiveMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.pendingSnapshotRecursive = !root.pendingSnapshotRecursive
                             }
                         }
                     }
