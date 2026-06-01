@@ -444,7 +444,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: 330
+                        width: 300
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -462,7 +462,7 @@ ShellRoot {
                                 delegate: Rectangle {
                                     required property var modelData
 
-                                    width: 94
+                                    width: 84
                                     height: 80
                                     radius: 8
                                     color: root.palette.panelBackground
@@ -505,7 +505,52 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 300 - 330 - 28
+                        width: 92
+                        height: parent.height
+                        radius: 8
+                        color: refreshMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                        border.width: 1
+                        border.color: root.loading ? root.palette.accent : root.palette.panelBorder
+                        opacity: !root.runningAction ? 1 : 0.45
+
+                        Column {
+                            anchors.centerIn: parent
+                            width: parent.width - 16
+                            spacing: 5
+
+                            Text {
+                                width: parent.width
+                                text: root.loading ? "..." : "REF"
+                                color: root.loading ? root.palette.accent : root.palette.secondaryText
+                                font.pixelSize: 16
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.loading ? "Refreshing" : "Refresh"
+                                color: root.palette.mutedText
+                                font.pixelSize: 11
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        MouseArea {
+                            id: refreshMouse
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: !root.loading && !root.runningAction
+                            onClicked: root.refreshSnapshot()
+                        }
+                    }
+
+                    Rectangle {
+                        width: parent.width - 300 - 300 - 92 - 42
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -998,32 +1043,6 @@ ShellRoot {
                                 }
                             }
 
-                            Rectangle {
-                                width: parent.width
-                                height: 40
-                                radius: 8
-                                color: refreshMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
-                                border.width: 1
-                                border.color: root.palette.panelBorder
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: root.loading ? "Refreshing..." : "Refresh"
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 13
-                                    font.bold: true
-                                }
-
-                                MouseArea {
-                                    id: refreshMouse
-
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    enabled: !root.loading && !root.runningAction
-                                    onClicked: root.refreshSnapshot()
-                                }
-                            }
                         }
                     }
                 }
