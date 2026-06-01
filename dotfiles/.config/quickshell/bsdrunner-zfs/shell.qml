@@ -12,6 +12,7 @@ ShellRoot {
     }
 
     readonly property var palette: themeLoader.palette
+    readonly property var snapshotPresets: ["manual", "before-update", "experiment"]
     property bool loading: false
     property bool runningAction: false
     property string statusTone: "info"
@@ -778,6 +779,51 @@ ShellRoot {
                                         color: root.palette.mutedText
                                         font.pixelSize: 14
                                         verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                            }
+
+                            Row {
+                                width: parent.width
+                                spacing: 6
+
+                                Repeater {
+                                    model: root.snapshotPresets
+
+                                    Rectangle {
+                                        id: presetChip
+
+                                        required property string modelData
+
+                                        width: Math.floor((parent.width - 12) / 3)
+                                        height: 28
+                                        radius: 7
+                                        color: presetMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.snapshotName === modelData ? root.palette.accent : root.palette.frameBorder
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 10
+                                            text: presetChip.modelData
+                                            color: root.snapshotName === presetChip.modelData ? root.palette.accent : root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            font.bold: root.snapshotName === presetChip.modelData
+                                            horizontalAlignment: Text.AlignHCenter
+                                            elide: Text.ElideRight
+                                        }
+
+                                        MouseArea {
+                                            id: presetMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.snapshotName = presetChip.modelData
+                                                snapshotInput.forceActiveFocus()
+                                            }
+                                        }
                                     }
                                 }
                             }
