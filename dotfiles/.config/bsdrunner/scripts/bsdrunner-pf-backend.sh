@@ -437,6 +437,86 @@ do_follow_logs() {
     exec tcpdump -l -n -e -ttt -i pflog0
 }
 
+do_penalty_list() {
+    if ! command -v pfctl >/dev/null 2>&1; then
+        emit_action_result false "pfctl is not installed or is not in PATH." ""
+        exit 1
+    fi
+
+    if command -v mdo >/dev/null 2>&1; then
+        output="$(mdo pfctl -t ssh_abuse -T show 2>&1 || true)"
+    else
+        output="$(pfctl -t ssh_abuse -T show 2>&1 || true)"
+    fi
+
+    if printf '%s\n' "$output" | grep -qi 'Table does not exist'; then
+        output=""
+    fi
+
+    printf '{"ok":true,'
+    printf '"message":"%s",' "$(printf '%s' "Loaded SSH penalty box." | json_escape)"
+    printf '"entries":['
+    first=1
+    printf '%s\n' "$output" | awk '
+        /^[[:space:]]*$/ { next }
+        /^(No ALTQ|ALTQ)/ { next }
+        {
+            value = $1
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            if (value ~ /^[0-9A-Fa-f:.]+$/)
+                print value
+        }
+    ' | while IFS= read -r ip_address; do
+        if [ "$first" -eq 0 ]; then
+            printf ','
+        fi
+        first=0
+        printf '{"ip":"%s"}' "$(printf '%s' "$ip_address" | json_escape)"
+    done
+    printf ']}\n'
+}
+
+do_penalty_clear() {
+    ip_address="${1:-}"
+
+    case "$ip_address" in
+        ''|*[!0-9A-Fa-f:.]*)
+            emit_action_result false "Select a valid penalty-box IP address first." ""
+            exit 1
+            ;;
+    esac
+
+    if command -v mdo >/dev/null 2>&1; then
+        output="$(mdo pfctl -t ssh_abuse -T delete "$ip_address" 2>&1)" || {
+            emit_action_result false "Unable to clear $ip_address from the penalty box." "$output"
+            exit 1
+        }
+    else
+        output="$(pfctl -t ssh_abuse -T delete "$ip_address" 2>&1)" || {
+            emit_action_result false "Unable to clear $ip_address from the penalty box." "$output"
+            exit 1
+        }
+    fi
+
+    emit_action_result true "Cleared $ip_address from the penalty box." "$output"
+}
+
+do_penalty_clear_all() {
+    if command -v mdo >/dev/null 2>&1; then
+        output="$(mdo pfctl -t ssh_abuse -T flush 2>&1)" || {
+            emit_action_result false "Unable to clear the penalty box." "$output"
+            exit 1
+        }
+    else
+        output="$(pfctl -t ssh_abuse -T flush 2>&1)" || {
+            emit_action_result false "Unable to clear the penalty box." "$output"
+            exit 1
+        }
+    fi
+
+    emit_action_result true "Cleared all penalty-box entries." "$output"
+}
+
 do_validate() {
     load_profile
     write_profile
@@ -609,6 +689,15 @@ case "$action" in
         ;;
     follow-logs)
         do_follow_logs
+        ;;
+    penalty-list)
+        do_penalty_list
+        ;;
+    penalty-clear)
+        do_penalty_clear "${2:-}"
+        ;;
+    penalty-clear-all)
+        do_penalty_clear_all
         ;;
     validate)
         do_validate

@@ -33,6 +33,7 @@ ShellRoot {
     property bool logLoading: false
     property bool logFollowing: false
     property bool stoppingLogFollow: false
+    property string viewerMode: "logs"
     property string logMessage: "PF logs are loaded on demand."
     property string logText: "Enable blocked-attempt logging, apply the profile, then refresh logs after blocked traffic occurs."
     property int logLineLimit: 200
@@ -42,6 +43,18 @@ ShellRoot {
     property bool logExited: false
     property bool logStdoutFinished: false
     property bool logStderrFinished: false
+    property bool penaltyLoading: false
+    property string penaltyMessage: "Load the SSH penalty box to inspect blocked LAN sources."
+    property var penaltyEntries: []
+    property string selectedPenaltyIp: ""
+    property string penaltyStdoutText: ""
+    property string penaltyStderrText: ""
+    property int penaltyExitCode: 0
+    property bool penaltyExited: false
+    property bool penaltyStdoutFinished: false
+    property bool penaltyStderrFinished: false
+    property string activePenaltyAction: "penalty-list"
+    property string activePenaltyIp: ""
     property string activeActionId: ""
     property string activeActionArg1: ""
     property string activeActionArg2: ""
@@ -318,6 +331,67 @@ ShellRoot {
         applyLogResult(logStdoutText, logExitCode, logStderrText);
     }
 
+    function openPenaltyBox() {
+        if (runningAction)
+            return;
+        viewerMode = "penalty";
+        refreshPenaltyBox();
+    }
+
+    function refreshPenaltyBox() {
+        if (penaltyProcess.running || runningAction)
+            return;
+        if (logFollowing)
+            toggleLogFollow();
+        viewerMode = "penalty";
+        activePenaltyAction = "penalty-list";
+        activePenaltyIp = "";
+        penaltyLoading = true;
+        penaltyMessage = "Loading SSH penalty box...";
+        penaltyStdoutText = "";
+        penaltyStderrText = "";
+        penaltyExitCode = 0;
+        penaltyExited = false;
+        penaltyStdoutFinished = false;
+        penaltyStderrFinished = false;
+        penaltyProcess.running = true;
+    }
+
+    function clearSelectedPenalty() {
+        if (selectedPenaltyIp.length === 0 || penaltyProcess.running || runningAction)
+            return;
+        activePenaltyAction = "penalty-clear";
+        activePenaltyIp = selectedPenaltyIp;
+        runPenaltyProcess("Clearing " + selectedPenaltyIp + "...");
+    }
+
+    function clearAllPenalty() {
+        if (penaltyProcess.running || runningAction)
+            return;
+        activePenaltyAction = "penalty-clear-all";
+        activePenaltyIp = "";
+        runPenaltyProcess("Clearing all penalty-box entries...");
+    }
+
+    function runPenaltyProcess(message) {
+        viewerMode = "penalty";
+        penaltyLoading = true;
+        penaltyMessage = message;
+        penaltyStdoutText = "";
+        penaltyStderrText = "";
+        penaltyExitCode = 0;
+        penaltyExited = false;
+        penaltyStdoutFinished = false;
+        penaltyStderrFinished = false;
+        penaltyProcess.running = true;
+    }
+
+    function maybeFinalizePenalty() {
+        if (!penaltyExited || !penaltyStdoutFinished || !penaltyStderrFinished)
+            return;
+        applyPenaltyResult(penaltyStdoutText, penaltyExitCode, penaltyStderrText);
+    }
+
     function applySnapshot(text, exitCode, stderrText) {
         loading = false;
         var payload = null;
@@ -414,6 +488,43 @@ ShellRoot {
         }
     }
 
+    function applyPenaltyResult(text, exitCode, stderrText) {
+        penaltyLoading = false;
+        var payload = null;
+
+        try {
+            payload = JSON.parse(text || "{}");
+        } catch (error) {
+            payload = null;
+        }
+
+        if (payload && payload.ok && exitCode === 0) {
+            penaltyMessage = payload.message || "Loaded SSH penalty box.";
+            if (activePenaltyAction === "penalty-list") {
+                penaltyEntries = payload.entries || [];
+                var selectedStillPresent = false;
+                for (var i = 0; i < penaltyEntries.length; i += 1) {
+                    if (penaltyEntries[i].ip === selectedPenaltyIp) {
+                        selectedStillPresent = true;
+                        break;
+                    }
+                }
+                if (!selectedStillPresent)
+                    selectedPenaltyIp = "";
+            } else {
+                selectedPenaltyIp = "";
+                refreshPenaltyBox();
+            }
+        } else if (payload) {
+            penaltyMessage = payload.message || "Unable to update the penalty box.";
+        } else {
+            penaltyMessage = stderrText || text || "Firewall backend returned invalid penalty-box JSON.";
+        }
+
+        activePenaltyAction = "penalty-list";
+        activePenaltyIp = "";
+    }
+
     Component.onCompleted: refreshSnapshot()
 
     Process {
@@ -497,6 +608,34 @@ ShellRoot {
             logProcess.controller.logExitCode = exitCode;
             logProcess.controller.logExited = true;
             logProcess.controller.maybeFinalizeLogs();
+        }
+    }
+
+    Process {
+        id: penaltyProcess
+        property var controller: root
+
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh", root.activePenaltyAction, root.activePenaltyIp]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                penaltyProcess.controller.penaltyStdoutText = text;
+                penaltyProcess.controller.penaltyStdoutFinished = true;
+                penaltyProcess.controller.maybeFinalizePenalty();
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                penaltyProcess.controller.penaltyStderrText = text;
+                penaltyProcess.controller.penaltyStderrFinished = true;
+                penaltyProcess.controller.maybeFinalizePenalty();
+            }
+        }
+        onExited: function (exitCode, exitStatus) {
+            penaltyProcess.controller.penaltyExitCode = exitCode;
+            penaltyProcess.controller.penaltyExited = true;
+            penaltyProcess.controller.maybeFinalizePenalty();
         }
     }
 
@@ -786,6 +925,12 @@ ShellRoot {
                                 "label": "Disable PF Now",
                                 "tone": "warning",
                                 "text": "Immediately disable PF without deleting /etc/pf.conf."
+                            },
+                            {
+                                "id": "penalty",
+                                "label": "Penalty Box",
+                                "tone": "warning",
+                                "text": "Inspect and clear IP addresses currently in the ssh_abuse table."
                             }
                         ]
 
@@ -815,7 +960,12 @@ ShellRoot {
                                 hoverEnabled: true
                                 enabled: !root.runningAction
                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                onClicked: root.requestAction(modelData.id, modelData.label, modelData.text)
+                                onClicked: {
+                                    if (modelData.id === "penalty")
+                                        root.openPenaltyBox();
+                                    else
+                                        root.requestAction(modelData.id, modelData.label, modelData.text);
+                                }
                             }
                         }
                     }
@@ -1067,7 +1217,7 @@ ShellRoot {
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.settingValue("log_blocked") ? root.palette.warning : root.palette.frameBorder
+                                border.color: root.viewerMode === "penalty" ? root.palette.warning : (root.settingValue("log_blocked") ? root.palette.warning : root.palette.frameBorder)
 
                                 Column {
                                     anchors.fill: parent
@@ -1080,26 +1230,26 @@ ShellRoot {
                                         spacing: 10
 
                                         Text {
-                                            width: parent.width - 188
-                                            text: "pflog Viewer"
-                                            color: root.settingValue("log_blocked") ? root.palette.warning : root.palette.primaryText
+                                            width: parent.width - 306
+                                            text: root.viewerMode === "penalty" ? "Penalty Box" : "pflog Viewer"
+                                            color: root.viewerMode === "penalty" || root.settingValue("log_blocked") ? root.palette.warning : root.palette.primaryText
                                             font.pixelSize: 14
                                             font.bold: true
                                             elide: Text.ElideRight
                                         }
 
                                         Rectangle {
-                                            width: 86
+                                            width: 76
                                             height: 28
                                             radius: 8
-                                            color: root.logLoading ? root.palette.cardBackground : root.palette.cardHover
+                                            color: root.logLoading || root.penaltyLoading ? root.palette.cardBackground : root.palette.cardHover
                                             border.width: 1
                                             border.color: root.palette.frameBorder
-                                            opacity: root.logLoading || root.runningAction ? 0.62 : 1.0
+                                            opacity: root.logLoading || root.penaltyLoading || root.runningAction ? 0.62 : 1.0
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: root.logLoading ? "Loading" : "Refresh"
+                                                text: root.logLoading || root.penaltyLoading ? "Loading" : "Refresh"
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: 11
                                                 font.bold: true
@@ -1107,15 +1257,16 @@ ShellRoot {
 
                                             MouseArea {
                                                 anchors.fill: parent
-                                                enabled: !root.logLoading && !root.logFollowing && !root.runningAction
+                                                enabled: !root.logLoading && !root.penaltyLoading && !root.logFollowing && !root.runningAction
                                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                onClicked: root.refreshLogs()
+                                                onClicked: root.viewerMode === "penalty" ? root.refreshPenaltyBox() : root.refreshLogs()
                                             }
                                         }
 
                                         Rectangle {
                                             width: 82
                                             height: 28
+                                            visible: root.viewerMode === "logs"
                                             radius: 8
                                             color: root.logFollowing ? Qt.alpha(root.palette.warning, 0.18) : root.palette.cardHover
                                             border.width: 1
@@ -1137,11 +1288,63 @@ ShellRoot {
                                                 onClicked: root.toggleLogFollow()
                                             }
                                         }
+
+                                        Rectangle {
+                                            width: 104
+                                            height: 28
+                                            visible: root.viewerMode === "penalty"
+                                            radius: 8
+                                            color: root.selectedPenaltyIp.length > 0 ? root.palette.cardHover : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.selectedPenaltyIp.length > 0 ? root.palette.warning : root.palette.frameBorder
+                                            opacity: root.penaltyLoading || root.runningAction || root.selectedPenaltyIp.length === 0 ? 0.62 : 1.0
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Clear Selected"
+                                                color: root.selectedPenaltyIp.length > 0 ? root.palette.warning : root.palette.mutedText
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: root.selectedPenaltyIp.length > 0 && !root.penaltyLoading && !root.runningAction
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.clearSelectedPenalty()
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 72
+                                            height: 28
+                                            visible: root.viewerMode === "penalty"
+                                            radius: 8
+                                            color: root.penaltyEntries.length > 0 ? Qt.alpha(root.palette.warning, 0.18) : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.penaltyEntries.length > 0 ? root.palette.warning : root.palette.frameBorder
+                                            opacity: root.penaltyLoading || root.runningAction || root.penaltyEntries.length === 0 ? 0.62 : 1.0
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Clear All"
+                                                color: root.penaltyEntries.length > 0 ? root.palette.warning : root.palette.mutedText
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: root.penaltyEntries.length > 0 && !root.penaltyLoading && !root.runningAction
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.clearAllPenalty()
+                                            }
+                                        }
                                     }
 
                                     Text {
                                         width: parent.width
-                                        text: root.logMessage
+                                        text: root.viewerMode === "penalty" ? root.penaltyMessage : root.logMessage
                                         color: root.palette.mutedText
                                         font.pixelSize: 10
                                         elide: Text.ElideRight
@@ -1158,6 +1361,7 @@ ShellRoot {
                                         Flickable {
                                             id: logFlickable
 
+                                            visible: root.viewerMode === "logs"
                                             anchors.fill: parent
                                             anchors.margins: 8
                                             contentWidth: width
@@ -1201,6 +1405,71 @@ ShellRoot {
                                                     opacity: 0.78
                                                     height: Math.max(28, parent.height * (logFlickable.height / Math.max(logFlickable.contentHeight, 1)))
                                                     y: (parent.height - height) * (logFlickable.contentY / Math.max(logFlickable.contentHeight - logFlickable.height, 1))
+                                                }
+                                            }
+                                        }
+
+                                        Flickable {
+                                            id: penaltyFlickable
+
+                                            visible: root.viewerMode === "penalty"
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            contentWidth: width
+                                            contentHeight: penaltyColumn.height
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            clip: true
+                                            interactive: contentHeight > height
+
+                                            Column {
+                                                id: penaltyColumn
+
+                                                width: penaltyFlickable.width - 12
+                                                spacing: 7
+
+                                                Text {
+                                                    width: parent.width
+                                                    visible: root.penaltyEntries.length === 0
+                                                    text: "No IP addresses are currently in ssh_abuse."
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 12
+                                                    wrapMode: Text.WordWrap
+                                                }
+
+                                                Repeater {
+                                                    model: root.penaltyEntries
+
+                                                    delegate: Rectangle {
+                                                        id: penaltyRow
+
+                                                        required property var modelData
+                                                        readonly property bool selected: root.selectedPenaltyIp === modelData.ip
+
+                                                        width: parent.width
+                                                        height: 34
+                                                        radius: 7
+                                                        color: selected ? Qt.alpha(root.palette.warning, 0.18) : root.palette.cardBackground
+                                                        border.width: 1
+                                                        border.color: selected ? root.palette.warning : root.palette.frameBorder
+
+                                                        Text {
+                                                            anchors.left: parent.left
+                                                            anchors.leftMargin: 10
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            text: penaltyRow.modelData.ip
+                                                            color: penaltyRow.selected ? root.palette.warning : root.palette.secondaryText
+                                                            font.family: "monospace"
+                                                            font.pixelSize: 13
+                                                            font.bold: penaltyRow.selected
+                                                        }
+
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: root.selectedPenaltyIp = penaltyRow.modelData.ip
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
