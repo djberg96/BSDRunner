@@ -73,6 +73,12 @@ collect_procstat_output() {
         return 1
     fi
 
+    output="$(procstat -v -a 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
     # shellcheck disable=SC2086
     procstat -v $pids 2>/dev/null || true
 }
@@ -126,7 +132,7 @@ write_pss_totals() {
     output_file="$3"
     pages_kb="$4"
 
-    awk -F '[ 	]+' -v page_kb="$pages_kb" '
+    awk -v page_kb="$pages_kb" '
         FNR == NR {
             process_name[$1] = $2
             rss_kb[$1] = $3 + 0
@@ -187,7 +193,7 @@ write_private_totals() {
     output_file="$3"
     pages_kb="$4"
 
-    awk -F '[ 	]+' -v page_kb="$pages_kb" '
+    awk -v page_kb="$pages_kb" '
         FNR == NR {
             process_name[$1] = $2
             rss_kb[$1] = $3 + 0
