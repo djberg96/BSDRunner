@@ -448,7 +448,7 @@ ShellRoot {
 
                         readonly property int visiblePoolCount: root.pools.length > 0 ? Math.min(root.pools.length, 2) : 1
 
-                        width: 28 + (visiblePoolCount * 94) + 114 + (visiblePoolCount * 10)
+                        width: 360
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -466,7 +466,7 @@ ShellRoot {
                                 delegate: Rectangle {
                                     required property var modelData
 
-                                    width: 94
+                                    width: Math.floor((poolSummaryCard.width - 28 - 114 - (poolSummaryCard.visiblePoolCount * 10)) / poolSummaryCard.visiblePoolCount)
                                     height: 80
                                     radius: 8
                                     color: root.palette.panelBackground
@@ -540,7 +540,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 320 - poolSummaryCard.width - 28
+                        width: parent.width - 320 - 360 - 28
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
