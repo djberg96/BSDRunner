@@ -271,32 +271,32 @@ ShellRoot {
                         Row {
                             anchors.fill: parent
                             anchors.margins: 14
-                            spacing: 18
 
                             Text {
-                                width: 268
+                                width: 118
                                 text: root.memoryHeading
                                 color: root.textColor
                                 font.pixelSize: 16
                                 font.bold: true
                                 verticalAlignment: Text.AlignVCenter
                                 height: parent.height
+                                horizontalAlignment: Text.AlignRight
                                 elide: Text.ElideRight
                             }
 
                             Text {
-                                width: 76
+                                width: 94
                                 text: root.topTotalLabel
                                 color: root.accentStrongColor
                                 font.pixelSize: 16
                                 font.bold: true
                                 verticalAlignment: Text.AlignVCenter
                                 height: parent.height
-                                horizontalAlignment: Text.AlignRight
+                                horizontalAlignment: Text.AlignHCenter
                             }
 
                             Text {
-                                width: parent.width - 268 - 76 - 36
+                                width: parent.width - 118 - 94
                                 text: root.generatedAt.length > 0 ? "Updated " + root.generatedAt : ""
                                 color: Qt.alpha(root.textColor, 0.58)
                                 font.pixelSize: 11
