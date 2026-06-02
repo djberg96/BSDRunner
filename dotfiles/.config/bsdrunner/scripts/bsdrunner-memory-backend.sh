@@ -401,6 +401,116 @@ write_private_json_totals() {
         head -n 8 > "$output_file"
 }
 
+write_private_pid_jq_totals() {
+    ps_file="$1"
+    output_file="$2"
+    pages_kb="$3"
+
+    if ! command -v jq >/dev/null 2>&1 || ! command -v procstat >/dev/null 2>&1; then
+        return 1
+    fi
+
+    raw_file="${output_file}.raw"
+    : > "$raw_file"
+
+    sort -rn -k3,3 "$ps_file" |
+        head -n 40 |
+        while IFS="$(printf '\t')" read -r pid name rss_kb cpu_percent; do
+            case "$pid" in
+                ''|*[!0-9]*)
+                    continue
+                    ;;
+            esac
+
+            if [ -n "${BSDRUNNER_MEMORY_PROCSTAT_JSON_OUTPUT:-}" ]; then
+                output="$BSDRUNNER_MEMORY_PROCSTAT_JSON_OUTPUT"
+            else
+                output="$(procstat --libxo=json,pretty,underscores -v "$pid" 2>/dev/null || true)"
+                if [ -z "$output" ]; then
+                    output="$(procstat --libxo json,pretty,underscores -v "$pid" 2>/dev/null || true)"
+                fi
+            fi
+            if [ -z "$output" ]; then
+                continue
+            fi
+
+            private_pages="$(
+                printf '%s\n' "$output" |
+                    jq -r --arg pid "$pid" '
+                        def private_pages:
+                            (.kve_private_resident // .private_resident // .pres // .pv_resident // 0);
+
+                        def mapping_pages($mapping):
+                            $mapping | private_pages;
+
+                        def process_pages($process):
+                            if (($process.vm? // null) | type) == "array" then
+                                $process.vm[] | mapping_pages(.)
+                            elif ($process | has("kve_private_resident") or has("private_resident") or has("pres") or has("pv_resident")) then
+                                $process | mapping_pages(.)
+                            else
+                                empty
+                            end;
+
+                        (.procstat.vm // empty) as $vm |
+                        [
+                            if ($vm | type) == "object" then
+                                if ($vm[$pid]?) then
+                                    process_pages($vm[$pid])
+                                else
+                                    $vm | to_entries[] | select((.value.process_id // empty | tostring) == $pid) | process_pages(.value)
+                                end
+                            elif ($vm | type) == "array" then
+                                $vm[] | process_pages(.)
+                            else
+                                empty
+                            end
+                        ] |
+                        add // 0
+                    '
+            )"
+
+            case "$private_pages" in
+                ''|*[!0-9.]*)
+                    continue
+                    ;;
+            esac
+
+            private_kb="$(awk -v pages="$private_pages" -v page_kb="$pages_kb" 'BEGIN { printf "%.0f", pages * page_kb }')"
+            if [ "$private_kb" -le 0 ]; then
+                continue
+            fi
+
+            printf '%s\t%s\t%s\t%s\n' "$private_kb" "$name" "$rss_kb" "$cpu_percent" >> "$raw_file"
+        done
+
+    awk -F '	' '
+        {
+            memory = $1 + 0
+            name = $2
+            rss = $3 + 0
+            cpu = $4 + 0
+
+            if (memory <= 0 || name == "") {
+                next
+            }
+
+            memory_total[name] += memory
+            rss_total[name] += rss
+            cpu_total[name] += cpu
+            process_count[name] += 1
+        }
+
+        END {
+            for (name in memory_total) {
+                printf "%d\t%s\t%.1f\t%d\t%d\n", memory_total[name], name, cpu_total[name], process_count[name], rss_total[name]
+            }
+        }
+    ' "$raw_file" |
+        sort -rn -k1,1 |
+        head -n 8 > "$output_file"
+}
+
 write_private_totals() {
     ps_file="$1"
     procstat_file="$2"
@@ -682,7 +792,15 @@ if [ ! -s "$ps_file" ]; then
 fi
 
 pids="$(sort -rn -k3,3 "$ps_file" | head -n 40 | awk -F '	' '{ printf "%s ", $1 }')"
-procstat_json_output="$(collect_procstat_json_output "$pids" || true)"
+procstat_json_output=""
+
+if [ "${BSDRUNNER_MEMORY_MODE:-private}" != "pss" ]; then
+    write_private_pid_jq_totals "$ps_file" "$totals_file" "$(page_kb)" || true
+fi
+
+if [ ! -s "$totals_file" ]; then
+    procstat_json_output="$(collect_procstat_json_output "$pids" || true)"
+fi
 
 if [ -n "$procstat_json_output" ] && [ "${BSDRUNNER_MEMORY_MODE:-private}" != "pss" ]; then
     printf '%s\n' "$procstat_json_output" > "$procstat_json_file"
