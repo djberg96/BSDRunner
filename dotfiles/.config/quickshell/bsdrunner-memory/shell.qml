@@ -23,6 +23,7 @@ ShellRoot {
     readonly property string palettePath: homeDir + "/.config/bsdrunner/themes/" + activeTheme + "/palette.conf"
     property var processes: []
     property string statusMessage: "Loading process memory..."
+    property string memoryHeading: "Top 8 Private"
     property string generatedAt: ""
     property string topTotalLabel: "--"
     property int largestRssMb: 1
@@ -66,6 +67,14 @@ ShellRoot {
         return Math.max(8, Math.round(maxWidth * (value / largest)))
     }
 
+    function processMemoryMb(process) {
+        return Number(process.memory_mb || process.rss_mb || 0)
+    }
+
+    function processMemoryLabel(process) {
+        return process.memory_label || process.rss_label || "--"
+    }
+
     function maybeFinalizeSnapshot() {
         if (!snapshotExited || !snapshotStdoutFinished || !snapshotStderrFinished)
             return
@@ -84,6 +93,7 @@ ShellRoot {
                 : snapshotStderrText.trim().length > 0
                     ? snapshotStderrText.trim()
                     : "Unable to read process memory."
+            memoryHeading = "Top 8 Private"
             generatedAt = ""
             topTotalLabel = "--"
             largestRssMb = 1
@@ -91,13 +101,14 @@ ShellRoot {
         }
 
         processes = payload.processes || []
-        statusMessage = payload.message || "RSS totals by command; shared memory can be counted more than once."
+        statusMessage = payload.message || "Private resident memory by command using procstat PRES."
+        memoryHeading = payload.memory_heading || "Top 8 Private"
         generatedAt = payload.generated_at || ""
         topTotalLabel = payload.top_total_label || "--"
         largestRssMb = 1
 
         for (var i = 0; i < processes.length; i += 1)
-            largestRssMb = Math.max(largestRssMb, Number(processes[i].rss_mb || 0))
+            largestRssMb = Math.max(largestRssMb, processMemoryMb(processes[i]))
     }
 
     Timer {
@@ -270,7 +281,7 @@ ShellRoot {
                             spacing: 18
 
                             Text {
-                                text: "Top 8 RSS Sum"
+                                text: root.memoryHeading
                                 color: root.textColor
                                 font.pixelSize: 18
                                 font.bold: true
@@ -336,7 +347,7 @@ ShellRoot {
                                         anchors.left: parent.left
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.leftMargin: 8
-                                        width: root.barWidth(processRow.modelData.rss_mb, parent.width - 16)
+                                        width: root.barWidth(root.processMemoryMb(processRow.modelData), parent.width - 16)
                                         height: parent.height - 12
                                         radius: 7
                                         color: Qt.alpha(root.accentColor, 0.28)
@@ -359,7 +370,7 @@ ShellRoot {
 
                                         Text {
                                             width: 88
-                                            text: processRow.modelData.rss_label
+                                            text: root.processMemoryLabel(processRow.modelData)
                                             color: root.accentStrongColor
                                             font.pixelSize: 13
                                             font.bold: true
