@@ -148,7 +148,7 @@ ShellRoot {
 
         visible: true
         implicitWidth: 330
-        implicitHeight: 324
+        implicitHeight: 348
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 
