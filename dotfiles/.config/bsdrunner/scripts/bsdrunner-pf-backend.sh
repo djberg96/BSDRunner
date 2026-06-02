@@ -169,6 +169,14 @@ run_privileged() {
     fi
 }
 
+run_privileged_capture() {
+    if command -v mdo >/dev/null 2>&1; then
+        mdo "$@" 2>&1
+    else
+        "$@" 2>&1
+    fi
+}
+
 pf_running_state() {
     if ! command -v pfctl >/dev/null 2>&1; then
         printf 'unavailable\n'
@@ -486,35 +494,45 @@ do_penalty_clear() {
             ;;
     esac
 
-    if command -v mdo >/dev/null 2>&1; then
-        output="$(mdo pfctl -t ssh_abuse -T delete "$ip_address" 2>&1)" || {
-            emit_action_result false "Unable to clear $ip_address from the penalty box." "$output"
-            exit 1
-        }
-    else
-        output="$(pfctl -t ssh_abuse -T delete "$ip_address" 2>&1)" || {
-            emit_action_result false "Unable to clear $ip_address from the penalty box." "$output"
-            exit 1
-        }
-    fi
+    output="$(run_privileged_capture pfctl -t ssh_abuse -T delete "$ip_address")" || {
+        emit_action_result false "Unable to clear $ip_address from the penalty box." "$output"
+        exit 1
+    }
 
-    emit_action_result true "Cleared $ip_address from the penalty box." "$output"
+    source_output="$(run_privileged_capture pfctl -K "$ip_address" || true)"
+    state_output="$(run_privileged_capture pfctl -k "$ip_address" || true)"
+
+    emit_action_result true "Cleared $ip_address from the penalty box." "$output
+$source_output
+$state_output"
 }
 
 do_penalty_clear_all() {
-    if command -v mdo >/dev/null 2>&1; then
-        output="$(mdo pfctl -t ssh_abuse -T flush 2>&1)" || {
-            emit_action_result false "Unable to clear the penalty box." "$output"
-            exit 1
+    entries="$(run_privileged_capture pfctl -t ssh_abuse -T show | awk '
+        /^[[:space:]]*$/ { next }
+        /^(No ALTQ|ALTQ)/ { next }
+        {
+            value = $1
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            if (value ~ /^[0-9A-Fa-f:.]+$/)
+                print value
         }
-    else
-        output="$(pfctl -t ssh_abuse -T flush 2>&1)" || {
-            emit_action_result false "Unable to clear the penalty box." "$output"
-            exit 1
-        }
-    fi
+    ')"
 
-    emit_action_result true "Cleared all penalty-box entries." "$output"
+    output="$(run_privileged_capture pfctl -t ssh_abuse -T flush)" || {
+        emit_action_result false "Unable to clear the penalty box." "$output"
+        exit 1
+    }
+
+    reset_output=""
+    for ip_address in $entries; do
+        reset_output="$reset_output
+$(run_privileged_capture pfctl -K "$ip_address" || true)
+$(run_privileged_capture pfctl -k "$ip_address" || true)"
+    done
+
+    emit_action_result true "Cleared all penalty-box entries." "$output
+$reset_output"
 }
 
 do_validate() {
