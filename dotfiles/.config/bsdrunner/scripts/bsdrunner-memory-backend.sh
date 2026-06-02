@@ -734,7 +734,7 @@ emit_snapshot() {
         memory_kind="PSS Estimate"
     elif [ "$mode" = "private" ]; then
         message="Private resident memory by command using procstat libxo VM mappings."
-        heading="Top 8 Private"
+        heading="Private Resident Memory - Top 8"
         memory_kind="Private Estimate"
     else
         message="RSS totals by command; shared memory can be counted more than once."
@@ -780,6 +780,8 @@ if [ "${1:-}" = "debug" ]; then
     debug_mode=1
 fi
 
+memory_mode="${BSDRUNNER_MEMORY_MODE:-private}"
+
 if [ -n "${BSDRUNNER_MEMORY_PS_OUTPUT:-}" ]; then
     ps_output="$BSDRUNNER_MEMORY_PS_OUTPUT"
 else
@@ -814,7 +816,9 @@ fi
 pids="$(sort -rn -k3,3 "$ps_file" | head -n 40 | awk -F '	' '{ printf "%s ", $1 }')"
 procstat_json_output=""
 
-if [ "${BSDRUNNER_MEMORY_MODE:-private}" != "pss" ]; then
+if [ "$memory_mode" = "rss" ]; then
+    write_rss_totals "$ps_file" "$totals_file"
+elif [ "$memory_mode" != "pss" ]; then
     procstat_json_output="$(collect_procstat_json_output "$pids" || true)"
 
     if [ -n "$procstat_json_output" ]; then
@@ -834,9 +838,9 @@ fi
 
 if [ -n "$procstat_output" ]; then
     printf '%s\n' "$procstat_output" > "$procstat_file"
-    if [ "${BSDRUNNER_MEMORY_MODE:-private}" = "pss" ]; then
+    if [ "$memory_mode" = "pss" ]; then
         write_pss_totals "$ps_file" "$procstat_file" "$totals_file" "$(page_kb)"
-    else
+    elif [ "$memory_mode" != "rss" ]; then
         write_private_totals "$ps_file" "$procstat_file" "$totals_file" "$(page_kb)"
     fi
 fi
@@ -847,8 +851,13 @@ if [ "$debug_mode" -eq 1 ]; then
 fi
 
 if [ -s "$totals_file" ]; then
-    emit_snapshot "$totals_file" "${BSDRUNNER_MEMORY_MODE:-private}"
+    emit_snapshot "$totals_file" "$memory_mode"
     exit 0
+fi
+
+if [ "$memory_mode" != "rss" ] && [ "${BSDRUNNER_MEMORY_ALLOW_RSS_FALLBACK:-no}" != "yes" ]; then
+    emit_error "Private process memory was unavailable. Check that mdo can run procstat -v without prompting."
+    exit 1
 fi
 
 write_rss_totals "$ps_file" "$totals_file"

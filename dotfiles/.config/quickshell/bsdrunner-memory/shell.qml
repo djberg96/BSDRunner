@@ -23,7 +23,7 @@ ShellRoot {
     readonly property string palettePath: homeDir + "/.config/bsdrunner/themes/" + activeTheme + "/palette.conf"
     property var processes: []
     property string statusMessage: "Loading process memory..."
-    property string memoryHeading: "Top 8 Private"
+    property string memoryHeading: "Private Resident Memory - Top 8"
     property string generatedAt: ""
     property string topTotalLabel: "--"
     property int largestRssMb: 1
@@ -93,7 +93,7 @@ ShellRoot {
                 : snapshotStderrText.trim().length > 0
                     ? snapshotStderrText.trim()
                     : "Unable to read process memory."
-            memoryHeading = "Top 8 Private"
+            memoryHeading = "Private Resident Memory - Top 8"
             generatedAt = ""
             topTotalLabel = "--"
             largestRssMb = 1
@@ -102,7 +102,7 @@ ShellRoot {
 
         processes = payload.processes || []
         statusMessage = payload.message || "Private resident memory by command using procstat libxo VM mappings."
-        memoryHeading = payload.memory_heading || "Top 8 Private"
+        memoryHeading = payload.memory_heading || "Private Resident Memory - Top 8"
         generatedAt = payload.generated_at || ""
         topTotalLabel = payload.top_total_label || "--"
         largestRssMb = 1
@@ -218,23 +218,16 @@ ShellRoot {
                         width: parent.width
                         spacing: 12
 
-                        Column {
+                        Item {
                             width: parent.width - closeButton.width - 12
-                            spacing: 4
+                            height: closeButton.height
 
                             Text {
+                                anchors.verticalCenter: parent.verticalCenter
                                 text: "Memory"
                                 color: root.accentColor
-                                font.pixelSize: 15
+                                font.pixelSize: 17
                                 font.bold: true
-                            }
-
-                            Text {
-                                text: root.statusMessage
-                                color: Qt.alpha(root.textColor, 0.72)
-                                font.pixelSize: 12
-                                elide: Text.ElideRight
-                                width: parent.width
                             }
                         }
 
@@ -281,28 +274,32 @@ ShellRoot {
                             spacing: 18
 
                             Text {
+                                width: 268
                                 text: root.memoryHeading
                                 color: root.textColor
-                                font.pixelSize: 18
+                                font.pixelSize: 16
                                 font.bold: true
                                 verticalAlignment: Text.AlignVCenter
                                 height: parent.height
+                                elide: Text.ElideRight
                             }
 
                             Text {
+                                width: 76
                                 text: root.topTotalLabel
                                 color: root.accentStrongColor
-                                font.pixelSize: 18
+                                font.pixelSize: 16
                                 font.bold: true
                                 verticalAlignment: Text.AlignVCenter
                                 height: parent.height
+                                horizontalAlignment: Text.AlignRight
                             }
 
                             Text {
-                                width: parent.width - 198
+                                width: parent.width - 268 - 76 - 36
                                 text: root.generatedAt.length > 0 ? "Updated " + root.generatedAt : ""
                                 color: Qt.alpha(root.textColor, 0.58)
-                                font.pixelSize: 12
+                                font.pixelSize: 11
                                 horizontalAlignment: Text.AlignRight
                                 verticalAlignment: Text.AlignVCenter
                                 height: parent.height
