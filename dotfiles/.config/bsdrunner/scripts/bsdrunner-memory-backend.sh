@@ -120,6 +120,55 @@ write_ps_table() {
         ' > "$output_file"
 }
 
+write_pss_totals() {
+    ps_file="$1"
+    procstat_file="$2"
+    output_file="$3"
+    pages_kb="$4"
+
+    awk -F '[ 	]+' -v page_kb="$pages_kb" '
+        FNR == NR {
+            process_name[$1] = $2
+            rss_kb[$1] = $3 + 0
+            cpu_percent[$1] = $4 + 0
+            next
+        }
+
+        $1 ~ /^[0-9]+$/ {
+            pid = $1
+            res_pages = $5 + 0
+            pres_pages = $6 + 0
+            ref_count = $7 + 0
+
+            if (!(pid in process_name) || res_pages <= 0) {
+                next
+            }
+
+            name = process_name[pid]
+            shared_pages = res_pages - pres_pages
+            if (shared_pages < 0) {
+                shared_pages = 0
+            }
+            if (ref_count < 1) {
+                ref_count = 1
+            }
+
+            pss_total[name] += (pres_pages + (shared_pages / ref_count)) * page_kb
+            rss_total[name] += rss_kb[pid]
+            cpu_total[name] += cpu_percent[pid]
+            process_count[name] += 1
+        }
+
+        END {
+            for (name in pss_total) {
+                printf "%.0f\t%s\t%.1f\t%d\t%d\n", pss_total[name], name, cpu_total[name], process_count[name], rss_total[name]
+            }
+        }
+    ' "$ps_file" "$procstat_file" |
+        sort -rn -k1,1 |
+        head -n 8 > "$output_file"
+}
+
 write_private_totals() {
     ps_file="$1"
     procstat_file="$2"
@@ -196,7 +245,11 @@ emit_snapshot() {
     top_total_kb="$(awk -F '	' '{ total += $1 } END { printf "%d", total }' "$output_file")"
     top_total_label="$(format_memory "$top_total_kb")"
 
-    if [ "$mode" = "private" ]; then
+    if [ "$mode" = "pss" ]; then
+        message="PSS estimate by command using procstat RES, PRES, and REF."
+        heading="Top 8 PSS"
+        memory_kind="PSS Estimate"
+    elif [ "$mode" = "private" ]; then
         message="Private resident memory by command using procstat PRES."
         heading="Top 8 Private"
         memory_kind="Private RSS"
@@ -274,11 +327,15 @@ procstat_output="$(collect_procstat_output "$pids" || true)"
 
 if [ -n "$procstat_output" ]; then
     printf '%s\n' "$procstat_output" > "$procstat_file"
-    write_private_totals "$ps_file" "$procstat_file" "$totals_file" "$(page_kb)"
+    if [ "${BSDRUNNER_MEMORY_MODE:-private}" = "pss" ]; then
+        write_pss_totals "$ps_file" "$procstat_file" "$totals_file" "$(page_kb)"
+    else
+        write_private_totals "$ps_file" "$procstat_file" "$totals_file" "$(page_kb)"
+    fi
 fi
 
 if [ -s "$totals_file" ]; then
-    emit_snapshot "$totals_file" "private"
+    emit_snapshot "$totals_file" "${BSDRUNNER_MEMORY_MODE:-private}"
     exit 0
 fi
 
