@@ -444,7 +444,11 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: 360
+                        id: poolSummaryCard
+
+                        readonly property int visiblePoolCount: root.pools.length > 0 ? Math.min(root.pools.length, 2) : 1
+
+                        width: 28 + (visiblePoolCount * 94) + 114 + (visiblePoolCount * 10)
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -502,13 +506,6 @@ ShellRoot {
                                 }
                             }
 
-                            Item {
-                                readonly property int poolChipCount: root.pools.length > 0 ? Math.min(root.pools.length, 2) : 1
-
-                                width: Math.max(0, parent.width - (poolChipCount * 94) - 114 - ((poolChipCount + 1) * 10))
-                                height: 80
-                            }
-
                             Rectangle {
                                 width: 114
                                 height: 80
@@ -543,7 +540,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 320 - 360 - 28
+                        width: parent.width - 320 - poolSummaryCard.width - 28
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -934,7 +931,7 @@ ShellRoot {
 
                             Item {
                                 width: parent.width
-                                height: 34
+                                height: 16
                             }
 
                             Rectangle {
