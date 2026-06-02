@@ -58,7 +58,7 @@ ShellRoot {
     property string actionFeedbackDetails: ""
     readonly property var visiblePackages: packageData
     readonly property var selectedPackage: findPackage(selectedPackageName)
-    readonly property string appVersion: "1.0.0"
+    readonly property string appVersion: "1.0.1"
 
     function normalize(value) {
         return (value || "").toLowerCase()
@@ -1406,6 +1406,48 @@ ShellRoot {
                             width: parent.width
                             spacing: 14
 
+                            Rectangle {
+                                visible: root.actionFeedbackTitle.length > 0
+                                width: parent.width
+                                height: actionFeedbackColumn.implicitHeight + 22
+                                radius: 14
+                                color: root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.actionFeedbackTone === "error"
+                                    ? root.palette.danger
+                                    : root.actionFeedbackTone === "success"
+                                        ? root.palette.success
+                                        : root.palette.warning
+
+                                Column {
+                                    id: actionFeedbackColumn
+
+                                    anchors.fill: parent
+                                    anchors.margins: 11
+                                    spacing: 8
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.actionFeedbackTitle
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        visible: root.actionFeedbackDetails.length > 0
+                                        text: root.actionFeedbackDetails
+                                        color: root.actionFeedbackTone === "error"
+                                            ? root.palette.danger
+                                            : root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+
                             Text {
                                 width: parent.width
                                 height: 38
@@ -1440,48 +1482,6 @@ ShellRoot {
                                     Column {
                                         width: parent.width
                                         spacing: 10
-
-                                        Rectangle {
-                                            visible: root.actionFeedbackTitle.length > 0
-                                            width: parent.width
-                                            height: actionFeedbackColumn.implicitHeight + 22
-                                            radius: 14
-                                            color: root.palette.cardBackground
-                                            border.width: 1
-                                            border.color: root.actionFeedbackTone === "error"
-                                                ? root.palette.danger
-                                                : root.actionFeedbackTone === "success"
-                                                    ? root.palette.success
-                                                    : root.palette.warning
-
-                                            Column {
-                                                id: actionFeedbackColumn
-
-                                                anchors.fill: parent
-                                                anchors.margins: 11
-                                                spacing: 8
-
-                                                Text {
-                                                    width: parent.width
-                                                    text: root.actionFeedbackTitle
-                                                    color: root.palette.primaryText
-                                                    font.pixelSize: 13
-                                                    font.bold: true
-                                                    wrapMode: Text.WordWrap
-                                                }
-
-                                                Text {
-                                                    width: parent.width
-                                                    visible: root.actionFeedbackDetails.length > 0
-                                                    text: root.actionFeedbackDetails
-                                                    color: root.actionFeedbackTone === "error"
-                                                        ? root.palette.danger
-                                                        : root.palette.secondaryText
-                                                    font.pixelSize: 12
-                                                    wrapMode: Text.WordWrap
-                                                }
-                                            }
-                                        }
 
                                         Rectangle {
                                             visible: root.pendingActionId.length > 0
