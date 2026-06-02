@@ -33,6 +33,40 @@ emit_error() {
     printf '{"ok":false,"message":"%s","processes":[]}\n' "$(escape_json "$message")"
 }
 
+collect_ps_output() {
+    output="$(ps ax -o comm= -o rss= -o %cpu= 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
+    output="$(ps ax -o comm= -o rss= -o pcpu= 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
+    output="$(ps ax -o comm -o rss -o %cpu 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
+    output="$(ps ax -o comm -o rss -o pcpu 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
+    output="$(ps -axo comm=,rss=,%cpu= 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
+    return 1
+}
+
 if [ -n "${BSDRUNNER_MEMORY_PS_OUTPUT:-}" ]; then
     ps_output="$BSDRUNNER_MEMORY_PS_OUTPUT"
 else
@@ -41,7 +75,7 @@ else
         exit 1
     fi
 
-    ps_output="$(ps -axo comm=,rss=,pcpu= 2>/dev/null || true)"
+    ps_output="$(collect_ps_output || true)"
 fi
 
 if [ -z "$ps_output" ]; then
