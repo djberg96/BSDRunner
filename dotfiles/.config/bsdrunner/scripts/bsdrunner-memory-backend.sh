@@ -734,7 +734,7 @@ emit_snapshot() {
         memory_kind="PSS Estimate"
     elif [ "$mode" = "private" ]; then
         message="Private resident memory by command using procstat libxo VM mappings."
-        heading="Private Resident Memory - Top 8"
+        heading="Top 8"
         memory_kind="Private Estimate"
     else
         message="RSS totals by command; shared memory can be counted more than once."

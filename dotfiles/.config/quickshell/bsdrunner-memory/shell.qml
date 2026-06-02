@@ -23,7 +23,7 @@ ShellRoot {
     readonly property string palettePath: homeDir + "/.config/bsdrunner/themes/" + activeTheme + "/palette.conf"
     property var processes: []
     property string statusMessage: "Loading process memory..."
-    property string memoryHeading: "Private Resident Memory - Top 8"
+    property string memoryHeading: "Top 8"
     property string generatedAt: ""
     property string topTotalLabel: "--"
     property int largestRssMb: 1
@@ -93,7 +93,7 @@ ShellRoot {
                 : snapshotStderrText.trim().length > 0
                     ? snapshotStderrText.trim()
                     : "Unable to read process memory."
-            memoryHeading = "Private Resident Memory - Top 8"
+            memoryHeading = "Top 8"
             generatedAt = ""
             topTotalLabel = "--"
             largestRssMb = 1
@@ -102,7 +102,7 @@ ShellRoot {
 
         processes = payload.processes || []
         statusMessage = payload.message || "Private resident memory by command using procstat libxo VM mappings."
-        memoryHeading = payload.memory_heading || "Private Resident Memory - Top 8"
+        memoryHeading = payload.memory_heading || "Top 8"
         generatedAt = payload.generated_at || ""
         topTotalLabel = payload.top_total_label || "--"
         largestRssMb = 1
@@ -224,7 +224,7 @@ ShellRoot {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "Memory"
+                                text: "Private Resident Memory"
                                 color: root.accentColor
                                 font.pixelSize: 17
                                 font.bold: true
