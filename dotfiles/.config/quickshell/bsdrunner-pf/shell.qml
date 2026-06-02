@@ -1150,16 +1150,19 @@ ShellRoot {
                                 Repeater {
                                     model: [
                                         {
+                                            "id": "enabled",
                                             "label": "Enabled",
                                             "value": root.enabledRuleCount() + " / " + root.rules.length,
                                             "tone": "success"
                                         },
                                         {
+                                            "id": "ssh",
                                             "label": "SSH",
                                             "value": root.settingValue("allow_ssh_lan") ? "LAN only" : "Off",
                                             "tone": root.settingValue("allow_ssh_lan") ? "warning" : "info"
                                         },
                                         {
+                                            "id": "logging",
                                             "label": "Logging",
                                             "value": root.settingValue("log_blocked") ? "On" : "Off",
                                             "tone": root.settingValue("log_blocked") ? "warning" : "info"
@@ -1167,12 +1170,15 @@ ShellRoot {
                                     ]
 
                                     delegate: Rectangle {
+                                        id: summaryMetricCard
+
                                         required property var modelData
+                                        readonly property bool clickable: modelData.id === "logging" && root.settingValue("log_blocked")
 
                                         width: (summaryMetricRow.width - summaryMetricRow.spacing * 2) / 3
                                         height: 34
                                         radius: 8
-                                        color: root.palette.panelBackground
+                                        color: clickable && summaryMetricMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
                                         border.width: 1
                                         border.color: root.toneColor(modelData.tone)
 
@@ -1206,6 +1212,16 @@ ShellRoot {
                                                 verticalAlignment: Text.AlignVCenter
                                                 elide: Text.ElideRight
                                             }
+                                        }
+
+                                        MouseArea {
+                                            id: summaryMetricMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: summaryMetricCard.clickable
+                                            enabled: summaryMetricCard.clickable
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.viewerMode = "logs"
                                         }
                                     }
                                 }
