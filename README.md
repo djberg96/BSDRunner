@@ -154,6 +154,16 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-dns.sh
 
 The GUI starts in read-only status mode until you choose an action. See `docs/dns.md` for backend commands and manual acceptance checks.
 
+## ZFS
+
+BSDRunner includes a laptop-focused ZFS snapshot surface for pool health, datasets, and basic snapshot actions.
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-zfs.sh
+```
+
+See `docs/zfs.md` for the backend commands and scope.
+
 ## Scope
 
 This starter is targeted at:

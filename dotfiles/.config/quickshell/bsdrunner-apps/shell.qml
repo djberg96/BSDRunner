@@ -36,6 +36,13 @@ ShellRoot {
             "tone": "info"
         },
         {
+            "action": "zfs",
+            "icon": "ZFS",
+            "label": "ZFS",
+            "detail": "Snapshots and pool health",
+            "tone": "warning"
+        },
+        {
             "action": "firefox",
             "icon": "WEB",
             "label": "Firefox",
@@ -73,6 +80,11 @@ ShellRoot {
             return [
                 "sh",
                 themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-dns.sh"
+            ]
+        case "zfs":
+            return [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-zfs.sh"
             ]
         case "firefox":
             return ["firefox"]
@@ -136,7 +148,7 @@ ShellRoot {
 
         visible: true
         implicitWidth: 330
-        implicitHeight: 292
+        implicitHeight: 348
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 
