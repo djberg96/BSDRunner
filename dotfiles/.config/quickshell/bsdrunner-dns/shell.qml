@@ -121,11 +121,23 @@ ShellRoot {
     }
 
     function requestAction(actionId, label, description) {
-        if (runningAction)
+        if (runningAction || !actionAvailable(actionId))
             return
         pendingActionId = actionId
         pendingActionLabel = label
         pendingActionDescription = description
+    }
+
+    function actionAvailable(actionId) {
+        var cacheEnabled = serviceRunning || bootEnabled
+        switch (actionId) {
+        case "enable":
+            return !cacheEnabled
+        case "disable":
+            return cacheEnabled
+        default:
+            return true
+        }
     }
 
     function clearPendingAction() {
@@ -557,19 +569,23 @@ ShellRoot {
 
                             required property var modelData
                             readonly property bool dangerous: modelData.id === "disable"
+                            readonly property bool actionEnabled: root.actionAvailable(modelData.id) && !root.runningAction
+                            readonly property bool hovered: actionMouse.containsMouse && actionEnabled
 
                             width: (parent.width - 30) / 4
                             height: parent.height
                             radius: 8
-                            color: actionMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                            color: hovered ? root.palette.cardHover : root.palette.cardBackground
                             border.width: 1
-                            border.color: dangerous ? root.palette.warning : root.palette.panelBorder
-                            opacity: root.runningAction ? 0.48 : 1.0
+                            border.color: dangerous && actionEnabled ? root.palette.warning : root.palette.panelBorder
+                            opacity: actionEnabled ? 1.0 : 0.42
 
                             Text {
                                 anchors.centerIn: parent
                                 text: actionButton.modelData.label
-                                color: actionButton.dangerous ? root.palette.warning : root.palette.primaryText
+                                color: actionButton.actionEnabled
+                                    ? (actionButton.dangerous ? root.palette.warning : root.palette.primaryText)
+                                    : root.palette.mutedText
                                 font.pixelSize: 13
                                 font.bold: true
                             }
@@ -578,8 +594,9 @@ ShellRoot {
                                 id: actionMouse
 
                                 anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
+                                enabled: actionButton.actionEnabled
+                                hoverEnabled: actionButton.actionEnabled
+                                cursorShape: actionButton.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                 onClicked: root.requestAction(actionButton.modelData.id, actionButton.modelData.label, actionButton.modelData.description)
                             }
                         }
