@@ -113,12 +113,17 @@ collect_procstat_json_output() {
         return 1
     fi
 
-    output="$(procstat --libxo=json,pretty,underscores -a vm 2>/dev/null || true)"
+    # The all-process libxo VM form can emit only process stubs on FreeBSD 15,
+    # so ask for known PIDs first and fall back to one PID at a time.
+    # shellcheck disable=SC2086
+    output="$(procstat --libxo=json,pretty,underscores -v $pids 2>/dev/null || true)"
     if [ -z "$output" ]; then
-        output="$(procstat --libxo json,pretty,underscores -a vm 2>/dev/null || true)"
+        # shellcheck disable=SC2086
+        output="$(procstat --libxo json,pretty,underscores -v $pids 2>/dev/null || true)"
     fi
     if [ -z "$output" ]; then
-        output="$(procstat --libxo=json,pretty,underscores vm -a 2>/dev/null || true)"
+        # shellcheck disable=SC2086
+        output="$(procstat --libxo=json,pretty,underscores vm $pids 2>/dev/null || true)"
     fi
     if [ -z "$output" ]; then
         output="$(procstat --libxo=json,pretty,underscores -v -a 2>/dev/null || true)"
@@ -127,14 +132,36 @@ collect_procstat_json_output() {
         output="$(procstat --libxo json,pretty,underscores -v -a 2>/dev/null || true)"
     fi
     if [ -n "$output" ]; then
+        if printf '%s\n' "$output" | grep -Eq '"kve_private_resident"|"private_resident"|"pv_resident"'; then
+            printf '%s\n' "$output"
+            return 0
+        fi
+    fi
+
+    output=""
+    for pid in $pids; do
+        case "$pid" in
+            ''|*[!0-9]*)
+                continue
+                ;;
+        esac
+
+        pid_output="$(procstat --libxo=json,pretty,underscores -v "$pid" 2>/dev/null || true)"
+        if [ -z "$pid_output" ]; then
+            pid_output="$(procstat --libxo json,pretty,underscores -v "$pid" 2>/dev/null || true)"
+        fi
+        if [ -n "$pid_output" ]; then
+            output="${output}${output:+
+}${pid_output}"
+        fi
+    done
+
+    if [ -n "$output" ]; then
         printf '%s\n' "$output"
         return 0
     fi
 
-    # shellcheck disable=SC2086
-    procstat --libxo=json,pretty,underscores vm $pids 2>/dev/null ||
-        procstat --libxo=json,pretty,underscores -v $pids 2>/dev/null ||
-        true
+    procstat --libxo=json,pretty,underscores -a -v 2>/dev/null || true
 }
 
 page_kb() {
@@ -249,6 +276,56 @@ write_private_json_totals() {
     procstat_json_file="$2"
     output_file="$3"
     pages_kb="$4"
+
+    if command -v jq >/dev/null 2>&1; then
+        jq -rs '
+            (map(.procstat.vm // {}) | add // {}) |
+            to_entries[] |
+            . as $entry |
+            ($entry.value.process_id // ($entry.key | tonumber)) as $pid |
+            ($entry.value.vm // [])[]? |
+            [
+                $pid,
+                (.kve_private_resident // .private_resident // .pres // .pv_resident // 0)
+            ] |
+            @tsv
+        ' "$procstat_json_file" |
+            awk -F '	' -v page_kb="$pages_kb" '
+                FNR == NR {
+                    process_name[$1] = $2
+                    rss_kb[$1] = $3 + 0
+                    cpu_percent[$1] = $4 + 0
+                    next
+                }
+
+                {
+                    pid = $1
+                    private_pages = $2 + 0
+
+                    if (!(pid in process_name) || private_pages <= 0) {
+                        next
+                    }
+
+                    name = process_name[pid]
+                    private_total[name] += private_pages * page_kb
+                    if (!seen_pid[name, pid]) {
+                        process_count[name] += 1
+                        rss_total[name] += rss_kb[pid]
+                        cpu_total[name] += cpu_percent[pid]
+                        seen_pid[name, pid] = 1
+                    }
+                }
+
+                END {
+                    for (name in private_total) {
+                        printf "%d\t%s\t%.1f\t%d\t%d\n", private_total[name], name, cpu_total[name], process_count[name], rss_total[name]
+                    }
+                }
+            ' "$ps_file" - |
+            sort -rn -k1,1 |
+            head -n 8 > "$output_file"
+        return 0
+    fi
 
     awk -v page_kb="$pages_kb" '
         FNR == NR {
@@ -467,16 +544,24 @@ emit_debug() {
 
     procstat_json_rows=0
     if [ -s "$procstat_json_file" ]; then
-        procstat_json_rows="$(
-            awk '
-                /^[[:space:]]*"process_id"[[:space:]]*:/ || /^[[:space:]]*"pid"[[:space:]]*:/ {
-                    count += 1
-                }
-                END {
-                    print count + 0
-                }
-            ' "$procstat_json_file"
-        )"
+        if command -v jq >/dev/null 2>&1; then
+            procstat_json_rows="$(
+                jq -rs '
+                    [(map(.procstat.vm // {}) | add // {}) | to_entries[] | (.value.vm // [])[]?] | length
+                ' "$procstat_json_file"
+            )"
+        else
+            procstat_json_rows="$(
+                awk '
+                    /^[[:space:]]*"kve_private_resident"[[:space:]]*:/ || /^[[:space:]]*"private_resident"[[:space:]]*:/ {
+                        count += 1
+                    }
+                    END {
+                        print count + 0
+                    }
+                ' "$procstat_json_file"
+            )"
+        fi
     fi
 
     set -- $private_stats
@@ -596,7 +681,7 @@ if [ ! -s "$ps_file" ]; then
     exit 1
 fi
 
-pids="$(awk -F '	' '{ printf "%s ", $1 }' "$ps_file")"
+pids="$(sort -rn -k3,3 "$ps_file" | head -n 40 | awk -F '	' '{ printf "%s ", $1 }')"
 procstat_json_output="$(collect_procstat_json_output "$pids" || true)"
 
 if [ -n "$procstat_json_output" ] && [ "${BSDRUNNER_MEMORY_MODE:-private}" != "pss" ]; then
