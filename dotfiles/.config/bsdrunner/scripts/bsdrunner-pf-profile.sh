@@ -160,16 +160,16 @@ EOF
 
 # Allow SSH only from private IPv4 LAN ranges.
 # PF cannot count failed SSH passwords, so this limits new connection attempts:
-# one active SSH connection per LAN source, and five new attempts per 24 hours.
+# three active SSH connections per LAN source, and twenty new attempts per 24 hours.
 block in quick inet proto tcp from <ssh_abuse> to any port 22
-pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 1, max-src-conn-rate 5/86400, overload <ssh_abuse> flush global)
+pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 3, max-src-conn-rate 20/86400, overload <ssh_abuse> flush global)
 EOF
     else
         cat <<'EOF'
 
 # Optional SSH rule, disabled by default:
 # block in quick inet proto tcp from <ssh_abuse> to any port 22
-# pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 1, max-src-conn-rate 5/86400, overload <ssh_abuse> flush global)
+# pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 3, max-src-conn-rate 20/86400, overload <ssh_abuse> flush global)
 EOF
     fi
 
