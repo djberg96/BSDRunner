@@ -101,7 +101,7 @@ ShellRoot {
         }
 
         processes = payload.processes || []
-        statusMessage = payload.message || "Private resident estimate by command using procstat RES rows with SHD 0."
+        statusMessage = payload.message || "Private resident memory by command using procstat libxo VM mappings."
         memoryHeading = payload.memory_heading || "Top 8 Private"
         generatedAt = payload.generated_at || ""
         topTotalLabel = payload.top_total_label || "--"

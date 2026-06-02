@@ -33,6 +33,18 @@ emit_error() {
     printf '{"ok":false,"message":"%s","processes":[]}\n' "$(escape_json "$message")"
 }
 
+debug_value() {
+    value="${1:-}"
+    case "$value" in
+        ''|*[!0-9]*)
+            printf '0\n'
+            ;;
+        *)
+            printf '%s\n' "$value"
+            ;;
+    esac
+}
+
 collect_ps_output() {
     output="$(ps ax -o pid= -o comm= -o rss= -o %cpu= 2>/dev/null || true)"
     if [ -n "$output" ]; then
@@ -81,6 +93,31 @@ collect_procstat_output() {
 
     # shellcheck disable=SC2086
     procstat -v $pids 2>/dev/null || true
+}
+
+collect_procstat_json_output() {
+    pids="$1"
+
+    if [ -n "${BSDRUNNER_MEMORY_PROCSTAT_JSON_OUTPUT:-}" ]; then
+        printf '%s\n' "$BSDRUNNER_MEMORY_PROCSTAT_JSON_OUTPUT"
+        return 0
+    fi
+
+    if [ -z "$pids" ] || ! command -v procstat >/dev/null 2>&1; then
+        return 1
+    fi
+
+    output="$(procstat --libxo=json,pretty,underscores -v -a 2>/dev/null || true)"
+    if [ -z "$output" ]; then
+        output="$(procstat --libxo json,pretty,underscores -v -a 2>/dev/null || true)"
+    fi
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+
+    # shellcheck disable=SC2086
+    procstat --libxo=json,pretty,underscores -v $pids 2>/dev/null || true
 }
 
 page_kb() {
@@ -172,9 +209,12 @@ write_pss_totals() {
             }
 
             pss_total[name] += (pres_pages + (shared_pages / ref_count)) * page_kb
-            rss_total[name] += rss_kb[pid]
-            cpu_total[name] += cpu_percent[pid]
-            process_count[name] += 1
+            if (!seen_pid[name, pid]) {
+                process_count[name] += 1
+                rss_total[name] += rss_kb[pid]
+                cpu_total[name] += cpu_percent[pid]
+                seen_pid[name, pid] = 1
+            }
         }
 
         END {
@@ -183,6 +223,86 @@ write_pss_totals() {
             }
         }
     ' "$ps_file" "$procstat_file" |
+        sort -rn -k1,1 |
+        head -n 8 > "$output_file"
+}
+
+write_private_json_totals() {
+    ps_file="$1"
+    procstat_json_file="$2"
+    output_file="$3"
+    pages_kb="$4"
+
+    awk -v page_kb="$pages_kb" '
+        FNR == NR {
+            process_name[$1] = $2
+            rss_kb[$1] = $3 + 0
+            cpu_percent[$1] = $4 + 0
+            next
+        }
+
+        function json_key(line, text) {
+            text = line
+            sub(/^[[:space:]]*"/, "", text)
+            sub(/".*$/, "", text)
+            gsub(/-/, "_", text)
+            return text
+        }
+
+        function json_value(line, text) {
+            text = line
+            sub(/^[^:]*:[[:space:]]*/, "", text)
+            sub(/,[[:space:]]*$/, "", text)
+            sub(/^"/, "", text)
+            sub(/"$/, "", text)
+            return text
+        }
+
+        function flush_mapping() {
+            if ((pid in process_name) && private_pages > 0) {
+                name = process_name[pid]
+                private_total[name] += private_pages * page_kb
+                if (!seen_pid[name, pid]) {
+                    process_count[name] += 1
+                    rss_total[name] += rss_kb[pid]
+                    cpu_total[name] += cpu_percent[pid]
+                    seen_pid[name, pid] = 1
+                }
+            }
+
+            pid = ""
+            private_pages = 0
+        }
+
+        /^[[:space:]]*"[^"]+"[[:space:]]*:/ {
+            key = json_key($0)
+            value = json_value($0)
+
+            if (key == "process_id" || key == "pid") {
+                if (pid != "") {
+                    flush_mapping()
+                }
+                pid = value + 0
+            } else if (key == "private_resident" || key == "pres") {
+                private_pages = value + 0
+            }
+        }
+
+        /^[[:space:]]*}[,]?[[:space:]]*$/ {
+            if (pid != "") {
+                flush_mapping()
+            }
+        }
+
+        END {
+            if (pid != "") {
+                flush_mapping()
+            }
+            for (name in private_total) {
+                printf "%d\t%s\t%.1f\t%d\t%d\n", private_total[name], name, cpu_total[name], process_count[name], rss_total[name]
+            }
+        }
+    ' "$ps_file" "$procstat_json_file" |
         sort -rn -k1,1 |
         head -n 8 > "$output_file"
 }
@@ -222,9 +342,12 @@ write_private_totals() {
 
             name = process_name[pid]
             private_total[name] += res_pages * page_kb
-            rss_total[name] += rss_kb[pid]
-            cpu_total[name] += cpu_percent[pid]
-            process_count[name] += 1
+            if (!seen_pid[name, pid]) {
+                process_count[name] += 1
+                rss_total[name] += rss_kb[pid]
+                cpu_total[name] += cpu_percent[pid]
+                seen_pid[name, pid] = 1
+            }
         }
 
         END {
@@ -266,6 +389,105 @@ write_rss_totals() {
         head -n 8 > "$output_file"
 }
 
+emit_debug() {
+    ps_file="$1"
+    procstat_file="$2"
+    procstat_json_file="$3"
+    totals_file="$4"
+
+    ps_rows="$(wc -l < "$ps_file" | awk '{ print $1 + 0 }')"
+    totals_rows="$(wc -l < "$totals_file" 2>/dev/null | awk '{ print $1 + 0 }')"
+    procstat_rows=0
+    procstat_header=""
+    private_stats="0 0 0 0 0 0"
+
+    if [ -s "$procstat_file" ]; then
+        procstat_rows="$(awk '$1 ~ /^[0-9]+$/ { count += 1 } END { print count + 0 }' "$procstat_file")"
+        procstat_header="$(awk '$1 == "PID" { print; exit }' "$procstat_file")"
+        private_stats="$(
+            awk '
+                FNR == NR {
+                    process_name[$1] = $2
+                    next
+                }
+
+                {
+                    for (i = 1; i <= NF; i += 1) {
+                        if ($i == "RES") {
+                            res_idx = i
+                        } else if ($i == "SHD") {
+                            shd_idx = i
+                        }
+                    }
+                }
+
+                $1 ~ /^[0-9]+$/ {
+                    total_rows += 1
+                    pid = $1
+                    res_pages = $(res_idx ? res_idx : 5) + 0
+                    shared_count = $(shd_idx ? shd_idx : 8) + 0
+
+                    if (pid in process_name) {
+                        pid_matches += 1
+                    }
+                    if (res_pages > 0) {
+                        resident_rows += 1
+                    }
+                    if (shared_count == 0) {
+                        unshared_rows += 1
+                    }
+                    if ((pid in process_name) && res_pages > 0 && shared_count == 0) {
+                        usable_rows += 1
+                    }
+                }
+
+                END {
+                    printf "%d %d %d %d %d %d\n", total_rows + 0, pid_matches + 0, resident_rows + 0, unshared_rows + 0, usable_rows + 0, res_idx + 0
+                }
+            ' "$ps_file" "$procstat_file"
+        )"
+    fi
+
+    procstat_json_rows=0
+    if [ -s "$procstat_json_file" ]; then
+        procstat_json_rows="$(
+            awk '
+                /^[[:space:]]*"process_id"[[:space:]]*:/ || /^[[:space:]]*"pid"[[:space:]]*:/ {
+                    count += 1
+                }
+                END {
+                    print count + 0
+                }
+            ' "$procstat_json_file"
+        )"
+    fi
+
+    set -- $private_stats
+    total_rows="$(debug_value "${1:-0}")"
+    pid_matches="$(debug_value "${2:-0}")"
+    resident_rows="$(debug_value "${3:-0}")"
+    unshared_rows="$(debug_value "${4:-0}")"
+    usable_rows="$(debug_value "${5:-0}")"
+    res_column="$(debug_value "${6:-0}")"
+
+    printf 'BSDRunner memory backend debug\n'
+    printf 'ps rows: %s\n' "$ps_rows"
+    printf 'procstat json mapping rows: %s\n' "$procstat_json_rows"
+    printf 'procstat rows: %s\n' "$procstat_rows"
+    printf 'procstat header: %s\n' "${procstat_header:-not found}"
+    printf 'detected RES column: %s\n' "$res_column"
+    printf 'procstat PID rows total: %s\n' "$total_rows"
+    printf 'procstat PID rows matching ps PIDs: %s\n' "$pid_matches"
+    printf 'procstat rows with RES > 0: %s\n' "$resident_rows"
+    printf 'procstat rows with SHD == 0: %s\n' "$unshared_rows"
+    printf 'private usable rows: %s\n' "$usable_rows"
+    printf 'private totals rows: %s\n' "$totals_rows"
+    if [ -s "$totals_file" ]; then
+        printf 'private totals preview:\n'
+        sed -n '1,8p' "$totals_file"
+    fi
+}
+
 emit_snapshot() {
     output_file="$1"
     mode="$2"
@@ -279,7 +501,7 @@ emit_snapshot() {
         heading="Top 8 PSS"
         memory_kind="PSS Estimate"
     elif [ "$mode" = "private" ]; then
-        message="Private resident estimate by command using procstat RES rows with SHD 0."
+        message="Private resident memory by command using procstat libxo VM mappings."
         heading="Top 8 Private"
         memory_kind="Private Estimate"
     else
@@ -321,6 +543,11 @@ emit_snapshot() {
     printf ']}\n'
 }
 
+debug_mode=0
+if [ "${1:-}" = "debug" ]; then
+    debug_mode=1
+fi
+
 if [ -n "${BSDRUNNER_MEMORY_PS_OUTPUT:-}" ]; then
     ps_output="$BSDRUNNER_MEMORY_PS_OUTPUT"
 else
@@ -341,6 +568,7 @@ tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-memory.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 ps_file="$tmp_dir/ps.tsv"
+procstat_json_file="$tmp_dir/procstat.json"
 procstat_file="$tmp_dir/procstat.txt"
 totals_file="$tmp_dir/totals.tsv"
 
@@ -352,7 +580,17 @@ if [ ! -s "$ps_file" ]; then
 fi
 
 pids="$(awk -F '	' '{ printf "%s ", $1 }' "$ps_file")"
-procstat_output="$(collect_procstat_output "$pids" || true)"
+procstat_json_output="$(collect_procstat_json_output "$pids" || true)"
+
+if [ -n "$procstat_json_output" ] && [ "${BSDRUNNER_MEMORY_MODE:-private}" != "pss" ]; then
+    printf '%s\n' "$procstat_json_output" > "$procstat_json_file"
+    write_private_json_totals "$ps_file" "$procstat_json_file" "$totals_file" "$(page_kb)"
+fi
+
+procstat_output=""
+if [ ! -s "$totals_file" ]; then
+    procstat_output="$(collect_procstat_output "$pids" || true)"
+fi
 
 if [ -n "$procstat_output" ]; then
     printf '%s\n' "$procstat_output" > "$procstat_file"
@@ -361,6 +599,11 @@ if [ -n "$procstat_output" ]; then
     else
         write_private_totals "$ps_file" "$procstat_file" "$totals_file" "$(page_kb)"
     fi
+fi
+
+if [ "$debug_mode" -eq 1 ]; then
+    emit_debug "$ps_file" "$procstat_file" "$procstat_json_file" "$totals_file"
+    exit 0
 fi
 
 if [ -s "$totals_file" ]; then
