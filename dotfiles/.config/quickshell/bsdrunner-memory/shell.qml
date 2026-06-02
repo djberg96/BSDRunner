@@ -300,78 +300,110 @@ ShellRoot {
                         }
                     }
 
-                    Column {
+                    Flickable {
+                        id: processFlickable
+
                         width: parent.width
-                        spacing: 8
+                        height: parent.height - y
+                        contentWidth: width
+                        contentHeight: processColumn.height
+                        boundsBehavior: Flickable.StopAtBounds
+                        clip: true
+                        interactive: contentHeight > height
 
-                        Repeater {
-                            model: root.processes
+                        Column {
+                            id: processColumn
 
-                            delegate: Rectangle {
-                                id: processRow
+                            width: processFlickable.width - (processFlickable.contentHeight > processFlickable.height ? 12 : 0)
+                            spacing: 8
 
-                                required property var modelData
+                            Repeater {
+                                model: root.processes
 
+                                delegate: Rectangle {
+                                    id: processRow
+
+                                    required property var modelData
+
+                                    width: parent.width
+                                    height: 34
+                                    radius: 10
+                                    color: Qt.alpha(root.backgroundColor, 0.42)
+                                    border.width: 1
+                                    border.color: Qt.alpha(root.accentColor, 0.16)
+
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.leftMargin: 8
+                                        width: root.barWidth(processRow.modelData.rss_mb, parent.width - 16)
+                                        height: parent.height - 12
+                                        radius: 7
+                                        color: Qt.alpha(root.accentColor, 0.28)
+                                    }
+
+                                    Row {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 10
+
+                                        Text {
+                                            width: 176
+                                            text: processRow.modelData.name
+                                            color: root.textColor
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        Text {
+                                            width: 88
+                                            text: processRow.modelData.rss_label
+                                            color: root.accentStrongColor
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        Text {
+                                            width: 72
+                                            text: processRow.modelData.count + " proc"
+                                            color: Qt.alpha(root.textColor, 0.70)
+                                            font.pixelSize: 12
+                                            horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        Text {
+                                            width: parent.width - 366
+                                            text: "CPU " + processRow.modelData.cpu + "%"
+                                            color: Qt.alpha(root.textColor, 0.60)
+                                            font.pixelSize: 12
+                                            horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            visible: processFlickable.contentHeight > processFlickable.height
+                            anchors.top: parent.top
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            width: 5
+                            radius: 3
+                            color: Qt.alpha(root.accentColor, 0.16)
+
+                            Rectangle {
                                 width: parent.width
-                                height: 34
-                                radius: 10
-                                color: Qt.alpha(root.backgroundColor, 0.42)
-                                border.width: 1
-                                border.color: Qt.alpha(root.accentColor, 0.16)
-
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.leftMargin: 8
-                                    width: root.barWidth(processRow.modelData.rss_mb, parent.width - 16)
-                                    height: parent.height - 12
-                                    radius: 7
-                                    color: Qt.alpha(root.accentColor, 0.28)
-                                }
-
-                                Row {
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    spacing: 10
-
-                                    Text {
-                                        width: 176
-                                        text: processRow.modelData.name
-                                        color: root.textColor
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                        elide: Text.ElideRight
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-
-                                    Text {
-                                        width: 88
-                                        text: processRow.modelData.rss_label
-                                        color: root.accentStrongColor
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                        horizontalAlignment: Text.AlignRight
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-
-                                    Text {
-                                        width: 72
-                                        text: processRow.modelData.count + " proc"
-                                        color: Qt.alpha(root.textColor, 0.70)
-                                        font.pixelSize: 12
-                                        horizontalAlignment: Text.AlignRight
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-
-                                    Text {
-                                        width: parent.width - 366
-                                        text: "CPU " + processRow.modelData.cpu + "%"
-                                        color: Qt.alpha(root.textColor, 0.60)
-                                        font.pixelSize: 12
-                                        horizontalAlignment: Text.AlignRight
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                }
+                                radius: 3
+                                color: Qt.alpha(root.accentColor, 0.78)
+                                height: Math.max(28, parent.height * (processFlickable.height / Math.max(processFlickable.contentHeight, 1)))
+                                y: (parent.height - height) * (processFlickable.contentY / Math.max(processFlickable.contentHeight - processFlickable.height, 1))
                             }
                         }
                     }
