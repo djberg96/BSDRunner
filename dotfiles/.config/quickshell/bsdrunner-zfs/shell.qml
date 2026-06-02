@@ -502,6 +502,13 @@ ShellRoot {
                                 }
                             }
 
+                            Item {
+                                readonly property int poolChipCount: root.pools.length > 0 ? Math.min(root.pools.length, 2) : 1
+
+                                width: Math.max(0, parent.width - (poolChipCount * 94) - 114 - ((poolChipCount + 1) * 10))
+                                height: 80
+                            }
+
                             Rectangle {
                                 width: 114
                                 height: 80
@@ -923,6 +930,11 @@ ShellRoot {
                                     height: 2
                                     color: Qt.alpha(root.palette.accent, 0.72)
                                 }
+                            }
+
+                            Item {
+                                width: parent.width
+                                height: 34
                             }
 
                             Rectangle {
