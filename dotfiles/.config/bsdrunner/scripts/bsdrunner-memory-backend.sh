@@ -85,12 +85,16 @@ collect_procstat_output() {
         return 1
     fi
 
-    output="$(procstat -a vm 2>/dev/null || true)"
+    # VM maps can require elevated access even for the user's own GUI
+    # processes. Prefer mdo when it is available, then fall back to plain
+    # procstat for systems that expose the data without elevation.
+    # shellcheck disable=SC2086
+    output="$(run_procstat -v $pids 2>/dev/null || true)"
     if [ -z "$output" ]; then
-        output="$(procstat vm -a 2>/dev/null || true)"
+        output="$(run_procstat -v -a 2>/dev/null || true)"
     fi
     if [ -z "$output" ]; then
-        output="$(procstat -v -a 2>/dev/null || true)"
+        output="$(run_procstat -a vm 2>/dev/null || true)"
     fi
     if [ -n "$output" ]; then
         printf '%s\n' "$output"
@@ -98,7 +102,7 @@ collect_procstat_output() {
     fi
 
     # shellcheck disable=SC2086
-    procstat vm $pids 2>/dev/null || procstat -v $pids 2>/dev/null || true
+    run_procstat vm $pids 2>/dev/null || true
 }
 
 collect_procstat_json_output() {
@@ -116,20 +120,20 @@ collect_procstat_json_output() {
     # The all-process libxo VM form can emit only process stubs on FreeBSD 15,
     # so ask for known PIDs first and fall back to one PID at a time.
     # shellcheck disable=SC2086
-    output="$(procstat --libxo=json,pretty,underscores -v $pids 2>/dev/null || true)"
+    output="$(run_procstat --libxo=json,pretty,underscores -v $pids 2>/dev/null || true)"
     if [ -z "$output" ]; then
         # shellcheck disable=SC2086
-        output="$(procstat --libxo json,pretty,underscores -v $pids 2>/dev/null || true)"
+        output="$(run_procstat --libxo json,pretty,underscores -v $pids 2>/dev/null || true)"
     fi
     if [ -z "$output" ]; then
         # shellcheck disable=SC2086
-        output="$(procstat --libxo=json,pretty,underscores vm $pids 2>/dev/null || true)"
+        output="$(run_procstat --libxo=json,pretty,underscores vm $pids 2>/dev/null || true)"
     fi
     if [ -z "$output" ]; then
-        output="$(procstat --libxo=json,pretty,underscores -v -a 2>/dev/null || true)"
+        output="$(run_procstat --libxo=json,pretty,underscores -v -a 2>/dev/null || true)"
     fi
     if [ -z "$output" ]; then
-        output="$(procstat --libxo json,pretty,underscores -v -a 2>/dev/null || true)"
+        output="$(run_procstat --libxo json,pretty,underscores -v -a 2>/dev/null || true)"
     fi
     if [ -n "$output" ]; then
         if printf '%s\n' "$output" | grep -Eq '"kve_private_resident"|"private_resident"|"pv_resident"'; then
@@ -146,9 +150,9 @@ collect_procstat_json_output() {
                 ;;
         esac
 
-        pid_output="$(procstat --libxo=json,pretty,underscores -v "$pid" 2>/dev/null || true)"
+        pid_output="$(run_procstat --libxo=json,pretty,underscores -v "$pid" 2>/dev/null || true)"
         if [ -z "$pid_output" ]; then
-            pid_output="$(procstat --libxo json,pretty,underscores -v "$pid" 2>/dev/null || true)"
+            pid_output="$(run_procstat --libxo json,pretty,underscores -v "$pid" 2>/dev/null || true)"
         fi
         if [ -n "$pid_output" ]; then
             output="${output}${output:+
@@ -161,7 +165,19 @@ collect_procstat_json_output() {
         return 0
     fi
 
-    procstat --libxo=json,pretty,underscores -a -v 2>/dev/null || true
+    run_procstat --libxo=json,pretty,underscores -a -v 2>/dev/null || true
+}
+
+run_procstat() {
+    if command -v mdo >/dev/null 2>&1; then
+        output="$(mdo procstat "$@" 2>/dev/null || true)"
+        if [ -n "$output" ]; then
+            printf '%s\n' "$output"
+            return 0
+        fi
+    fi
+
+    procstat "$@" 2>/dev/null || true
 }
 
 page_kb() {
@@ -284,9 +300,11 @@ write_private_json_totals() {
             . as $entry |
             ($entry.value.process_id // ($entry.key | tonumber)) as $pid |
             ($entry.value.vm // [])[]? |
+            (.kve_resident // .resident // .res // 0) as $resident |
+            (.kve_private_resident // .private_resident // .pres // .pv_resident // 0) as $private |
             [
                 $pid,
-                (.kve_private_resident // .private_resident // .pres // .pv_resident // 0)
+                (if $resident > 0 and $private > $resident then $resident else $private end)
             ] |
             @tsv
         ' "$procstat_json_file" |
@@ -438,7 +456,9 @@ write_private_pid_jq_totals() {
                 printf '%s\n' "$output" |
                     jq -r --arg pid "$pid" '
                         def private_pages:
-                            (.kve_private_resident // .private_resident // .pres // .pv_resident // 0);
+                            (.kve_resident // .resident // .res // 0) as $resident |
+                            (.kve_private_resident // .private_resident // .pres // .pv_resident // 0) as $private |
+                            if $resident > 0 and $private > $resident then $resident else $private end;
 
                         def mapping_pages($mapping):
                             $mapping | private_pages;
@@ -795,16 +815,16 @@ pids="$(sort -rn -k3,3 "$ps_file" | head -n 40 | awk -F '	' '{ printf "%s ", $1 
 procstat_json_output=""
 
 if [ "${BSDRUNNER_MEMORY_MODE:-private}" != "pss" ]; then
-    write_private_pid_jq_totals "$ps_file" "$totals_file" "$(page_kb)" || true
-fi
-
-if [ ! -s "$totals_file" ]; then
     procstat_json_output="$(collect_procstat_json_output "$pids" || true)"
-fi
 
-if [ -n "$procstat_json_output" ] && [ "${BSDRUNNER_MEMORY_MODE:-private}" != "pss" ]; then
-    printf '%s\n' "$procstat_json_output" > "$procstat_json_file"
-    write_private_json_totals "$ps_file" "$procstat_json_file" "$totals_file" "$(page_kb)"
+    if [ -n "$procstat_json_output" ]; then
+        printf '%s\n' "$procstat_json_output" > "$procstat_json_file"
+        write_private_json_totals "$ps_file" "$procstat_json_file" "$totals_file" "$(page_kb)"
+    fi
+
+    if [ ! -s "$totals_file" ]; then
+        write_private_pid_jq_totals "$ps_file" "$totals_file" "$(page_kb)" || true
+    fi
 fi
 
 procstat_output=""
