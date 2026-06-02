@@ -87,10 +87,22 @@ pss_total_kb() {
 
     printf '%s\n' "$input" |
         awk -F '[ 	]+' -v page_kb="$pages_kb" '
+            {
+                for (i = 1; i <= NF; i += 1) {
+                    if ($i == "RES") {
+                        res_idx = i
+                    } else if ($i == "PRES") {
+                        pres_idx = i
+                    } else if ($i == "REF") {
+                        ref_idx = i
+                    }
+                }
+            }
+
             $1 ~ /^[0-9]+$/ {
-                res_pages = $5 + 0
-                pres_pages = $6 + 0
-                ref_count = $7 + 0
+                res_pages = $(res_idx ? res_idx : 5) + 0
+                pres_pages = $(pres_idx ? pres_idx : 6) + 0
+                ref_count = $(ref_idx ? ref_idx : 7) + 0
 
                 if (res_pages <= 0) {
                     next
