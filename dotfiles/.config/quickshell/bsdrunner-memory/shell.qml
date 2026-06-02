@@ -91,7 +91,7 @@ ShellRoot {
         }
 
         processes = payload.processes || []
-        statusMessage = payload.message || "Top memory consumers by command name."
+        statusMessage = payload.message || "RSS totals by command; shared memory can be counted more than once."
         generatedAt = payload.generated_at || ""
         topTotalLabel = payload.top_total_label || "--"
         largestRssMb = 1
@@ -270,7 +270,7 @@ ShellRoot {
                             spacing: 18
 
                             Text {
-                                text: "Top 8 RSS"
+                                text: "Top 8 RSS Sum"
                                 color: root.textColor
                                 font.pixelSize: 18
                                 font.bold: true

@@ -121,7 +121,7 @@ top_total_kb="$(awk -F '	' '{ total += $1 } END { printf "%d", total }' "$tmp_fi
 top_total_label="$(format_rss "$top_total_kb")"
 
 printf '{"ok":true,'
-printf '"message":"Top memory consumers by command name.",'
+printf '"message":"RSS totals by command; shared memory can be counted more than once.",'
 printf '"generated_at":"%s",' "$(escape_json "$generated_at")"
 printf '"top_total_label":"%s",' "$(escape_json "$top_total_label")"
 printf '"processes":['
