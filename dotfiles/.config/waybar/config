@@ -9,7 +9,7 @@
     "margin-right": 10,
     "modules-left": ["custom/theme", "custom/apps", "hyprland/workspaces", "custom/wallpaper-animation", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
+    "modules-right": ["cpu", "custom/memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -72,10 +72,13 @@
       "tooltip-format": "CPU usage: {usage}%"
     },
 
-    "memory": {
+    "custom/memory": {
+      "exec": "sh ~/.config/waybar/scripts/bsdrunner-memory-summary.sh",
+      "return-type": "json",
       "interval": 5,
-      "format": "󰍛 {percentage}%",
-      "tooltip-format": "Memory in use: {used:0.1f}G / {total:0.1f}G"
+      "format": "󰍛 {}",
+      "tooltip": true,
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-memory-window.sh"
     },
 
     "disk": {

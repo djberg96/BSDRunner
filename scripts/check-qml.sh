@@ -32,6 +32,7 @@ dotfiles/.config/quickshell/bsdrunner-dns/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/shell.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/ThemePalette.qml
+dotfiles/.config/quickshell/bsdrunner-memory/shell.qml
 "
 
 printf 'Running qmllint...\n'
