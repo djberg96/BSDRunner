@@ -94,10 +94,12 @@ EOF
     if [ "$allow_ssh_lan" = "yes" ]; then
         cat <<'EOF'
 lan_hosts = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }"
+table <ssh_abuse> persist
 EOF
     else
         cat <<'EOF'
 # lan_hosts = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }"
+# table <ssh_abuse> persist
 EOF
     fi
 
@@ -157,13 +159,17 @@ EOF
         cat <<'EOF'
 
 # Allow SSH only from private IPv4 LAN ranges.
-pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state
+# PF cannot count failed SSH passwords, so this limits new connection attempts:
+# one active SSH connection per LAN source, and five new attempts per 24 hours.
+block in quick inet proto tcp from <ssh_abuse> to any port 22
+pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 1, max-src-conn-rate 5/86400, overload <ssh_abuse> flush global)
 EOF
     else
         cat <<'EOF'
 
 # Optional SSH rule, disabled by default:
-# pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state
+# block in quick inet proto tcp from <ssh_abuse> to any port 22
+# pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 1, max-src-conn-rate 5/86400, overload <ssh_abuse> flush global)
 EOF
     fi
 
