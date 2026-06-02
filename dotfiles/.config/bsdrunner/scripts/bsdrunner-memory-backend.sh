@@ -85,14 +85,20 @@ collect_procstat_output() {
         return 1
     fi
 
-    output="$(procstat -v -a 2>/dev/null || true)"
+    output="$(procstat -a vm 2>/dev/null || true)"
+    if [ -z "$output" ]; then
+        output="$(procstat vm -a 2>/dev/null || true)"
+    fi
+    if [ -z "$output" ]; then
+        output="$(procstat -v -a 2>/dev/null || true)"
+    fi
     if [ -n "$output" ]; then
         printf '%s\n' "$output"
         return 0
     fi
 
     # shellcheck disable=SC2086
-    procstat -v $pids 2>/dev/null || true
+    procstat vm $pids 2>/dev/null || procstat -v $pids 2>/dev/null || true
 }
 
 collect_procstat_json_output() {
@@ -107,7 +113,16 @@ collect_procstat_json_output() {
         return 1
     fi
 
-    output="$(procstat --libxo=json,pretty,underscores -v -a 2>/dev/null || true)"
+    output="$(procstat --libxo=json,pretty,underscores -a vm 2>/dev/null || true)"
+    if [ -z "$output" ]; then
+        output="$(procstat --libxo json,pretty,underscores -a vm 2>/dev/null || true)"
+    fi
+    if [ -z "$output" ]; then
+        output="$(procstat --libxo=json,pretty,underscores vm -a 2>/dev/null || true)"
+    fi
+    if [ -z "$output" ]; then
+        output="$(procstat --libxo=json,pretty,underscores -v -a 2>/dev/null || true)"
+    fi
     if [ -z "$output" ]; then
         output="$(procstat --libxo json,pretty,underscores -v -a 2>/dev/null || true)"
     fi
@@ -117,7 +132,9 @@ collect_procstat_json_output() {
     fi
 
     # shellcheck disable=SC2086
-    procstat --libxo=json,pretty,underscores -v $pids 2>/dev/null || true
+    procstat --libxo=json,pretty,underscores vm $pids 2>/dev/null ||
+        procstat --libxo=json,pretty,underscores -v $pids 2>/dev/null ||
+        true
 }
 
 page_kb() {
