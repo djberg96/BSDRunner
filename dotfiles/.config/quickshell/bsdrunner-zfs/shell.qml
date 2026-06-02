@@ -380,7 +380,7 @@ ShellRoot {
                     spacing: 14
 
                     Rectangle {
-                        width: 300
+                        width: 320
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -444,7 +444,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: 330
+                        width: 360
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -457,7 +457,7 @@ ShellRoot {
                             spacing: 10
 
                             Repeater {
-                                model: root.pools.length > 0 ? root.pools.slice(0, 3) : [{"name": "No pool", "size": "--", "free": "--", "health": "--"}]
+                                model: root.pools.length > 0 ? root.pools.slice(0, 2) : [{"name": "No pool", "size": "--", "free": "--", "health": "--"}]
 
                                 delegate: Rectangle {
                                     required property var modelData
@@ -503,7 +503,7 @@ ShellRoot {
                             }
 
                             Rectangle {
-                                width: 64
+                                width: 114
                                 height: 80
                                 radius: 8
                                 color: refreshMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
@@ -511,29 +511,15 @@ ShellRoot {
                                 border.color: root.loading ? root.palette.accent : root.palette.panelBorder
                                 opacity: !root.runningAction ? 1 : 0.45
 
-                                Column {
+                                Text {
                                     anchors.centerIn: parent
                                     width: parent.width - 10
-                                    spacing: 4
-
-                                    Text {
-                                        width: parent.width
-                                        text: root.loading ? "..." : "REF"
-                                        color: root.loading ? root.palette.accent : root.palette.secondaryText
-                                        font.pixelSize: 14
-                                        font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-
-                                    Text {
-                                        width: parent.width
-                                        text: root.loading ? "Reload" : "Refresh"
-                                        color: root.palette.mutedText
-                                        font.pixelSize: 10
-                                        font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter
-                                        elide: Text.ElideRight
-                                    }
+                                    text: root.loading ? "Refreshing" : "Refresh"
+                                    color: root.loading ? root.palette.accent : root.palette.secondaryText
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
                                 }
 
                                 MouseArea {
@@ -550,7 +536,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 300 - 330 - 28
+                        width: parent.width - 320 - 360 - 28
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
