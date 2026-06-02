@@ -226,7 +226,7 @@ mdo -- sysrc pf_enable=NO
 
 The documented baseline intentionally does not allow inbound SSH by default. The BSDRunner Firewall GUI can enable the LAN-scoped SSH profile setting; when that profile is applied, the GUI also synchronizes `sshd_enable` and starts or stops the `sshd` service to match the firewall setting.
 
-When LAN SSH is enabled, the generated rule allows one active SSH connection per LAN source and adds sources to an `ssh_abuse` table after more than five new SSH connection attempts in 24 hours. PF cannot inspect SSH authentication results, so this limits connection attempts rather than confirmed failed passwords.
+When LAN SSH is enabled, the generated rule allows three active SSH connections per LAN source and adds sources to an `ssh_abuse` table after more than twenty new SSH connection attempts in 24 hours. PF cannot inspect SSH authentication results, so this limits connection attempts rather than confirmed failed passwords.
 
 The rules avoid OpenBSD-specific assumptions where FreeBSD behavior may differ. In particular, they use FreeBSD's modern `set reassemble yes` normalization style and numeric ports for desktop discovery services.
 
