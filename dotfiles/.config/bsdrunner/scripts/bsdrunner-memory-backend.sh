@@ -197,22 +197,25 @@ write_private_totals() {
 
         {
             for (i = 1; i <= NF; i += 1) {
-                if ($i == "PRES") {
-                    pres_idx = i
+                if ($i == "RES") {
+                    res_idx = i
+                } else if ($i == "SHD") {
+                    shd_idx = i
                 }
             }
         }
 
         $1 ~ /^[0-9]+$/ {
             pid = $1
-            pres_pages = $(pres_idx ? pres_idx : 6) + 0
+            res_pages = $(res_idx ? res_idx : 5) + 0
+            shared_count = $(shd_idx ? shd_idx : 8) + 0
 
-            if (!(pid in process_name) || pres_pages <= 0) {
+            if (!(pid in process_name) || res_pages <= 0 || shared_count > 0) {
                 next
             }
 
             name = process_name[pid]
-            private_total[name] += pres_pages * page_kb
+            private_total[name] += res_pages * page_kb
             rss_total[name] += rss_kb[pid]
             cpu_total[name] += cpu_percent[pid]
             process_count[name] += 1
@@ -270,9 +273,9 @@ emit_snapshot() {
         heading="Top 8 PSS"
         memory_kind="PSS Estimate"
     elif [ "$mode" = "private" ]; then
-        message="Private resident memory by command using procstat PRES."
+        message="Private resident estimate by command using procstat RES rows with SHD 0."
         heading="Top 8 Private"
-        memory_kind="Private RSS"
+        memory_kind="Private Estimate"
     else
         message="RSS totals by command; shared memory can be counted more than once."
         heading="Top 8 RSS Sum"
