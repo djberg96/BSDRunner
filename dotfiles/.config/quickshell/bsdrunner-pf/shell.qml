@@ -155,6 +155,17 @@ ShellRoot {
         return value;
     }
 
+    function statusTimestamp(value) {
+        if (!value || value.length === 0)
+            return "";
+
+        var parts = value.split(" ");
+        if (parts.length >= 2)
+            return parts[0] + " " + parts[1].replace(/:[0-9][0-9]$/, "");
+
+        return value;
+    }
+
     function firstNonEmptyLine(value) {
         if (!value || value.length === 0)
             return "";
@@ -174,7 +185,7 @@ ShellRoot {
             return firstNonEmptyLine(actionDetails);
 
         if (lastResultTimestamp.length > 0)
-            return "Updated " + compactTimestamp(lastResultTimestamp);
+            return "Updated " + statusTimestamp(lastResultTimestamp);
 
         return "";
     }
