@@ -200,6 +200,22 @@ run_privileged_capture() {
     fi
 }
 
+run_service_capture() {
+    service_name="$1"
+    service_action="$2"
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-service.XXXXXX")"
+
+    if run_privileged service "$service_name" "$service_action" >"$tmp_file" 2>&1; then
+        cat "$tmp_file"
+        rm -f "$tmp_file"
+        return 0
+    fi
+
+    cat "$tmp_file"
+    rm -f "$tmp_file"
+    return 1
+}
+
 pf_running_state() {
     if ! command -v pfctl >/dev/null 2>&1; then
         printf 'unavailable\n'
@@ -231,8 +247,21 @@ sysrc_value() {
 
 service_running() {
     name="$1"
-    command -v service >/dev/null 2>&1 || return 1
-    service "$name" onestatus >/dev/null 2>&1
+    if command -v service >/dev/null 2>&1 && service "$name" onestatus >/dev/null 2>&1; then
+        return 0
+    fi
+
+    case "$name" in
+        endlessh)
+            pgrep -f '/usr/local/bin/endlessh' >/dev/null 2>&1
+            ;;
+        sshd)
+            pgrep -x sshd >/dev/null 2>&1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 endlessh_installed() {
@@ -729,18 +758,20 @@ sync_endlessh_with_profile() {
         fi
 
         run_privileged sysrc endlessh_enable=YES
+        run_privileged sysrc endlessh_daemonuser=root
         run_privileged sysrc "endlessh_args=-p $ssh_tarpit_port"
         if service_running endlessh; then
-            run_privileged service endlessh restart
+            run_service_capture endlessh restart
         else
-            run_privileged service endlessh start
+            run_service_capture endlessh start
         fi
         return
     fi
 
     run_privileged sysrc endlessh_enable=NO
+    run_privileged sysrc endlessh_daemonuser=nobody
     if service_running endlessh; then
-        run_privileged service endlessh stop
+        run_service_capture endlessh stop
     else
         printf 'endlessh was not running.\n'
     fi
@@ -761,9 +792,9 @@ sync_sshd_with_profile() {
 
         run_privileged sysrc sshd_enable=YES
         if service sshd onestatus >/dev/null 2>&1; then
-            run_privileged service sshd restart
+            run_service_capture sshd restart
         else
-            run_privileged service sshd start
+            run_service_capture sshd start
         fi
         return
     fi
@@ -771,7 +802,7 @@ sync_sshd_with_profile() {
     write_sshd_tarpit_config disable
     run_privileged sysrc sshd_enable=NO
     if service sshd onestatus >/dev/null 2>&1; then
-        run_privileged service sshd stop
+        run_service_capture sshd stop
     else
         printf 'sshd was not running.\n'
     fi
