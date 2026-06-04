@@ -916,11 +916,29 @@ ShellRoot {
                             anchors.margins: 14
                             spacing: 6
 
-                            Text {
-                                text: "Status"
-                                color: root.palette.mutedText
-                                font.pixelSize: 11
-                                font.bold: true
+                            Item {
+                                width: parent.width
+                                height: 18
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Status"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: root.settingValue("allow_ssh_tarpit")
+                                    text: "SSH Port: " + root.sshRealPort
+                                    color: root.palette.success
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
                             }
 
                             Text {
