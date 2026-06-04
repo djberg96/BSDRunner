@@ -806,7 +806,7 @@ ShellRoot {
                             Rectangle {
                                 width: parent.width
                                 visible: root.centerPaneMode !== "snapshots"
-                                height: visible ? 94 : 0
+                                height: visible ? 76 : 0
                                 radius: 8
                                 color: Qt.alpha(root.toneColor(root.encryptionTone(root.selectedDataset)), 0.12)
                                 border.width: 1
@@ -814,33 +814,45 @@ ShellRoot {
 
                                 Column {
                                     anchors.fill: parent
-                                    anchors.margins: 10
+                                    anchors.margins: 9
                                     spacing: 5
 
-                                    Text {
+                                    Item {
                                         width: parent.width
-                                        text: root.encryptionLabel(root.selectedDataset)
-                                        color: root.toneColor(root.encryptionTone(root.selectedDataset))
-                                        font.pixelSize: 20
-                                        minimumPixelSize: 14
-                                        fontSizeMode: Text.HorizontalFit
-                                        font.bold: true
-                                    }
+                                        height: 28
 
-                                    Text {
-                                        width: parent.width
-                                        text: root.selectedDataset ? root.selectedDataset.name : "No dataset selected"
-                                        color: root.palette.primaryText
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                        elide: Text.ElideRight
+                                        Text {
+                                            id: encryptionStatus
+
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root.encryptionLabel(root.selectedDataset)
+                                            color: root.toneColor(root.encryptionTone(root.selectedDataset))
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            anchors.left: parent.left
+                                            anchors.right: encryptionStatus.left
+                                            anchors.rightMargin: 10
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root.selectedDataset ? root.selectedDataset.name : "No dataset selected"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 20
+                                            minimumPixelSize: 14
+                                            fontSizeMode: Text.HorizontalFit
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
                                     }
 
                                     Text {
                                         width: parent.width
                                         text: root.selectedDataset ? root.selectedDataset.type + " | " + root.propertyValue(root.selectedDataset.mountpoint) : "Select a dataset from the left."
                                         color: root.palette.mutedText
-                                        font.pixelSize: 11
+                                        font.pixelSize: 13
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -849,7 +861,7 @@ ShellRoot {
                             Rectangle {
                                 width: parent.width
                                 visible: root.centerPaneMode !== "snapshots"
-                                height: visible ? 168 : 0
+                                height: visible ? 146 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -857,13 +869,13 @@ ShellRoot {
 
                                 Column {
                                     anchors.fill: parent
-                                    anchors.margins: 10
-                                    spacing: 8
+                                    anchors.margins: 8
+                                    spacing: 2
 
                                     Text {
                                         text: "Storage"
                                         color: root.palette.accent
-                                        font.pixelSize: 14
+                                        font.pixelSize: 15
                                         font.bold: true
                                     }
 
@@ -890,7 +902,7 @@ ShellRoot {
                                                 width: 92
                                                 text: modelData.label
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 11
+                                                font.pixelSize: 12
                                                 elide: Text.ElideRight
                                             }
 
@@ -901,7 +913,7 @@ ShellRoot {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: modelData.value
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 12
+                                                font.pixelSize: 13
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -913,7 +925,7 @@ ShellRoot {
                             Rectangle {
                                 width: parent.width
                                 visible: root.centerPaneMode !== "snapshots"
-                                height: visible ? parent.height - 30 - 94 - 168 - 20 : 0
+                                height: visible ? parent.height - 30 - 76 - 146 - 16 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -921,13 +933,13 @@ ShellRoot {
 
                                 Column {
                                     anchors.fill: parent
-                                    anchors.margins: 10
-                                    spacing: 8
+                                    anchors.margins: 8
+                                    spacing: 2
 
                                     Text {
                                         text: "Encryption Properties"
                                         color: root.palette.accent
-                                        font.pixelSize: 14
+                                        font.pixelSize: 15
                                         font.bold: true
                                     }
 
@@ -952,21 +964,21 @@ ShellRoot {
                                             Text {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                width: 108
+                                                width: 116
                                                 text: modelData.label
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 11
+                                                font.pixelSize: 12
                                                 elide: Text.ElideRight
                                             }
 
                                             Text {
                                                 anchors.left: parent.left
-                                                anchors.leftMargin: 118
+                                                anchors.leftMargin: 126
                                                 anchors.right: parent.right
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: modelData.value
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 12
+                                                font.pixelSize: 13
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
