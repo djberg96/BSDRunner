@@ -724,7 +724,7 @@ write_sshd_tarpit_config() {
     mode="$1"
     tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-sshd-config.XXXXXX")"
 
-    awk -v mode="$mode" -v port="$ssh_real_port" '
+    run_privileged awk -v mode="$mode" -v port="$ssh_real_port" '
         BEGIN {
             in_block = 0
             marker = "# BSDRunner disabled while tarpit is enabled: "
@@ -768,7 +768,11 @@ write_sshd_tarpit_config() {
                 print "# END BSDRunner firewall SSH tarpit"
             }
         }
-    ' "$sshd_config_file" >"$tmp_file"
+    ' "$sshd_config_file" >"$tmp_file" || {
+        rm -f "$tmp_file"
+        printf 'Unable to read %s for SSH tarpit update.\n' "$sshd_config_file"
+        return 1
+    }
 
     validation="$(run_privileged_capture sshd -t -f "$tmp_file")" || {
         rm -f "$tmp_file"
