@@ -40,7 +40,7 @@ ShellRoot {
             "icon": "ZFS",
             "label": "ZFS",
             "detail": "Snapshots and pool health",
-            "tone": "warning"
+            "tone": "storage"
         },
         {
             "action": "firefox",
@@ -59,6 +59,8 @@ ShellRoot {
             return palette.warning
         case "info":
             return palette.accent
+        case "storage":
+            return themeLoader.actionAccent("storage")
         default:
             return themeLoader.actionAccent("apps")
         }
