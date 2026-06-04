@@ -222,6 +222,8 @@ ShellRoot {
             return "Enable LAN SSH first.";
         if (!endlesshInstalled)
             return "Install endlessh to enable port 22 tarpitting.";
+        if (!settingValue("allow_ssh_tarpit"))
+            return "Trap port " + sshTarpitPort + ".";
         return "Trap port " + sshTarpitPort + "; real SSH moves to " + sshRealPort + ".";
     }
 
@@ -1080,7 +1082,7 @@ ShellRoot {
                                     },
                                     {
                                         "key": "allow_ssh_tarpit",
-                                        "label": "Tarpit",
+                                        "label": "SSH Tarpit",
                                         "detail": root.tarpitDetailText(),
                                         "enabled": root.tarpitAvailable()
                                     },
