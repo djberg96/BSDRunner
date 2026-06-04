@@ -21,7 +21,29 @@ allow_ssh_tarpit="no"
 log_blocked="no"
 ssh_tarpit_port="22"
 ssh_real_port="22222"
+ssh_real_port_configured="no"
 sshd_config_file="/etc/ssh/sshd_config"
+
+valid_real_ssh_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    [ "$1" -ge 22201 ] && [ "$1" -le 22299 ]
+}
+
+random_real_ssh_port() {
+    awk 'BEGIN { srand(); print int(22201 + rand() * 99) }'
+}
+
+ensure_real_ssh_port() {
+    if [ "$ssh_real_port_configured" != "yes" ] || ! valid_real_ssh_port "$ssh_real_port"; then
+        ssh_real_port="$(random_real_ssh_port)"
+        ssh_real_port_configured="yes"
+    fi
+}
 
 json_escape() {
     awk '
@@ -92,6 +114,12 @@ load_profile() {
             allow_ssh_tarpit)
                 allow_ssh_tarpit="$(normalize_bool "$value")"
                 ;;
+            ssh_real_port)
+                if valid_real_ssh_port "$value"; then
+                    ssh_real_port="$value"
+                    ssh_real_port_configured="yes"
+                fi
+                ;;
             log_blocked)
                 log_blocked="$(normalize_bool "$value")"
                 ;;
@@ -114,6 +142,9 @@ write_profile() {
         printf 'allow_mdns=%s\n' "$allow_mdns"
         printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
         printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
+        if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
+            printf 'ssh_real_port=%s\n' "$ssh_real_port"
+        fi
         printf 'log_blocked=%s\n' "$log_blocked"
     } >"$profile_file"
 }
@@ -127,6 +158,9 @@ emit_settings() {
     printf 'allow_mdns=%s\n' "$allow_mdns"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
     printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
+    if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
+        printf 'ssh_real_port=%s\n' "$ssh_real_port"
+    fi
     printf 'log_blocked=%s\n' "$log_blocked"
 }
 
@@ -169,6 +203,10 @@ set_setting_value() {
                 exit 1
             fi
             allow_ssh_tarpit="$value"
+            if [ "$allow_ssh_tarpit" = "yes" ]; then
+                ssh_real_port_configured="no"
+                ensure_real_ssh_port
+            fi
             ;;
         log_blocked)
             log_blocked="$value"
@@ -392,7 +430,7 @@ rules_summary_json() {
     printf ',{"id":"dhcp","label":"DHCP address assignment","description":"DHCP and DHCPv6 replies are allowed.","enabled":%s}' "$(bool_json "$allow_dhcp")"
     printf ',{"id":"mdns","label":"Local discovery","description":"mDNS discovery for local devices is allowed.","enabled":%s}' "$(bool_json "$allow_mdns")"
     printf ',{"id":"ssh","label":"SSH from local network","description":"SSH is limited to private IPv4 LAN ranges.","enabled":%s}' "$(bool_json "$allow_ssh_lan")"
-    printf ',{"id":"tarpit","label":"SSH tarpit","description":"endlessh listens on port 22 while real SSH moves to port %s.","enabled":%s}' "$ssh_real_port" "$(bool_json "$allow_ssh_tarpit")"
+    printf ',{"id":"tarpit","label":"SSH tarpit","description":"endlessh listens on port 22 while real SSH moves to the stored high port.","enabled":%s}' "$(bool_json "$allow_ssh_tarpit")"
     printf ',{"id":"logging","label":"Blocked attempt logging","description":"Blocked packets are written to pflog.","enabled":%s}' "$(bool_json "$log_blocked")"
     printf ']'
 }
@@ -643,6 +681,9 @@ $reset_output"
 
 do_validate() {
     load_profile
+    if [ "$allow_ssh_tarpit" = "yes" ]; then
+        ensure_real_ssh_port
+    fi
     write_profile
 
     if ! prereq_output="$(check_profile_prereqs)"; then
@@ -839,6 +880,9 @@ sync_ssh_services_with_profile() {
 do_apply() {
     mode="${1:-normal}"
     load_profile
+    if [ "$allow_ssh_tarpit" = "yes" ]; then
+        ensure_real_ssh_port
+    fi
     write_profile
 
     if ! prereq_output="$(check_profile_prereqs)"; then
@@ -900,6 +944,10 @@ ${sshd_output:-}"
 
 do_enable() {
     load_profile
+    if [ "$allow_ssh_tarpit" = "yes" ]; then
+        ensure_real_ssh_port
+        write_profile
+    fi
 
     if ! prereq_output="$(check_profile_prereqs)"; then
         write_last_result "error" "Firewall profile prerequisites are not met."

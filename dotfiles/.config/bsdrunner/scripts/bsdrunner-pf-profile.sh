@@ -15,6 +15,17 @@ allow_ssh_tarpit="no"
 log_blocked="no"
 ssh_tarpit_port="22"
 ssh_real_port="22222"
+ssh_real_port_configured="no"
+
+valid_real_ssh_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    [ "$1" -ge 22201 ] && [ "$1" -le 22299 ]
+}
 
 normalize_bool() {
     case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
@@ -59,6 +70,12 @@ load_profile() {
             allow_ssh_tarpit)
                 allow_ssh_tarpit="$(normalize_bool "$value")"
                 ;;
+            ssh_real_port)
+                if valid_real_ssh_port "$value"; then
+                    ssh_real_port="$value"
+                    ssh_real_port_configured="yes"
+                fi
+                ;;
             log_blocked)
                 log_blocked="$(normalize_bool "$value")"
                 ;;
@@ -79,6 +96,9 @@ emit_settings() {
     printf 'allow_mdns=%s\n' "$allow_mdns"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
     printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
+    if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
+        printf 'ssh_real_port=%s\n' "$ssh_real_port"
+    fi
     printf 'log_blocked=%s\n' "$log_blocked"
 }
 
