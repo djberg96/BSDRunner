@@ -902,7 +902,7 @@ ShellRoot {
                                                 width: 92
                                                 text: modelData.label
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 12
+                                                font.pixelSize: 13
                                                 elide: Text.ElideRight
                                             }
 
@@ -913,7 +913,7 @@ ShellRoot {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: modelData.value
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 13
+                                                font.pixelSize: 14
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -967,7 +967,7 @@ ShellRoot {
                                                 width: 116
                                                 text: modelData.label
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 12
+                                                font.pixelSize: 13
                                                 elide: Text.ElideRight
                                             }
 
@@ -978,7 +978,7 @@ ShellRoot {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: modelData.value
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 13
+                                                font.pixelSize: 14
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
