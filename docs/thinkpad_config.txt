@@ -75,7 +75,8 @@ hw.snd.latency=2
 dev.hdac.0.polling=0
 
 # Smooth out the processing window to eliminate clicks. Tried various values here.
-hw.snd.feeder_buffersize=4096
+# This was tried earlier, but is not a valid FreeBSD 15 sysctl OID:
+# hw.snd.feeder_buffersize=4096
 hw.snd.feeder_rate_quality=4
 
 # Allow multiple applications to share the hardware channels natively. In theory,
