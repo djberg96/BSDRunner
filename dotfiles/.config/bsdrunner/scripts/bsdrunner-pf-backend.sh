@@ -809,11 +809,25 @@ sync_sshd_with_profile() {
 }
 
 sync_ssh_services_with_profile() {
+    if [ "$allow_ssh_tarpit" != "yes" ]; then
+        endlessh_output="$(sync_endlessh_with_profile 2>&1)" || {
+            printf '%s\n' "$endlessh_output"
+            return 1
+        }
+
+        sshd_output="$(sync_sshd_with_profile 2>&1)" || {
+            printf '%s\n%s\n' "$endlessh_output" "$sshd_output"
+            return 1
+        }
+
+        printf '%s\n%s\n' "$endlessh_output" "$sshd_output"
+        return
+    fi
+
     sshd_output="$(sync_sshd_with_profile 2>&1)" || {
         printf '%s\n' "$sshd_output"
         return 1
     }
-
     endlessh_output="$(sync_endlessh_with_profile 2>&1)" || {
         printf '%s\n%s\n' "$sshd_output" "$endlessh_output"
         return 1
