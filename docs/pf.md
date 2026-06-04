@@ -226,7 +226,9 @@ mdo -- sysrc pf_enable=NO
 
 The documented baseline intentionally does not allow inbound SSH by default. The BSDRunner Firewall GUI can enable the LAN-scoped SSH profile setting; when that profile is applied, the GUI also synchronizes `sshd_enable` and starts or stops the `sshd` service to match the firewall setting.
 
-When LAN SSH is enabled, the generated rule allows three active SSH connections per LAN source and adds sources to an `ssh_abuse` table after more than twenty new SSH connection attempts in 24 hours. PF cannot inspect SSH authentication results, so this limits connection attempts rather than confirmed failed passwords.
+When LAN SSH is enabled, the generated rule allows five active SSH connections per LAN source and adds sources to an `ssh_abuse` table after more than forty new SSH connection attempts in 24 hours. PF cannot inspect SSH authentication results, so this limits connection attempts rather than confirmed failed passwords.
+
+If `security/endlessh` is installed, the GUI also exposes a `Tarpit` setting after LAN SSH is enabled. Applying that profile moves real `sshd` to port `22222`, starts `endlessh` on port `22`, and reloads PF with port `22` routed to the tarpit. In tarpit mode the real LAN SSH rule allows fifty active SSH connections per LAN source and four hundred new attempts in 24 hours.
 
 The rules avoid OpenBSD-specific assumptions where FreeBSD behavior may differ. In particular, they use FreeBSD's modern `set reassemble yes` normalization style and numeric ports for desktop discovery services.
 

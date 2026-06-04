@@ -67,6 +67,13 @@ ShellRoot {
     property bool pfAvailable: true
     property bool pfBootEnabled: false
     property bool pflogBootEnabled: false
+    property bool sshdBootEnabled: false
+    property bool sshdRunning: false
+    property bool endlesshInstalled: false
+    property bool endlesshBootEnabled: false
+    property bool endlesshRunning: false
+    property string sshTarpitPort: "22"
+    property string sshRealPort: "22222"
     property string configState: "unknown"
     property bool configManaged: false
     property bool configMatchesProfile: false
@@ -83,6 +90,7 @@ ShellRoot {
             "allow_dhcp": true,
             "allow_mdns": true,
             "allow_ssh_lan": false,
+            "allow_ssh_tarpit": false,
             "log_blocked": false
         })
     property var rules: []
@@ -205,8 +213,38 @@ ShellRoot {
         return !!settings[key];
     }
 
+    function tarpitAvailable() {
+        return settingValue("allow_ssh_lan") && endlesshInstalled;
+    }
+
+    function tarpitDetailText() {
+        if (!settingValue("allow_ssh_lan"))
+            return "Enable LAN SSH first.";
+        if (!endlesshInstalled)
+            return "Install endlessh to enable port 22 tarpitting.";
+        return "Trap port " + sshTarpitPort + "; real SSH moves to " + sshRealPort + ".";
+    }
+
+    function sshSummaryValue() {
+        if (!settingValue("allow_ssh_lan"))
+            return "Off";
+        if (settingValue("allow_ssh_tarpit"))
+            return sshTarpitPort + " -> " + sshRealPort;
+        return "LAN only";
+    }
+
+    function sshSummaryTone() {
+        if (settingValue("allow_ssh_tarpit"))
+            return "success";
+        if (settingValue("allow_ssh_lan"))
+            return "warning";
+        return "info";
+    }
+
     function toggleSetting(key, value) {
         if (runningAction || loading)
+            return;
+        if (key === "allow_ssh_tarpit" && value && !tarpitAvailable())
             return;
         activeActionId = "set";
         activeActionArg1 = key;
@@ -416,6 +454,13 @@ ShellRoot {
         pfAvailable = payload.pf ? payload.pf.available !== false : true;
         pfBootEnabled = payload.boot ? !!payload.boot.pf_enabled : false;
         pflogBootEnabled = payload.boot ? !!payload.boot.pflog_enabled : false;
+        sshdBootEnabled = payload.services ? !!payload.services.sshd_enabled : false;
+        sshdRunning = payload.services ? !!payload.services.sshd_running : false;
+        endlesshInstalled = payload.services ? !!payload.services.endlessh_installed : false;
+        endlesshBootEnabled = payload.services ? !!payload.services.endlessh_enabled : false;
+        endlesshRunning = payload.services ? !!payload.services.endlessh_running : false;
+        sshTarpitPort = payload.services ? payload.services.ssh_tarpit_port || "22" : "22";
+        sshRealPort = payload.services ? payload.services.ssh_real_port || "22222" : "22222";
         configState = payload.config ? payload.config.state || "unknown" : "unknown";
         configManaged = payload.config ? !!payload.config.managed : false;
         configMatchesProfile = payload.config ? !!payload.config.matches_profile : false;
@@ -1034,6 +1079,12 @@ ShellRoot {
                                         "detail": "Open port 22 only to private IPv4 LAN ranges."
                                     },
                                     {
+                                        "key": "allow_ssh_tarpit",
+                                        "label": "Tarpit",
+                                        "detail": root.tarpitDetailText(),
+                                        "enabled": root.tarpitAvailable()
+                                    },
+                                    {
                                         "key": "log_blocked",
                                         "label": "Log blocked inbound attempts",
                                         "detail": "Write blocked packets to pflog for inspection."
@@ -1045,11 +1096,13 @@ ShellRoot {
 
                                     required property var modelData
                                     readonly property bool checked: root.settingValue(modelData.key)
+                                    readonly property bool rowEnabled: modelData.enabled === undefined ? true : modelData.enabled
 
                                     width: parent.width
                                     height: 40
                                     radius: 8
-                                    color: toggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                    color: rowEnabled && toggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                    opacity: rowEnabled ? 1.0 : 0.48
                                     border.width: 1
                                     border.color: checked ? root.palette.accent : root.palette.frameBorder
 
@@ -1104,6 +1157,7 @@ ShellRoot {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         enabled: !root.runningAction && !root.loading
+                                                 && toggleRow.rowEnabled
                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: root.toggleSetting(toggleRow.modelData.key, !toggleRow.checked)
                                     }
@@ -1158,8 +1212,8 @@ ShellRoot {
                                         {
                                             "id": "ssh",
                                             "label": "SSH",
-                                            "value": root.settingValue("allow_ssh_lan") ? "LAN only" : "Off",
-                                            "tone": root.settingValue("allow_ssh_lan") ? "warning" : "info"
+                                            "value": root.sshSummaryValue(),
+                                            "tone": root.sshSummaryTone()
                                         },
                                         {
                                             "id": "logging",

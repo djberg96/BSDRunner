@@ -11,7 +11,10 @@ allow_ipv6="yes"
 allow_dhcp="yes"
 allow_mdns="yes"
 allow_ssh_lan="no"
+allow_ssh_tarpit="no"
 log_blocked="no"
+ssh_tarpit_port="22"
+ssh_real_port="22222"
 
 normalize_bool() {
     case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
@@ -53,11 +56,18 @@ load_profile() {
             allow_ssh_lan)
                 allow_ssh_lan="$(normalize_bool "$value")"
                 ;;
+            allow_ssh_tarpit)
+                allow_ssh_tarpit="$(normalize_bool "$value")"
+                ;;
             log_blocked)
                 log_blocked="$(normalize_bool "$value")"
                 ;;
         esac
     done <"$profile_file"
+
+    if [ "$allow_ssh_lan" != "yes" ]; then
+        allow_ssh_tarpit="no"
+    fi
 }
 
 emit_settings() {
@@ -68,6 +78,7 @@ emit_settings() {
     printf 'allow_dhcp=%s\n' "$allow_dhcp"
     printf 'allow_mdns=%s\n' "$allow_mdns"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
+    printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
     printf 'log_blocked=%s\n' "$log_blocked"
 }
 
@@ -96,6 +107,10 @@ EOF
 lan_hosts = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }"
 table <ssh_abuse> persist
 EOF
+        if [ "$allow_ssh_tarpit" = "yes" ]; then
+            printf 'ssh_tarpit_port = "%s"\n' "$ssh_tarpit_port"
+            printf 'ssh_real_port = "%s"\n' "$ssh_real_port"
+        fi
     else
         cat <<'EOF'
 # lan_hosts = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }"
@@ -155,21 +170,38 @@ pass in quick inet6 proto icmp6 icmp6-type $icmp6_types keep state
 EOF
     fi
 
-    if [ "$allow_ssh_lan" = "yes" ]; then
+    if [ "$allow_ssh_lan" = "yes" ] && [ "$allow_ssh_tarpit" = "yes" ]; then
+        cat <<'EOF'
+
+# Tarpit suspicious SSH clients on the usual SSH port.
+# Real sshd is moved to $ssh_real_port by the BSDRunner backend.
+pass in quick inet proto tcp to any port $ssh_tarpit_port flags S/SA keep state
+
+# Allow real SSH only from private IPv4 LAN ranges.
+# The tarpit absorbs the noisy default port, so the real SSH limits are wider:
+# fifty active SSH connections per LAN source, and four hundred new attempts per 24 hours.
+block in quick inet proto tcp from <ssh_abuse> to any port $ssh_real_port
+pass in quick inet proto tcp from $lan_hosts to any port $ssh_real_port flags S/SA keep state (max-src-conn 50, max-src-conn-rate 400/86400, overload <ssh_abuse> flush global)
+EOF
+    elif [ "$allow_ssh_lan" = "yes" ]; then
         cat <<'EOF'
 
 # Allow SSH only from private IPv4 LAN ranges.
 # PF cannot count failed SSH passwords, so this limits new connection attempts:
-# three active SSH connections per LAN source, and twenty new attempts per 24 hours.
+# five active SSH connections per LAN source, and forty new attempts per 24 hours.
 block in quick inet proto tcp from <ssh_abuse> to any port 22
-pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 3, max-src-conn-rate 20/86400, overload <ssh_abuse> flush global)
+pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 5, max-src-conn-rate 40/86400, overload <ssh_abuse> flush global)
 EOF
     else
         cat <<'EOF'
 
 # Optional SSH rule, disabled by default:
 # block in quick inet proto tcp from <ssh_abuse> to any port 22
-# pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 3, max-src-conn-rate 20/86400, overload <ssh_abuse> flush global)
+# pass in quick inet proto tcp from $lan_hosts to any port 22 flags S/SA keep state (max-src-conn 5, max-src-conn-rate 40/86400, overload <ssh_abuse> flush global)
+# Optional SSH tarpit, disabled by default:
+# pass in quick inet proto tcp to any port 22 flags S/SA keep state
+# block in quick inet proto tcp from <ssh_abuse> to any port 22222
+# pass in quick inet proto tcp from $lan_hosts to any port 22222 flags S/SA keep state (max-src-conn 50, max-src-conn-rate 400/86400, overload <ssh_abuse> flush global)
 EOF
     fi
 
