@@ -30,6 +30,7 @@ ShellRoot {
     property string snapshotName: ""
     property string selectedDatasetName: ""
     property string selectedSnapshotName: ""
+    property string centerPaneMode: "details"
     property var pools: []
     property var datasets: []
     property var snapshots: []
@@ -150,6 +151,30 @@ ShellRoot {
         if (visibleSnapshots.length === 0)
             return null
         return visibleSnapshots[visibleSnapshots.length - 1]
+    }
+
+    function ensureSnapshotSelection() {
+        if (centerPaneMode !== "snapshots") {
+            selectedSnapshotName = ""
+            return
+        }
+
+        if (visibleSnapshots.length > 0 && (!selectedSnapshotName || !findByName(visibleSnapshots, selectedSnapshotName)))
+            selectedSnapshotName = visibleSnapshots[visibleSnapshots.length - 1].name
+        else if (visibleSnapshots.length === 0)
+            selectedSnapshotName = ""
+    }
+
+    function showDatasetDetails() {
+        centerPaneMode = "details"
+        selectedSnapshotName = ""
+    }
+
+    function showSnapshots() {
+        if (!selectedDatasetName)
+            return
+        centerPaneMode = "snapshots"
+        ensureSnapshotSelection()
     }
 
     function propertyValue(value) {
@@ -290,7 +315,7 @@ ShellRoot {
         if ((!selectedDatasetName || !findByName(datasets, selectedDatasetName)) && datasets.length > 0)
             selectedDatasetName = datasets[0].name
 
-        selectedSnapshotName = ""
+        ensureSnapshotSelection()
     }
 
     function applyActionResult(text, exitCode, stderrText) {
@@ -690,7 +715,7 @@ ShellRoot {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             root.selectedDatasetName = modelData.name
-                                            root.selectedSnapshotName = ""
+                                            root.showDatasetDetails()
                                         }
                                     }
                                 }
@@ -712,15 +737,76 @@ ShellRoot {
                             spacing: 10
 
                             Text {
-                                text: "Dataset Details"
+                                text: root.centerPaneMode === "snapshots" ? "Snapshots" : "Dataset Details"
                                 color: root.palette.accent
                                 font.pixelSize: 15
                                 font.bold: true
                             }
 
+                            ListView {
+                                visible: root.centerPaneMode === "snapshots"
+                                width: parent.width
+                                height: visible ? parent.height - 30 : 0
+                                clip: true
+                                model: root.visibleSnapshots
+                                spacing: 8
+
+                                delegate: Rectangle {
+                                    id: snapshotRow
+
+                                    required property var modelData
+                                    readonly property bool selected: root.selectedSnapshotName === modelData.name
+
+                                    width: ListView.view.width
+                                    height: 70
+                                    radius: 8
+                                    color: selected ? Qt.alpha(root.palette.warning, 0.15) : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: selected ? root.palette.warning : root.palette.frameBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 4
+
+                                        Text {
+                                            width: parent.width
+                                            text: modelData.snapshot
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: modelData.created
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: modelData.used + " used | " + modelData.refer + " referenced"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.selectedSnapshotName = snapshotRow.modelData.name
+                                    }
+                                }
+                            }
+
                             Rectangle {
                                 width: parent.width
-                                height: 94
+                                visible: root.centerPaneMode !== "snapshots"
+                                height: visible ? 94 : 0
                                 radius: 8
                                 color: Qt.alpha(root.toneColor(root.encryptionTone(root.selectedDataset)), 0.12)
                                 border.width: 1
@@ -762,7 +848,8 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 168
+                                visible: root.centerPaneMode !== "snapshots"
+                                height: visible ? 168 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -825,7 +912,8 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: parent.height - 30 - 94 - 168 - 20
+                                visible: root.centerPaneMode !== "snapshots"
+                                height: visible ? parent.height - 30 - 94 - 168 - 20 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1090,7 +1178,7 @@ ShellRoot {
                                     spacing: 8
 
                                     Text {
-                                        text: "Snapshot Summary"
+                                        text: root.centerPaneMode === "snapshots" ? "Current Selection" : "Snapshot Summary"
                                         color: root.palette.accent
                                         font.pixelSize: 15
                                         font.bold: true
@@ -1100,9 +1188,9 @@ ShellRoot {
                                         width: parent.width
                                         height: 74
                                         radius: 8
-                                        color: root.palette.cardBackground
+                                        color: snapshotSummaryMouse.containsMouse && root.centerPaneMode !== "snapshots" ? root.palette.cardHover : root.palette.cardBackground
                                         border.width: 1
-                                        border.color: root.palette.frameBorder
+                                        border.color: root.centerPaneMode !== "snapshots" ? root.palette.accent : root.palette.frameBorder
 
                                         Column {
                                             anchors.fill: parent
@@ -1111,7 +1199,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.selectedDatasetName || "No dataset selected"
+                                                text: root.centerPaneMode === "snapshots" ? (root.selectedSnapshot ? root.selectedSnapshot.name : "No snapshot selected") : (root.selectedDatasetName || "No dataset selected")
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 15
                                                 font.bold: true
@@ -1120,7 +1208,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.selectedDatasetSnapshotCount() + " recent snapshot(s)"
+                                                text: root.centerPaneMode === "snapshots" ? root.selectedSnapshotDetail() : root.selectedDatasetSnapshotCount() + " recent snapshot(s). Click to browse."
                                                 color: root.palette.mutedText
                                                 font.pixelSize: 11
                                                 wrapMode: Text.WordWrap
@@ -1128,11 +1216,22 @@ ShellRoot {
                                                 elide: Text.ElideRight
                                             }
                                         }
+
+                                        MouseArea {
+                                            id: snapshotSummaryMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: root.centerPaneMode !== "snapshots" && root.selectedDatasetName ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            enabled: root.centerPaneMode !== "snapshots" && root.selectedDatasetName
+                                            onClicked: root.showSnapshots()
+                                        }
                                     }
 
                                     Rectangle {
+                                        visible: root.centerPaneMode !== "snapshots"
                                         width: parent.width
-                                        height: 36
+                                        height: visible ? 36 : 0
                                         radius: 8
                                         color: root.palette.cardBackground
                                         border.width: 1
@@ -1147,6 +1246,56 @@ ShellRoot {
                                             font.bold: true
                                             verticalAlignment: Text.AlignVCenter
                                             elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Row {
+                                        visible: root.centerPaneMode === "snapshots"
+                                        height: visible ? 36 : 0
+                                        spacing: 8
+
+                                        Repeater {
+                                            model: [
+                                                {"label": "Rollback", "action": "rollback-snapshot", "tone": "warning"},
+                                                {"label": "Destroy", "action": "destroy-snapshot", "tone": "error"}
+                                            ]
+
+                                            delegate: Rectangle {
+                                                id: actionButton
+
+                                                required property var modelData
+                                                readonly property color accent: root.toneColor(modelData.tone)
+
+                                                width: 122
+                                                height: 36
+                                                radius: 8
+                                                color: actionMouse.containsMouse ? root.palette.cardHover : Qt.alpha(accent, 0.10)
+                                                border.width: 1
+                                                border.color: accent
+                                                opacity: root.selectedSnapshotName && !root.runningAction ? 1 : 0.45
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: actionButton.modelData.label
+                                                    color: actionButton.accent
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    id: actionMouse
+
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    enabled: root.selectedSnapshotName && !root.runningAction
+                                                    onClicked: root.requestAction(
+                                                        actionButton.modelData.action,
+                                                        actionButton.modelData.label + " snapshot",
+                                                        actionButton.modelData.label + " " + root.selectedSnapshotName + "?"
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
