@@ -314,9 +314,9 @@ write_applied_state() {
 }
 
 installed_config_state() {
-    if [ ! -f /etc/pf.conf ]; then
+    if [ ! -e /etc/pf.conf ]; then
         printf 'missing\n'
-    elif grep -q "$managed_marker" /etc/pf.conf 2>/dev/null; then
+    elif run_privileged grep -q "$managed_marker" /etc/pf.conf >/dev/null 2>&1; then
         printf 'managed\n'
     elif [ "$(applied_state_value state)" = "managed" ]; then
         printf 'managed\n'
@@ -326,8 +326,8 @@ installed_config_state() {
 }
 
 installed_config_checksum() {
-    [ -f /etc/pf.conf ] || return 0
-    checksum="$(awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' /etc/pf.conf 2>/dev/null || true)"
+    [ -e /etc/pf.conf ] || return 0
+    checksum="$(run_privileged_capture awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' /etc/pf.conf || true)"
     if [ -n "$checksum" ]; then
         printf '%s\n' "$checksum"
     else
