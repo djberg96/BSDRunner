@@ -17,7 +17,33 @@ allow_ipv6="yes"
 allow_dhcp="yes"
 allow_mdns="yes"
 allow_ssh_lan="no"
+allow_ssh_tarpit="no"
 log_blocked="no"
+ssh_tarpit_port="22"
+ssh_real_port="22222"
+ssh_real_port_configured="no"
+sshd_config_file="/etc/ssh/sshd_config"
+
+valid_real_ssh_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    [ "$1" -ge 22201 ] && [ "$1" -le 22299 ]
+}
+
+random_real_ssh_port() {
+    awk 'BEGIN { srand(); print int(22201 + rand() * 99) }'
+}
+
+ensure_real_ssh_port() {
+    if [ "$ssh_real_port_configured" != "yes" ] || ! valid_real_ssh_port "$ssh_real_port"; then
+        ssh_real_port="$(random_real_ssh_port)"
+        ssh_real_port_configured="yes"
+    fi
+}
 
 json_escape() {
     awk '
@@ -85,11 +111,24 @@ load_profile() {
             allow_ssh_lan)
                 allow_ssh_lan="$(normalize_bool "$value")"
                 ;;
+            allow_ssh_tarpit)
+                allow_ssh_tarpit="$(normalize_bool "$value")"
+                ;;
+            ssh_real_port)
+                if valid_real_ssh_port "$value"; then
+                    ssh_real_port="$value"
+                    ssh_real_port_configured="yes"
+                fi
+                ;;
             log_blocked)
                 log_blocked="$(normalize_bool "$value")"
                 ;;
         esac
     done <"$profile_file"
+
+    if [ "$allow_ssh_lan" != "yes" ]; then
+        allow_ssh_tarpit="no"
+    fi
 }
 
 write_profile() {
@@ -102,6 +141,10 @@ write_profile() {
         printf 'allow_dhcp=%s\n' "$allow_dhcp"
         printf 'allow_mdns=%s\n' "$allow_mdns"
         printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
+        printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
+        if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
+            printf 'ssh_real_port=%s\n' "$ssh_real_port"
+        fi
         printf 'log_blocked=%s\n' "$log_blocked"
     } >"$profile_file"
 }
@@ -114,6 +157,10 @@ emit_settings() {
     printf 'allow_dhcp=%s\n' "$allow_dhcp"
     printf 'allow_mdns=%s\n' "$allow_mdns"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
+    printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
+    if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
+        printf 'ssh_real_port=%s\n' "$ssh_real_port"
+    fi
     printf 'log_blocked=%s\n' "$log_blocked"
 }
 
@@ -146,6 +193,20 @@ set_setting_value() {
             ;;
         allow_ssh_lan)
             allow_ssh_lan="$value"
+            if [ "$allow_ssh_lan" != "yes" ]; then
+                allow_ssh_tarpit="no"
+            fi
+            ;;
+        allow_ssh_tarpit)
+            if [ "$value" = "yes" ] && [ "$allow_ssh_lan" != "yes" ]; then
+                emit_error "Enable LAN SSH before enabling the tarpit."
+                exit 1
+            fi
+            allow_ssh_tarpit="$value"
+            if [ "$allow_ssh_tarpit" = "yes" ]; then
+                ssh_real_port_configured="no"
+                ensure_real_ssh_port
+            fi
             ;;
         log_blocked)
             log_blocked="$value"
@@ -177,6 +238,22 @@ run_privileged_capture() {
     fi
 }
 
+run_service_capture() {
+    service_name="$1"
+    service_action="$2"
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-service.XXXXXX")"
+
+    if run_privileged service "$service_name" "$service_action" >"$tmp_file" 2>&1; then
+        cat "$tmp_file"
+        rm -f "$tmp_file"
+        return 0
+    fi
+
+    cat "$tmp_file"
+    rm -f "$tmp_file"
+    return 1
+}
+
 pf_running_state() {
     if ! command -v pfctl >/dev/null 2>&1; then
         printf 'unavailable\n'
@@ -206,6 +283,58 @@ sysrc_value() {
     fi
 }
 
+service_running() {
+    name="$1"
+    if command -v service >/dev/null 2>&1 && service "$name" onestatus >/dev/null 2>&1; then
+        return 0
+    fi
+
+    case "$name" in
+        endlessh)
+            pgrep -f '/usr/local/bin/endlessh' >/dev/null 2>&1
+            ;;
+        sshd)
+            pgrep -x sshd >/dev/null 2>&1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+endlessh_installed() {
+    command -v endlessh >/dev/null 2>&1 || [ -x /usr/local/bin/endlessh ]
+}
+
+sshd_effective_port() {
+    if [ "$allow_ssh_lan" = "yes" ] && [ "$allow_ssh_tarpit" = "yes" ]; then
+        printf '%s\n' "$ssh_real_port"
+    elif command -v sshd >/dev/null 2>&1; then
+        port="$(sshd -T 2>/dev/null | awk '$1 == "port" { print $2; exit }')"
+        if [ -n "$port" ]; then
+            printf '%s\n' "$port"
+        else
+            printf '22\n'
+        fi
+    else
+        printf '22\n'
+    fi
+}
+
+check_profile_prereqs() {
+    if [ "$allow_ssh_tarpit" = "yes" ] && [ "$allow_ssh_lan" != "yes" ]; then
+        printf 'Enable LAN SSH before enabling the tarpit.\n'
+        return 1
+    fi
+
+    if [ "$allow_ssh_tarpit" = "yes" ] && ! endlessh_installed; then
+        printf 'endlessh is not installed. Install security/endlessh before enabling the tarpit.\n'
+        return 1
+    fi
+
+    return 0
+}
+
 applied_state_value() {
     key="$1"
     [ -f "$applied_state_file" ] || return 0
@@ -223,9 +352,9 @@ write_applied_state() {
 }
 
 installed_config_state() {
-    if [ ! -f /etc/pf.conf ]; then
+    if [ ! -e /etc/pf.conf ]; then
         printf 'missing\n'
-    elif grep -q "$managed_marker" /etc/pf.conf 2>/dev/null; then
+    elif run_privileged grep -q "$managed_marker" /etc/pf.conf >/dev/null 2>&1; then
         printf 'managed\n'
     elif [ "$(applied_state_value state)" = "managed" ]; then
         printf 'managed\n'
@@ -235,8 +364,8 @@ installed_config_state() {
 }
 
 installed_config_checksum() {
-    [ -f /etc/pf.conf ] || return 0
-    checksum="$(awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' /etc/pf.conf 2>/dev/null || true)"
+    [ -e /etc/pf.conf ] || return 0
+    checksum="$(run_privileged_capture awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' /etc/pf.conf || true)"
     if [ -n "$checksum" ]; then
         printf '%s\n' "$checksum"
     else
@@ -301,6 +430,7 @@ rules_summary_json() {
     printf ',{"id":"dhcp","label":"DHCP address assignment","description":"DHCP and DHCPv6 replies are allowed.","enabled":%s}' "$(bool_json "$allow_dhcp")"
     printf ',{"id":"mdns","label":"Local discovery","description":"mDNS discovery for local devices is allowed.","enabled":%s}' "$(bool_json "$allow_mdns")"
     printf ',{"id":"ssh","label":"SSH from local network","description":"SSH is limited to private IPv4 LAN ranges.","enabled":%s}' "$(bool_json "$allow_ssh_lan")"
+    printf ',{"id":"tarpit","label":"SSH tarpit","description":"endlessh listens on port 22 while real SSH moves to the stored high port.","enabled":%s}' "$(bool_json "$allow_ssh_tarpit")"
     printf ',{"id":"logging","label":"Blocked attempt logging","description":"Blocked packets are written to pflog.","enabled":%s}' "$(bool_json "$log_blocked")"
     printf ']'
 }
@@ -317,6 +447,9 @@ emit_snapshot() {
     last_tone="$(last_result_value tone)"
     last_message="$(last_result_value message)"
     last_timestamp="$(last_result_value timestamp)"
+    endlessh_enable="$(sysrc_value endlessh_enable)"
+    sshd_enable="$(sysrc_value sshd_enable)"
+    real_ssh_port="$(sshd_effective_port)"
 
     [ -n "$last_tone" ] || last_tone="info"
     [ -n "$last_message" ] || last_message="Loaded firewall status."
@@ -334,6 +467,16 @@ emit_snapshot() {
         "$(printf '%s' "$pflog_enable" | json_escape)" \
         "$(bool_json "$pf_enable")" \
         "$(bool_json "$pflog_enable")"
+    printf '"services":{"sshd_enable":"%s","sshd_enabled":%s,"sshd_running":%s,"endlessh_installed":%s,"endlessh_enable":"%s","endlessh_enabled":%s,"endlessh_running":%s,"ssh_tarpit_port":"%s","ssh_real_port":"%s"},' \
+        "$(printf '%s' "$sshd_enable" | json_escape)" \
+        "$(bool_json "$sshd_enable")" \
+        "$(if service_running sshd; then printf true; else printf false; fi)" \
+        "$(if endlessh_installed; then printf true; else printf false; fi)" \
+        "$(printf '%s' "$endlessh_enable" | json_escape)" \
+        "$(bool_json "$endlessh_enable")" \
+        "$(if service_running endlessh; then printf true; else printf false; fi)" \
+        "$(printf '%s' "$ssh_tarpit_port" | json_escape)" \
+        "$(printf '%s' "$real_ssh_port" | json_escape)"
     printf '"config":{"state":"%s","managed":%s,"checksum":"%s","profile_checksum":"%s","matches_profile":%s,"applied_timestamp":"%s"},' \
         "$config_state" \
         "$(if [ "$config_state" = "managed" ]; then printf true; else printf false; fi)" \
@@ -349,6 +492,7 @@ emit_snapshot() {
     printf '"allow_dhcp":%s,' "$(bool_json "$allow_dhcp")"
     printf '"allow_mdns":%s,' "$(bool_json "$allow_mdns")"
     printf '"allow_ssh_lan":%s,' "$(bool_json "$allow_ssh_lan")"
+    printf '"allow_ssh_tarpit":%s,' "$(bool_json "$allow_ssh_tarpit")"
     printf '"log_blocked":%s' "$(bool_json "$log_blocked")"
     printf '},'
     printf '"rules":'
@@ -537,7 +681,17 @@ $reset_output"
 
 do_validate() {
     load_profile
+    if [ "$allow_ssh_tarpit" = "yes" ]; then
+        ensure_real_ssh_port
+    fi
     write_profile
+
+    if ! prereq_output="$(check_profile_prereqs)"; then
+        write_last_result "error" "Firewall profile prerequisites are not met."
+        emit_action_result false "Firewall profile prerequisites are not met." "$prereq_output"
+        exit 1
+    fi
+
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-pf-validate.XXXXXX")"
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
     rendered="$tmp_dir/pf.conf"
@@ -566,6 +720,108 @@ reload_pf() {
     run_privileged service pf reload
 }
 
+write_sshd_tarpit_config() {
+    mode="$1"
+    tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-sshd-config.XXXXXX")"
+
+    run_privileged awk -v mode="$mode" -v port="$ssh_real_port" '
+        BEGIN {
+            in_block = 0
+            marker = "# BSDRunner disabled while tarpit is enabled: "
+        }
+        /^# BEGIN BSDRunner firewall SSH tarpit$/ {
+            in_block = 1
+            next
+        }
+        /^# END BSDRunner firewall SSH tarpit$/ {
+            in_block = 0
+            next
+        }
+        in_block {
+            next
+        }
+        mode == "enable" {
+            if ($0 ~ /^[[:space:]]*Port[[:space:]]+/) {
+                print marker $0
+                next
+            }
+            print
+            next
+        }
+        mode == "disable" {
+            if (index($0, marker) == 1) {
+                print substr($0, length(marker) + 1)
+                next
+            }
+            print
+            next
+        }
+        {
+            print
+        }
+        END {
+            if (mode == "enable") {
+                print ""
+                print "# BEGIN BSDRunner firewall SSH tarpit"
+                print "# Real sshd is moved away from port 22 while endlessh owns the tarpit."
+                print "Port " port
+                print "# END BSDRunner firewall SSH tarpit"
+            }
+        }
+    ' "$sshd_config_file" >"$tmp_file" || {
+        rm -f "$tmp_file"
+        printf 'Unable to read %s for SSH tarpit update.\n' "$sshd_config_file"
+        return 1
+    }
+
+    validation="$(run_privileged_capture sshd -t -f "$tmp_file")" || {
+        rm -f "$tmp_file"
+        printf '%s\n' "$validation"
+        return 1
+    }
+
+    install_output="$(run_privileged_capture install -m 0600 "$tmp_file" "$sshd_config_file")" || {
+        rm -f "$tmp_file"
+        printf '%s\n' "$install_output"
+        return 1
+    }
+
+    rm -f "$tmp_file"
+    printf '%s\n%s\n' "$validation" "$install_output"
+}
+
+sync_endlessh_with_profile() {
+    if ! command -v sysrc >/dev/null 2>&1 || ! command -v service >/dev/null 2>&1; then
+        printf 'sysrc or service is unavailable; endlessh was not changed.\n'
+        return 0
+    fi
+
+    if [ "$allow_ssh_lan" = "yes" ] && [ "$allow_ssh_tarpit" = "yes" ]; then
+        if ! endlessh_installed; then
+            printf 'endlessh is not installed.\n'
+            return 1
+        fi
+
+        run_privileged sysrc endlessh_enable=YES
+        run_privileged sysrc endlessh_daemonuser=root
+        run_privileged sysrc "endlessh_args=-p $ssh_tarpit_port"
+        if service_running endlessh; then
+            run_service_capture endlessh restart
+        else
+            run_service_capture endlessh start
+        fi
+        return
+    fi
+
+    run_privileged sysrc endlessh_enable=NO
+    run_privileged sysrc endlessh_daemonuser=nobody
+    if service_running endlessh; then
+        run_service_capture endlessh stop
+    else
+        printf 'endlessh was not running.\n'
+    fi
+}
+
 sync_sshd_with_profile() {
     if ! command -v sysrc >/dev/null 2>&1 || ! command -v service >/dev/null 2>&1; then
         printf 'sysrc or service is unavailable; sshd_enable was not changed.\n'
@@ -573,27 +829,72 @@ sync_sshd_with_profile() {
     fi
 
     if [ "$allow_ssh_lan" = "yes" ]; then
+        if [ "$allow_ssh_tarpit" = "yes" ]; then
+            write_sshd_tarpit_config enable
+        else
+            write_sshd_tarpit_config disable
+        fi
+
         run_privileged sysrc sshd_enable=YES
         if service sshd onestatus >/dev/null 2>&1; then
-            printf 'sshd is already running.\n'
+            run_service_capture sshd restart
         else
-            run_privileged service sshd start
+            run_service_capture sshd start
         fi
         return
     fi
 
+    write_sshd_tarpit_config disable
     run_privileged sysrc sshd_enable=NO
     if service sshd onestatus >/dev/null 2>&1; then
-        run_privileged service sshd stop
+        run_service_capture sshd stop
     else
         printf 'sshd was not running.\n'
     fi
 }
 
+sync_ssh_services_with_profile() {
+    if [ "$allow_ssh_tarpit" != "yes" ]; then
+        endlessh_output="$(sync_endlessh_with_profile 2>&1)" || {
+            printf '%s\n' "$endlessh_output"
+            return 1
+        }
+
+        sshd_output="$(sync_sshd_with_profile 2>&1)" || {
+            printf '%s\n%s\n' "$endlessh_output" "$sshd_output"
+            return 1
+        }
+
+        printf '%s\n%s\n' "$endlessh_output" "$sshd_output"
+        return
+    fi
+
+    sshd_output="$(sync_sshd_with_profile 2>&1)" || {
+        printf '%s\n' "$sshd_output"
+        return 1
+    }
+    endlessh_output="$(sync_endlessh_with_profile 2>&1)" || {
+        printf '%s\n%s\n' "$sshd_output" "$endlessh_output"
+        return 1
+    }
+
+    printf '%s\n%s\n' "$sshd_output" "$endlessh_output"
+}
+
 do_apply() {
     mode="${1:-normal}"
     load_profile
+    if [ "$allow_ssh_tarpit" = "yes" ]; then
+        ensure_real_ssh_port
+    fi
     write_profile
+
+    if ! prereq_output="$(check_profile_prereqs)"; then
+        write_last_result "error" "Firewall profile prerequisites are not met."
+        emit_action_result false "Firewall profile prerequisites are not met." "$prereq_output"
+        exit 1
+    fi
+
     config_state="$(installed_config_state)"
     current_profile_checksum="$(profile_checksum)"
     installed_checksum="$(installed_config_checksum)"
@@ -615,9 +916,9 @@ do_apply() {
     fi
 
     if [ "$mode" != "adopt" ] && [ "$config_state" = "managed" ] && [ "$installed_checksum" = "$current_profile_checksum" ]; then
-        if ! sshd_output="$(sync_sshd_with_profile 2>&1)"; then
-            write_last_result "error" "Firewall profile is applied, but sshd could not be synchronized."
-            emit_action_result false "Firewall profile is applied, but sshd could not be synchronized." "$validation
+        if ! sshd_output="$(sync_ssh_services_with_profile 2>&1)"; then
+            write_last_result "error" "Firewall profile is applied, but SSH services could not be synchronized."
+            emit_action_result false "Firewall profile is applied, but SSH services could not be synchronized." "$validation
 $sshd_output"
             exit 1
         fi
@@ -628,7 +929,7 @@ $sshd_output"
         return
     fi
 
-    if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)" && sshd_output="$(sync_sshd_with_profile 2>&1)"; then
+    if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)" && sshd_output="$(sync_ssh_services_with_profile 2>&1)"; then
         write_applied_state "$current_profile_checksum"
         write_last_result "success" "BSDRunner firewall profile applied."
         emit_action_result true "BSDRunner firewall profile applied." "$validation
@@ -647,14 +948,25 @@ ${sshd_output:-}"
 
 do_enable() {
     load_profile
+    if [ "$allow_ssh_tarpit" = "yes" ]; then
+        ensure_real_ssh_port
+        write_profile
+    fi
+
+    if ! prereq_output="$(check_profile_prereqs)"; then
+        write_last_result "error" "Firewall profile prerequisites are not met."
+        emit_action_result false "Firewall profile prerequisites are not met." "$prereq_output"
+        exit 1
+    fi
+
     if command -v mdo >/dev/null 2>&1; then
-        output="$(mdo sysrc pf_enable=YES 2>&1 && mdo sysrc pflog_enable=YES 2>&1 && mdo service pf start 2>&1 && mdo service pflog start 2>&1 && sync_sshd_with_profile 2>&1)" || {
+        output="$(mdo sysrc pf_enable=YES 2>&1 && mdo sysrc pflog_enable=YES 2>&1 && mdo service pf start 2>&1 && mdo service pflog start 2>&1 && sync_ssh_services_with_profile 2>&1)" || {
             write_last_result "error" "Unable to enable firewall services."
             emit_action_result false "Unable to enable firewall services." "$output"
             exit 1
         }
     else
-        output="$(sysrc pf_enable=YES 2>&1 && sysrc pflog_enable=YES 2>&1 && service pf start 2>&1 && service pflog start 2>&1 && sync_sshd_with_profile 2>&1)" || {
+        output="$(sysrc pf_enable=YES 2>&1 && sysrc pflog_enable=YES 2>&1 && service pf start 2>&1 && service pflog start 2>&1 && sync_ssh_services_with_profile 2>&1)" || {
             write_last_result "error" "Unable to enable firewall services."
             emit_action_result false "Unable to enable firewall services." "$output"
             exit 1
