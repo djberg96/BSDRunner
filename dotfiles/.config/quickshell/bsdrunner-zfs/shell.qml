@@ -668,6 +668,8 @@ ShellRoot {
                             }
 
                             ListView {
+                                id: datasetList
+
                                 width: parent.width
                                 height: parent.height - 30
                                 clip: true
@@ -680,7 +682,7 @@ ShellRoot {
                                     required property var modelData
                                     readonly property bool selected: root.selectedDatasetName === modelData.name
 
-                                    width: ListView.view.width
+                                    width: datasetList.width
                                     height: 52
                                     radius: 8
                                     color: selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.panelBackground
@@ -711,10 +713,12 @@ ShellRoot {
                                     }
 
                                     MouseArea {
-                                        anchors.fill: parent
+                                        z: 10
+                                        width: datasetRow.width
+                                        height: datasetRow.height
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            root.selectedDatasetName = modelData.name
+                                            root.selectedDatasetName = datasetRow.modelData.name
                                             root.showDatasetDetails()
                                         }
                                     }
@@ -744,6 +748,8 @@ ShellRoot {
                             }
 
                             ListView {
+                                id: snapshotList
+
                                 visible: root.centerPaneMode === "snapshots"
                                 width: parent.width
                                 height: visible ? parent.height - 30 : 0
@@ -757,7 +763,7 @@ ShellRoot {
                                     required property var modelData
                                     readonly property bool selected: root.selectedSnapshotName === modelData.name
 
-                                    width: ListView.view.width
+                                    width: snapshotList.width
                                     height: 70
                                     radius: 8
                                     color: selected ? Qt.alpha(root.palette.warning, 0.15) : root.palette.panelBackground
@@ -796,7 +802,9 @@ ShellRoot {
                                     }
 
                                     MouseArea {
-                                        anchors.fill: parent
+                                        z: 10
+                                        width: snapshotRow.width
+                                        height: snapshotRow.height
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: root.selectedSnapshotName = snapshotRow.modelData.name
                                     }
