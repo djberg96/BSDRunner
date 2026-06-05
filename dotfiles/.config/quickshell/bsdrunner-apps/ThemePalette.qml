@@ -29,7 +29,8 @@ QtObject {
                 "actionAccents": {
                     "terminal": "#d7e3ea",
                     "files": "#c4d4e2",
-                    "browser": "#ffb86b",
+                    "browser": "#ffd19a",
+                    "storage": "#8fbcbb",
                     "apps": "#8eb6d6",
                     "reload": "#8eb6d6",
                     "power": "#f5fbff",
@@ -56,7 +57,8 @@ QtObject {
                 "actionAccents": {
                     "terminal": "#ff6f83",
                     "files": "#f0c0b7",
-                    "browser": "#ffb36b",
+                    "browser": "#ffc891",
+                    "storage": "#66d6c8",
                     "apps": "#ff8795",
                     "reload": "#ff8795",
                     "power": "#ffd7dd",
@@ -83,7 +85,8 @@ QtObject {
                 "actionAccents": {
                     "terminal": "#8fd3ff",
                     "files": "#dff6ff",
-                    "browser": "#ffb86b",
+                    "browser": "#ffd19a",
+                    "storage": "#7fd1ae",
                     "apps": "#9fcfe8",
                     "reload": "#9fcfe8",
                     "power": "#bde9ff",
@@ -110,7 +113,8 @@ QtObject {
                 "actionAccents": {
                     "terminal": "#f3c316",
                     "files": "#ffd76a",
-                    "browser": "#ffb347",
+                    "browser": "#ffd08a",
+                    "storage": "#7fd6b2",
                     "apps": "#ffcf5a",
                     "reload": "#ffcf5a",
                     "power": "#fff0c7",
@@ -137,7 +141,8 @@ QtObject {
                 "actionAccents": {
                     "terminal": "#5d8c45",
                     "files": "#b4a14d",
-                    "browser": "#d9a15d",
+                    "browser": "#f0bf7a",
+                    "storage": "#8fd3ff",
                     "apps": "#88a16c",
                     "reload": "#88a16c",
                     "power": "#dce4d3",

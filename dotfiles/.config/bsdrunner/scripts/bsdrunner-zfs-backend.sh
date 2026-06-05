@@ -123,7 +123,7 @@ emit_dataset_json() {
         return
     fi
 
-    zfs list -H -t filesystem,volume -o name,used,avail,refer,mountpoint,type 2>/dev/null |
+    zfs list -H -t filesystem,volume -o name,used,avail,refer,mountpoint,type,encryption,keystatus,keyformat,keylocation,encryptionroot,pbkdf2iters 2>/dev/null |
     awk -F '\t' '
         function esc(value) {
             gsub(/\\/, "\\\\", value)
@@ -131,10 +131,10 @@ emit_dataset_json() {
             return value
         }
         BEGIN { printf "["; first = 1 }
-        NF >= 6 {
+        NF >= 12 {
             if (!first) printf ","
             first = 0
-            printf "{\"name\":\"%s\",\"used\":\"%s\",\"avail\":\"%s\",\"refer\":\"%s\",\"mountpoint\":\"%s\",\"type\":\"%s\"}", esc($1), esc($2), esc($3), esc($4), esc($5), esc($6)
+            printf "{\"name\":\"%s\",\"used\":\"%s\",\"avail\":\"%s\",\"refer\":\"%s\",\"mountpoint\":\"%s\",\"type\":\"%s\",\"encryption\":\"%s\",\"keystatus\":\"%s\",\"keyformat\":\"%s\",\"keylocation\":\"%s\",\"encryptionroot\":\"%s\",\"pbkdf2iters\":\"%s\"}", esc($1), esc($2), esc($3), esc($4), esc($5), esc($6), esc($7), esc($8), esc($9), esc($10), esc($11), esc($12)
         }
         END { printf "]" }
     '

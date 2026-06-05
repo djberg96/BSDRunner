@@ -30,6 +30,7 @@ ShellRoot {
     property string snapshotName: ""
     property string selectedDatasetName: ""
     property string selectedSnapshotName: ""
+    property string centerPaneMode: "details"
     property var pools: []
     property var datasets: []
     property var snapshots: []
@@ -60,6 +61,10 @@ ShellRoot {
                 return list[i]
         }
         return null
+    }
+
+    function isPoolDataset(datasetName) {
+        return !!findByName(pools, datasetName)
     }
 
     function snapshotsForDataset(datasetName) {
@@ -138,8 +143,70 @@ ShellRoot {
 
     function selectedDatasetDetail() {
         if (!selectedDataset)
-            return "Select a dataset to create or browse snapshots."
+            return "Select a dataset to create snapshots or inspect details."
         return selectedDataset.used + " used / " + selectedDataset.avail + " free"
+    }
+
+    function selectedDatasetSnapshotCount() {
+        return visibleSnapshots.length
+    }
+
+    function latestSnapshot() {
+        if (visibleSnapshots.length === 0)
+            return null
+        return visibleSnapshots[visibleSnapshots.length - 1]
+    }
+
+    function ensureSnapshotSelection() {
+        if (centerPaneMode !== "snapshots") {
+            selectedSnapshotName = ""
+            return
+        }
+
+        if (visibleSnapshots.length > 0 && (!selectedSnapshotName || !findByName(visibleSnapshots, selectedSnapshotName)))
+            selectedSnapshotName = visibleSnapshots[visibleSnapshots.length - 1].name
+        else if (visibleSnapshots.length === 0)
+            selectedSnapshotName = ""
+    }
+
+    function showDatasetDetails() {
+        centerPaneMode = "details"
+        selectedSnapshotName = ""
+    }
+
+    function showSnapshots() {
+        if (!selectedDatasetName)
+            return
+        centerPaneMode = "snapshots"
+        ensureSnapshotSelection()
+    }
+
+    function propertyValue(value) {
+        if (!value || value === "-" || value === "none")
+            return "None"
+        return value
+    }
+
+    function encryptionEnabled(dataset) {
+        return dataset && dataset.encryption && dataset.encryption !== "off"
+    }
+
+    function encryptionLabel(dataset) {
+        if (!dataset)
+            return "No dataset selected"
+        if (!encryptionEnabled(dataset))
+            return "Unencrypted"
+        if ((dataset.keystatus || "").toLowerCase() === "available")
+            return "Encrypted / Key Loaded"
+        if ((dataset.keystatus || "").toLowerCase() === "unavailable")
+            return "Encrypted / Key Unloaded"
+        return "Encrypted"
+    }
+
+    function encryptionTone(dataset) {
+        if (!dataset || !encryptionEnabled(dataset))
+            return "info"
+        return (dataset.keystatus || "").toLowerCase() === "available" ? "success" : "warning"
     }
 
     function selectedSnapshotDetail() {
@@ -252,11 +319,7 @@ ShellRoot {
         if ((!selectedDatasetName || !findByName(datasets, selectedDatasetName)) && datasets.length > 0)
             selectedDatasetName = datasets[0].name
 
-        var filtered = snapshotsForDataset(selectedDatasetName)
-        if (filtered.length > 0 && (!selectedSnapshotName || !findByName(filtered, selectedSnapshotName)))
-            selectedSnapshotName = filtered[filtered.length - 1].name
-        else if (filtered.length === 0)
-            selectedSnapshotName = ""
+        ensureSnapshotSelection()
     }
 
     function applyActionResult(text, exitCode, stderrText) {
@@ -609,6 +672,8 @@ ShellRoot {
                             }
 
                             ListView {
+                                id: datasetList
+
                                 width: parent.width
                                 height: parent.height - 30
                                 clip: true
@@ -621,16 +686,29 @@ ShellRoot {
                                     required property var modelData
                                     readonly property bool selected: root.selectedDatasetName === modelData.name
 
-                                    width: ListView.view.width
+                                    width: datasetList.width
                                     height: 52
                                     radius: 8
                                     color: selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.panelBackground
                                     border.width: 1
                                     border.color: selected ? root.palette.accent : root.palette.frameBorder
 
+                                    Text {
+                                        anchors.top: parent.top
+                                        anchors.right: parent.right
+                                        anchors.topMargin: 7
+                                        anchors.rightMargin: 8
+                                        visible: root.isPoolDataset(datasetRow.modelData.name)
+                                        text: "Pool"
+                                        color: datasetRow.selected ? root.palette.accent : root.palette.secondaryText
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+
                                     Column {
                                         anchors.fill: parent
                                         anchors.margins: 8
+                                        anchors.rightMargin: root.isPoolDataset(datasetRow.modelData.name) ? 44 : 8
                                         spacing: 2
 
                                         Text {
@@ -652,14 +730,13 @@ ShellRoot {
                                     }
 
                                     MouseArea {
-                                        anchors.fill: parent
+                                        z: 10
+                                        width: datasetRow.width
+                                        height: datasetRow.height
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            root.selectedDatasetName = modelData.name
-                                            if (root.visibleSnapshots.length > 0)
-                                                root.selectedSnapshotName = root.visibleSnapshots[root.visibleSnapshots.length - 1].name
-                                            else
-                                                root.selectedSnapshotName = ""
+                                            root.selectedDatasetName = datasetRow.modelData.name
+                                            root.showDatasetDetails()
                                         }
                                     }
                                 }
@@ -681,15 +758,18 @@ ShellRoot {
                             spacing: 10
 
                             Text {
-                                text: "Snapshots"
+                                text: root.centerPaneMode === "snapshots" ? "Snapshots" : "Dataset Details"
                                 color: root.palette.accent
                                 font.pixelSize: 15
                                 font.bold: true
                             }
 
                             ListView {
+                                id: snapshotList
+
+                                visible: root.centerPaneMode === "snapshots"
                                 width: parent.width
-                                height: parent.height - 30
+                                height: visible ? parent.height - 30 : 0
                                 clip: true
                                 model: root.visibleSnapshots
                                 spacing: 8
@@ -700,7 +780,7 @@ ShellRoot {
                                     required property var modelData
                                     readonly property bool selected: root.selectedSnapshotName === modelData.name
 
-                                    width: ListView.view.width
+                                    width: snapshotList.width
                                     height: 70
                                     radius: 8
                                     color: selected ? Qt.alpha(root.palette.warning, 0.15) : root.palette.panelBackground
@@ -739,10 +819,197 @@ ShellRoot {
                                     }
 
                                     MouseArea {
-                                        anchors.fill: parent
+                                        z: 10
+                                        width: snapshotRow.width
+                                        height: snapshotRow.height
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.selectedSnapshotName = modelData.name
+                                        onClicked: root.selectedSnapshotName = snapshotRow.modelData.name
                                     }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                visible: root.centerPaneMode !== "snapshots"
+                                height: visible ? 76 : 0
+                                radius: 8
+                                color: Qt.alpha(root.toneColor(root.encryptionTone(root.selectedDataset)), 0.12)
+                                border.width: 1
+                                border.color: root.toneColor(root.encryptionTone(root.selectedDataset))
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 9
+                                    spacing: 5
+
+                                    Item {
+                                        width: parent.width
+                                        height: 28
+
+                                        Text {
+                                            id: encryptionStatus
+
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root.encryptionLabel(root.selectedDataset)
+                                            color: root.toneColor(root.encryptionTone(root.selectedDataset))
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            anchors.left: parent.left
+                                            anchors.right: encryptionStatus.left
+                                            anchors.rightMargin: 10
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root.selectedDataset ? root.selectedDataset.name : "No dataset selected"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 20
+                                            minimumPixelSize: 14
+                                            fontSizeMode: Text.HorizontalFit
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.selectedDataset ? root.selectedDataset.type + " | " + root.propertyValue(root.selectedDataset.mountpoint) : "Select a dataset from the left."
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 13
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                visible: root.centerPaneMode !== "snapshots"
+                                height: visible ? 146 : 0
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 2
+
+                                    Text {
+                                        text: "Storage"
+                                        color: root.palette.accent
+                                        font.pixelSize: 15
+                                        font.bold: true
+                                    }
+
+                                    Repeater {
+                                        model: root.selectedDataset ? [
+                                            {"label": "Used", "value": root.selectedDataset.used},
+                                            {"label": "Available", "value": root.selectedDataset.avail},
+                                            {"label": "Referenced", "value": root.selectedDataset.refer},
+                                            {"label": "Snapshots", "value": root.selectedDatasetSnapshotCount().toString()},
+                                            {"label": "Mountpoint", "value": root.propertyValue(root.selectedDataset.mountpoint)}
+                                        ] : [
+                                            {"label": "Dataset", "value": "None selected"}
+                                        ]
+
+                                        delegate: Item {
+                                            required property var modelData
+
+                                            width: parent.width
+                                            height: 18
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                width: 92
+                                                text: modelData.label
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 13
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.leftMargin: 102
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: modelData.value
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                visible: root.centerPaneMode !== "snapshots"
+                                height: visible ? parent.height - 30 - 76 - 146 - 16 : 0
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 2
+
+                                    Text {
+                                        text: "Encryption Properties"
+                                        color: root.palette.accent
+                                        font.pixelSize: 15
+                                        font.bold: true
+                                    }
+
+                                    Repeater {
+                                        model: root.selectedDataset ? [
+                                            {"label": "Encryption", "value": root.propertyValue(root.selectedDataset.encryption)},
+                                            {"label": "Key Status", "value": root.propertyValue(root.selectedDataset.keystatus)},
+                                            {"label": "Key Format", "value": root.propertyValue(root.selectedDataset.keyformat)},
+                                            {"label": "Key Location", "value": root.propertyValue(root.selectedDataset.keylocation)},
+                                            {"label": "Encryption Root", "value": root.propertyValue(root.selectedDataset.encryptionroot)},
+                                            {"label": "PBKDF2 Iters", "value": root.propertyValue(root.selectedDataset.pbkdf2iters)}
+                                        ] : [
+                                            {"label": "Encryption", "value": "None selected"}
+                                        ]
+
+                                        delegate: Item {
+                                            required property var modelData
+
+                                            width: parent.width
+                                            height: 20
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                width: 116
+                                                text: modelData.label
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 13
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.leftMargin: 126
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: modelData.value
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+
                                 }
                             }
                         }
@@ -948,7 +1215,7 @@ ShellRoot {
                                     spacing: 8
 
                                     Text {
-                                        text: "Current Selection"
+                                        text: root.centerPaneMode === "snapshots" ? "Current Selection" : "Snapshot Summary"
                                         color: root.palette.accent
                                         font.pixelSize: 15
                                         font.bold: true
@@ -958,9 +1225,9 @@ ShellRoot {
                                         width: parent.width
                                         height: 74
                                         radius: 8
-                                        color: root.palette.cardBackground
+                                        color: snapshotSummaryMouse.containsMouse && root.centerPaneMode !== "snapshots" ? root.palette.cardHover : root.palette.cardBackground
                                         border.width: 1
-                                        border.color: root.palette.frameBorder
+                                        border.color: root.centerPaneMode !== "snapshots" ? root.palette.accent : root.palette.frameBorder
 
                                         Column {
                                             anchors.fill: parent
@@ -969,7 +1236,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.selectedSnapshot ? root.selectedSnapshot.name : "No snapshot selected"
+                                                text: root.centerPaneMode === "snapshots" ? (root.selectedSnapshot ? root.selectedSnapshot.name : "No snapshot selected") : (root.selectedDatasetName || "No dataset selected")
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 15
                                                 font.bold: true
@@ -978,7 +1245,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.selectedSnapshotDetail()
+                                                text: root.centerPaneMode === "snapshots" ? root.selectedSnapshotDetail() : root.selectedDatasetSnapshotCount() + " recent snapshot(s). Click to browse."
                                                 color: root.palette.mutedText
                                                 font.pixelSize: 11
                                                 wrapMode: Text.WordWrap
@@ -986,9 +1253,42 @@ ShellRoot {
                                                 elide: Text.ElideRight
                                             }
                                         }
+
+                                        MouseArea {
+                                            id: snapshotSummaryMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: root.centerPaneMode !== "snapshots" && root.selectedDatasetName ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            enabled: root.centerPaneMode !== "snapshots" && root.selectedDatasetName
+                                            onClicked: root.showSnapshots()
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: root.centerPaneMode !== "snapshots"
+                                        width: parent.width
+                                        height: visible ? 36 : 0
+                                        radius: 8
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            text: root.latestSnapshot() ? "Latest: " + root.latestSnapshot().snapshot : "Latest: none"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            verticalAlignment: Text.AlignVCenter
+                                            elide: Text.ElideRight
+                                        }
                                     }
 
                                     Row {
+                                        visible: root.centerPaneMode === "snapshots"
+                                        height: visible ? 36 : 0
                                         spacing: 8
 
                                         Repeater {
@@ -1013,7 +1313,7 @@ ShellRoot {
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: modelData.label
+                                                    text: actionButton.modelData.label
                                                     color: actionButton.accent
                                                     font.pixelSize: 13
                                                     font.bold: true
@@ -1027,9 +1327,9 @@ ShellRoot {
                                                     cursorShape: Qt.PointingHandCursor
                                                     enabled: root.selectedSnapshotName && !root.runningAction
                                                     onClicked: root.requestAction(
-                                                        modelData.action,
-                                                        modelData.label + " snapshot",
-                                                        modelData.label + " " + root.selectedSnapshotName + "?"
+                                                        actionButton.modelData.action,
+                                                        actionButton.modelData.label + " snapshot",
+                                                        actionButton.modelData.label + " " + root.selectedSnapshotName + "?"
                                                     )
                                                 }
                                             }

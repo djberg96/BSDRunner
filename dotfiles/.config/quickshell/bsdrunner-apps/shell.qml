@@ -26,7 +26,7 @@ ShellRoot {
             "icon": "PF",
             "label": "Firewall",
             "detail": "Manage desktop protection",
-            "tone": "success"
+            "tone": "warning"
         },
         {
             "action": "dns",
@@ -40,14 +40,14 @@ ShellRoot {
             "icon": "ZFS",
             "label": "ZFS",
             "detail": "Snapshots and pool health",
-            "tone": "warning"
+            "tone": "storage"
         },
         {
             "action": "firefox",
             "icon": "WEB",
             "label": "Firefox",
             "detail": "Open the web browser",
-            "tone": "warning"
+            "tone": "browser"
         }
     ]
 
@@ -59,6 +59,10 @@ ShellRoot {
             return palette.warning
         case "info":
             return palette.accent
+        case "storage":
+            return themeLoader.actionAccent("storage")
+        case "browser":
+            return themeLoader.actionAccent("browser")
         default:
             return themeLoader.actionAccent("apps")
         }

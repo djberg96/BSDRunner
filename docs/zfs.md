@@ -12,11 +12,12 @@ The first version shows:
 
 - pool health and free space
 - filesystem and volume datasets
+- selected dataset details, including native ZFS encryption status and key metadata
 - recent snapshots
 - create snapshot for the selected dataset
 - optionally create snapshots recursively from the confirmation prompt
-- roll back to a selected snapshot
-- destroy a selected snapshot
+- clickable snapshot summary for the selected dataset
+- roll back to or destroy snapshots from the snapshot-browse view
 
 Actions are handled by `bsdrunner-zfs-backend.sh`, which wraps `zfs` and `zpool`. Snapshot creation, recursive snapshot creation, rollback, and deletion use `mdo` when it is available.
 
@@ -24,4 +25,6 @@ Snapshot labels are optional. If left blank, BSDRunner creates a timestamped lab
 
 Recursive snapshots use `zfs snapshot -r` and apply to the selected dataset plus descendants.
 
-Rollback and destroy are intentionally confirmation-gated. They are useful, but they can discard work or remove recovery points.
+The center pane defaults to dataset details. Click the lower-right snapshot summary to browse snapshots for the selected dataset; rollback and destroy are available there and remain confirmation-gated because they can discard work or remove recovery points.
+
+Dataset encryption status is read-only. BSDRunner shows ZFS properties such as `encryption`, `keystatus`, `keyformat`, `keylocation`, `encryptionroot`, and `pbkdf2iters`, but it does not create encrypted datasets, change keys, load keys, unload keys, or migrate existing data.
