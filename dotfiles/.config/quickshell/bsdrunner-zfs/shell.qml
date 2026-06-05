@@ -63,6 +63,10 @@ ShellRoot {
         return null
     }
 
+    function isPoolDataset(datasetName) {
+        return !!findByName(pools, datasetName)
+    }
+
     function snapshotsForDataset(datasetName) {
         if (!datasetName)
             return snapshots
@@ -689,9 +693,22 @@ ShellRoot {
                                     border.width: 1
                                     border.color: selected ? root.palette.accent : root.palette.frameBorder
 
+                                    Text {
+                                        anchors.top: parent.top
+                                        anchors.right: parent.right
+                                        anchors.topMargin: 7
+                                        anchors.rightMargin: 8
+                                        visible: root.isPoolDataset(datasetRow.modelData.name)
+                                        text: "Pool"
+                                        color: datasetRow.selected ? root.palette.accent : root.palette.secondaryText
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+
                                     Column {
                                         anchors.fill: parent
                                         anchors.margins: 8
+                                        anchors.rightMargin: root.isPoolDataset(datasetRow.modelData.name) ? 44 : 8
                                         spacing: 2
 
                                         Text {
