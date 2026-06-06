@@ -344,7 +344,7 @@ ShellRoot {
         var entry = selectedEntry()
         if (!entry)
             return "--"
-        return entry.kind === "directory" ? "Folder" : (entry.size_label || "--")
+        return entry.kind === "directory" ? "--" : (entry.size_label || "--")
     }
 
     function selectedPermissionLabel() {
@@ -381,6 +381,21 @@ ShellRoot {
         default:
             return "--"
         }
+    }
+
+    function detailsRows() {
+        var entry = selectedEntry()
+        var rows = [
+            {"label": "Type", "key": "type"}
+        ]
+
+        if (!entry || entry.kind !== "directory")
+            rows.push({"label": "Size", "key": "size"})
+
+        rows.push({"label": "Modified", "key": "modified"})
+        rows.push({"label": "Access", "key": "permissions"})
+        rows.push({"label": "Hidden", "key": "hidden"})
+        return rows
     }
 
     function actionButtonEnabled(action) {
@@ -1611,26 +1626,26 @@ ShellRoot {
 
                             Column {
                                 anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 8
+                                anchors.margins: 12
+                                spacing: 10
 
                                 Text {
                                     width: parent.width
                                     text: "Details"
                                     color: root.palette.primaryText
-                                    font.pixelSize: 14
+                                    font.pixelSize: 16
                                     font.bold: true
                                     elide: Text.ElideRight
                                 }
 
                                 Row {
                                     width: parent.width
-                                    height: 38
-                                    spacing: 8
+                                    height: 42
+                                    spacing: 10
 
                                     Rectangle {
-                                        width: 40
-                                        height: 30
+                                        width: 44
+                                        height: 32
                                         anchors.verticalCenter: parent.verticalCenter
                                         radius: 6
                                         color: Qt.alpha(themeLoader.actionAccent("files"), 0.16)
@@ -1641,20 +1656,20 @@ ShellRoot {
                                             anchors.centerIn: parent
                                             text: root.selectedEntry() ? root.kindIcon(root.selectedEntry().kind) : "--"
                                             color: themeLoader.actionAccent("files")
-                                            font.pixelSize: 9
+                                            font.pixelSize: 10
                                             font.bold: true
                                         }
                                     }
 
                                     Column {
-                                        width: parent.width - 48
+                                        width: parent.width - 54
                                         anchors.verticalCenter: parent.verticalCenter
 
                                         Text {
                                             width: parent.width
                                             text: root.selectedEntry() ? root.selectedEntry().name : ""
                                             color: root.palette.accentStrong
-                                            font.pixelSize: 12
+                                            font.pixelSize: 14
                                             font.bold: true
                                             elide: Text.ElideMiddle
                                         }
@@ -1662,32 +1677,29 @@ ShellRoot {
                                 }
 
                                 Grid {
+                                    id: detailsGrid
+
                                     width: parent.width
                                     columns: 2
                                     columnSpacing: 10
-                                    rowSpacing: 6
+                                    rowSpacing: 8
 
                                     Repeater {
-                                        model: [
-                                            {"label": "Size", "key": "size"},
-                                            {"label": "Modified", "key": "modified"},
-                                            {"label": "Access", "key": "permissions"},
-                                            {"label": "Hidden", "key": "hidden"}
-                                        ]
+                                        model: root.detailsRows()
 
                                         delegate: Column {
                                             id: detailCell
 
                                             required property var modelData
 
-                                            width: (detailsDrawer.width - 30) / 2
-                                            spacing: 1
+                                            width: (detailsGrid.width - detailsGrid.columnSpacing) / 2
+                                            spacing: 2
 
                                             Text {
                                                 width: parent.width
                                                 text: detailCell.modelData.label
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 9
+                                                font.pixelSize: 10
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -1696,7 +1708,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.detailsValue(detailCell.modelData.key)
                                                 color: root.palette.secondaryText
-                                                font.pixelSize: 10
+                                                font.pixelSize: 12
                                                 elide: Text.ElideRight
                                             }
                                         }
@@ -1705,23 +1717,23 @@ ShellRoot {
 
                                 Column {
                                     width: parent.width
-                                    spacing: 2
+                                    spacing: 3
 
                                     Text {
                                         width: parent.width
                                         text: "Path"
                                         color: root.palette.mutedText
-                                        font.pixelSize: 9
+                                        font.pixelSize: 10
                                         font.bold: true
                                         elide: Text.ElideRight
                                     }
 
                                     Text {
                                         width: parent.width
-                                        height: 46
+                                        height: 58
                                         text: root.selectedEntry() ? root.selectedEntry().path : ""
                                         color: root.palette.secondaryText
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                         wrapMode: Text.WrapAnywhere
                                         maximumLineCount: 3
                                         elide: Text.ElideRight
@@ -1735,16 +1747,18 @@ ShellRoot {
                                 }
 
                                 Grid {
+                                    id: drawerActionGrid
+
                                     width: parent.width
                                     columns: 2
                                     columnSpacing: 8
-                                    rowSpacing: 6
+                                    rowSpacing: 7
 
                                     Repeater {
                                         model: [
                                             {"label": "Open", "action": "open"},
                                             {"label": "Rename", "action": "rename"},
-                                            {"label": "Copy", "action": "copy-path"},
+                                            {"label": "Copy Path", "action": "copy-path"},
                                             {"label": "Terminal", "action": "terminal-target"},
                                             {"label": "Trash", "action": "trash"}
                                         ]
@@ -1758,8 +1772,8 @@ ShellRoot {
                                             readonly property bool terminalEnabled: hasSelection && root.selectedEntry().kind === "directory"
                                             readonly property bool enabledAction: hasSelection && (!isTerminal || terminalEnabled)
 
-                                            width: (detailsDrawer.width - 30) / 2
-                                            height: 28
+                                            width: (drawerActionGrid.width - drawerActionGrid.columnSpacing) / 2
+                                            height: 30
                                             radius: 6
                                             opacity: enabledAction ? 1.0 : 0.45
                                             color: drawerActionMouse.containsMouse && enabledAction
@@ -1776,7 +1790,7 @@ ShellRoot {
                                                 color: drawerAction.modelData.action === "trash" && drawerAction.enabledAction
                                                     ? root.palette.danger
                                                     : root.palette.secondaryText
-                                                font.pixelSize: 10
+                                                font.pixelSize: 11
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
