@@ -60,9 +60,17 @@ ShellRoot {
     property bool actionStdoutFinished: false
     property bool actionStderrFinished: false
     property bool runningAction: false
+    property bool contextMenuOpen: false
+    property real contextMenuX: 0
+    property real contextMenuY: 0
+    property string contextMenuKind: ""
+    property string contextMenuTargetPath: ""
+    property string contextMenuTargetName: ""
+    property string contextMenuTargetKind: ""
     readonly property var visibleEntries: filteredEntries()
     readonly property var breadcrumbs: breadcrumbEntries()
     readonly property var recentShortcuts: recentEntries()
+    readonly property var contextMenuActions: buildContextMenuActions()
 
     function cleanPath(value) {
         var text = String(value || "").trim()
@@ -325,6 +333,8 @@ ShellRoot {
     }
 
     function openActionDialog(mode) {
+        if (contextMenuOpen)
+            closeContextMenu()
         if (!actionButtonEnabled(mode))
             return
 
@@ -393,6 +403,111 @@ ShellRoot {
         if (entry && entry.kind === "directory")
             path = entry.path
         runBackendAction("terminal", path, "")
+    }
+
+    function copySelectedPath() {
+        if (runningAction)
+            return
+        var entry = selectedEntry()
+        if (!entry)
+            return
+        runBackendAction("copy-path", entry.path, "")
+    }
+
+    function buildContextMenuActions() {
+        if (!contextMenuOpen)
+            return []
+
+        if (contextMenuKind === "background") {
+            return [
+                {"label": "New Folder", "action": "mkdir", "tone": "normal"},
+                {"label": "Open Terminal Here", "action": "terminal-current", "tone": "normal"},
+                {"label": "Refresh", "action": "refresh", "tone": "normal"}
+            ]
+        }
+
+        var actions = [
+            {"label": contextMenuTargetKind === "directory" ? "Open Folder" : "Open", "action": "open", "tone": "normal"},
+            {"label": "Rename", "action": "rename", "tone": "normal"},
+            {"label": "Copy Path", "action": "copy-path", "tone": "normal"}
+        ]
+
+        if (contextMenuTargetKind === "directory")
+            actions.push({"label": "Open Terminal Here", "action": "terminal-target", "tone": "normal"})
+
+        actions.push({"label": "Move to Trash", "action": "trash", "tone": "danger"})
+        return actions
+    }
+
+    function openContextMenu(kind, x, y, entry) {
+        closeActionDialog()
+        contextMenuKind = kind
+        contextMenuX = Math.max(8, Math.min(x, window.width - 188))
+        contextMenuY = Math.max(8, Math.min(y, window.height - 220))
+
+        if (entry) {
+            selectedPath = entry.path
+            contextMenuTargetPath = entry.path
+            contextMenuTargetName = entry.name
+            contextMenuTargetKind = entry.kind
+        } else {
+            contextMenuTargetPath = currentPath
+            contextMenuTargetName = baseName(currentPath)
+            contextMenuTargetKind = "directory"
+        }
+
+        contextMenuOpen = true
+    }
+
+    function closeContextMenu() {
+        contextMenuOpen = false
+        contextMenuKind = ""
+        contextMenuTargetPath = ""
+        contextMenuTargetName = ""
+        contextMenuTargetKind = ""
+    }
+
+    function runContextMenuAction(actionId) {
+        var targetPath = contextMenuTargetPath
+        var targetEntry = entryByPath(targetPath)
+        closeContextMenu()
+
+        switch (actionId) {
+        case "open":
+            if (targetEntry)
+                activate(targetEntry)
+            break
+        case "rename":
+            if (targetEntry) {
+                selectedPath = targetEntry.path
+                openActionDialog("rename")
+            }
+            break
+        case "trash":
+            if (targetEntry) {
+                selectedPath = targetEntry.path
+                openActionDialog("trash")
+            }
+            break
+        case "copy-path":
+            if (targetEntry) {
+                selectedPath = targetEntry.path
+                copySelectedPath()
+            }
+            break
+        case "terminal-target":
+            runBackendAction("terminal", targetPath, "")
+            break
+        case "terminal-current":
+            runBackendAction("terminal", currentPath, "")
+            break
+        case "mkdir":
+            openActionDialog("mkdir")
+            break
+        case "refresh":
+            refreshCurrent()
+            break
+        }
     }
 
     function runBackendAction(actionId, arg1, arg2) {
@@ -719,6 +834,8 @@ ShellRoot {
         color: "transparent"
 
         Rectangle {
+            id: contentRoot
+
             anchors.fill: parent
             color: root.palette.panelBackground
 
@@ -1294,6 +1411,8 @@ ShellRoot {
                     }
 
                     Rectangle {
+                        id: listPanel
+
                         width: parent.width
                         height: parent.height - 34 - 30 - 34 - 32 - 28 - (parent.spacing * 5)
                         radius: 8
@@ -1443,14 +1562,22 @@ ShellRoot {
                                     id: rowMouse
 
                                     anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
+                                    onClicked: function(mouse) {
                                         root.selectedPath = entryRow.modelData.path
                                         entryList.currentIndex = entryRow.index
                                         entryList.forceActiveFocus()
+                                        if (mouse.button === Qt.RightButton) {
+                                            var point = entryRow.mapToItem(contentRoot, mouse.x, mouse.y)
+                                            root.openContextMenu("item", point.x, point.y, entryRow.modelData)
+                                        }
                                     }
-                                    onDoubleClicked: root.activate(entryRow.modelData)
+                                    onDoubleClicked: function(mouse) {
+                                        if (mouse.button === Qt.LeftButton)
+                                            root.activate(entryRow.modelData)
+                                    }
                                 }
                             }
                         }
@@ -1461,6 +1588,28 @@ ShellRoot {
                             text: "No entries"
                             color: root.palette.mutedText
                             font.pixelSize: 14
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            hoverEnabled: false
+                            propagateComposedEvents: true
+                            onClicked: function(mouse) {
+                                var listX = mouse.x - entryList.x
+                                var listY = mouse.y - entryList.y
+                                var index = entryList.indexAt(listX, listY)
+                                var point = listPanel.mapToItem(contentRoot, mouse.x, mouse.y)
+
+                                if (index >= 0 && index < root.visibleEntries.length) {
+                                    var entry = root.visibleEntries[index]
+                                    root.selectedPath = entry.path
+                                    entryList.currentIndex = index
+                                    root.openContextMenu("item", point.x, point.y, entry)
+                                } else {
+                                    root.openContextMenu("background", point.x, point.y, null)
+                                }
+                            }
                         }
                     }
 
@@ -1499,6 +1648,101 @@ ShellRoot {
                             horizontalAlignment: Text.AlignRight
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                visible: root.contextMenuOpen
+                color: "transparent"
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: root.closeContextMenu()
+                }
+
+                Rectangle {
+                    x: root.contextMenuX
+                    y: root.contextMenuY
+                    width: 188
+                    height: 10 + (root.contextMenuKind === "item" ? 38 : 0) + (root.contextMenuActions.length * 34)
+                    radius: 8
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.palette.panelBorder
+
+                    MouseArea {
+                        anchors.fill: parent
+                    }
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        spacing: 4
+
+                        Rectangle {
+                            width: parent.width
+                            height: 34
+                            visible: root.contextMenuKind === "item"
+                            radius: 6
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                text: root.contextMenuTargetName
+                                color: root.palette.primaryText
+                                font.pixelSize: 12
+                                font.bold: true
+                                elide: Text.ElideMiddle
+                            }
+                        }
+
+                        Repeater {
+                            model: root.contextMenuActions
+
+                            delegate: Rectangle {
+                                id: menuRow
+
+                                required property var modelData
+
+                                width: parent.width
+                                height: 30
+                                radius: 6
+                                color: menuMouse.containsMouse ? root.palette.cardHover : "transparent"
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    text: menuRow.modelData.label
+                                    color: menuRow.modelData.tone === "danger"
+                                        ? root.palette.danger
+                                        : root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: menuRow.modelData.tone === "danger"
+                                    elide: Text.ElideRight
+                                }
+
+                                MouseArea {
+                                    id: menuMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.runContextMenuAction(menuRow.modelData.action)
+                                }
+                            }
                         }
                     }
                 }

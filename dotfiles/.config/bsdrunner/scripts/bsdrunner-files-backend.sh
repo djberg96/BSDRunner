@@ -438,6 +438,40 @@ open_terminal() {
     json_action true "Opened terminal in $target." "$target"
 }
 
+copy_path() {
+    target="$(expand_path "${1:-}")"
+    if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
+        json_error "Path does not exist: ${1:-}"
+        exit 1
+    fi
+
+    if command -v wl-copy >/dev/null 2>&1; then
+        if printf '%s' "$target" | wl-copy >/dev/null 2>&1; then
+            json_action true "Copied path for ${target##*/}." "$target"
+            return 0
+        fi
+        json_error "Unable to reach the Wayland clipboard."
+        exit 1
+    elif command -v pbcopy >/dev/null 2>&1; then
+        if printf '%s' "$target" | pbcopy >/dev/null 2>&1; then
+            json_action true "Copied path for ${target##*/}." "$target"
+            return 0
+        fi
+        json_error "Unable to copy path with pbcopy."
+        exit 1
+    elif command -v xclip >/dev/null 2>&1; then
+        if printf '%s' "$target" | xclip -selection clipboard >/dev/null 2>&1; then
+            json_action true "Copied path for ${target##*/}." "$target"
+            return 0
+        fi
+        json_error "Unable to copy path with xclip."
+        exit 1
+    else
+        json_error "No clipboard helper found. Install wl-clipboard for wl-copy."
+        exit 1
+    fi
+}
+
 action="${1:-snapshot}"
 case "$action" in
     snapshot)
@@ -457,6 +491,9 @@ case "$action" in
         ;;
     terminal)
         open_terminal "${2:-$HOME}"
+        ;;
+    copy-path)
+        copy_path "${2:-}"
         ;;
     *)
         json_error "Unknown files backend action: $action"
