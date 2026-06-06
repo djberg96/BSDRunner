@@ -752,18 +752,9 @@ ShellRoot {
                             elide: Text.ElideRight
                         }
 
-                        Text {
-                            width: parent.width
-                            text: root.palette.name
-                            color: root.palette.accent
-                            font.pixelSize: 12
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
-
                         Flickable {
                             width: parent.width
-                            height: parent.height - 62
+                            height: parent.height - 42
                             clip: true
                             contentHeight: railContent.height
                             boundsBehavior: Flickable.StopAtBounds

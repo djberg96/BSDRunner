@@ -209,10 +209,9 @@ add_media_shortcuts() {
         "/Volumes"
     do
         [ -d "$media_root" ] || continue
-        add_shortcut "${media_root##*/}" "$media_root"
         for media_entry in "$media_root"/*; do
             [ -d "$media_entry" ] || continue
-            add_shortcut "${media_entry##*/}" "$media_entry"
+            add_shortcut "${media_entry##*/} (${media_root##*/})" "$media_entry"
         done
     done
 }
@@ -254,7 +253,6 @@ snapshot() {
     add_shortcut "Downloads" "$HOME/Downloads"
     add_shortcut "Documents" "$HOME/Documents"
     add_shortcut "Pictures" "$HOME/Pictures"
-    add_shortcut "Root" "/"
     add_media_shortcuts
 
     printf '{"ok":true,'
