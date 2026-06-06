@@ -1311,7 +1311,7 @@ ShellRoot {
                         spacing: 8
 
                         Rectangle {
-                            width: parent.width - hiddenToggle.width - parent.spacing
+                            width: parent.width - hiddenToggle.width - newFolderButton.width - (parent.spacing * 2)
                             height: parent.height
                             radius: 6
                             color: root.palette.cardBackground
@@ -1356,6 +1356,42 @@ ShellRoot {
                         }
 
                         Rectangle {
+                            id: newFolderButton
+
+                            width: 112
+                            height: parent.height
+                            radius: 6
+                            color: newFolderMouse.containsMouse && root.actionButtonEnabled("mkdir")
+                                ? root.palette.cardHover
+                                : root.palette.cardBackground
+                            opacity: root.actionButtonEnabled("mkdir") ? 1.0 : 0.45
+                            border.width: 1
+                            border.color: newFolderMouse.containsMouse && root.actionButtonEnabled("mkdir")
+                                ? root.palette.accent
+                                : root.palette.frameBorder
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "New Folder"
+                                color: root.palette.secondaryText
+                                font.pixelSize: 12
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: newFolderMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: root.actionButtonEnabled("mkdir") ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: {
+                                    if (root.actionButtonEnabled("mkdir"))
+                                        root.openActionDialog("mkdir")
+                                }
+                            }
+                        }
+
+                        Rectangle {
                             id: hiddenToggle
 
                             width: 104
@@ -1386,94 +1422,11 @@ ShellRoot {
                         }
                     }
 
-                    Row {
-                        width: parent.width
-                        height: 32
-                        spacing: 8
-
-                        Repeater {
-                            model: [
-                                {
-                                    "label": "New Folder",
-                                    "action": "mkdir"
-                                },
-                                {
-                                    "label": "Rename",
-                                    "action": "rename"
-                                },
-                                {
-                                    "label": "Trash",
-                                    "action": "trash"
-                                },
-                                {
-                                    "label": "Terminal",
-                                    "action": "terminal"
-                                }
-                            ]
-
-                            delegate: Rectangle {
-                                id: actionButton
-
-                                required property var modelData
-                                readonly property bool buttonEnabled: root.actionButtonEnabled(modelData.action)
-
-                                width: 104
-                                height: parent.height
-                                radius: 6
-                                color: actionMouse.containsMouse && buttonEnabled
-                                    ? root.palette.cardHover
-                                    : root.palette.cardBackground
-                                opacity: buttonEnabled ? 1.0 : 0.45
-                                border.width: 1
-                                border.color: actionMouse.containsMouse && buttonEnabled
-                                    ? (modelData.action === "trash" ? root.palette.danger : root.palette.accent)
-                                    : root.palette.frameBorder
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: actionButton.modelData.label
-                                    color: actionButton.modelData.action === "trash" && actionButton.buttonEnabled
-                                        ? root.palette.danger
-                                        : root.palette.secondaryText
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                }
-
-                                MouseArea {
-                                    id: actionMouse
-
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: actionButton.buttonEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                    onClicked: {
-                                        if (!actionButton.buttonEnabled)
-                                            return
-                                        if (actionButton.modelData.action === "terminal")
-                                            root.openTerminalHere()
-                                        else
-                                            root.openActionDialog(actionButton.modelData.action)
-                                    }
-                                }
-                            }
-                        }
-
-                        Text {
-                            width: parent.width - (104 * 4) - (parent.spacing * 4)
-                            height: parent.height
-                            text: root.runningAction ? "Working..." : (root.selectedPath.length > 0 ? root.baseName(root.selectedPath) : "No selection")
-                            color: root.palette.mutedText
-                            font.pixelSize: 11
-                            verticalAlignment: Text.AlignVCenter
-                            horizontalAlignment: Text.AlignRight
-                            elide: Text.ElideMiddle
-                        }
-                    }
-
                     Rectangle {
                         id: listPanel
 
                         width: parent.width
-                        height: parent.height - 34 - 30 - 34 - 32 - 28 - (parent.spacing * 5)
+                        height: parent.height - 34 - 30 - 34 - 28 - (parent.spacing * 4)
                         radius: 8
                         color: root.palette.cardBackground
                         border.width: 1
