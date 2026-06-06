@@ -1626,8 +1626,8 @@ ShellRoot {
 
                             Column {
                                 anchors.fill: parent
-                                anchors.margins: 12
-                                spacing: 10
+                                anchors.margins: 10
+                                spacing: 8
 
                                 Text {
                                     width: parent.width
@@ -1682,7 +1682,7 @@ ShellRoot {
                                     width: parent.width
                                     columns: 2
                                     columnSpacing: 10
-                                    rowSpacing: 8
+                                    rowSpacing: 6
 
                                     Repeater {
                                         model: root.detailsRows()
@@ -1730,12 +1730,12 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        height: 58
+                                        height: 38
                                         text: root.selectedEntry() ? root.selectedEntry().path : ""
                                         color: root.palette.secondaryText
                                         font.pixelSize: 12
                                         wrapMode: Text.WrapAnywhere
-                                        maximumLineCount: 3
+                                        maximumLineCount: 2
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -1752,7 +1752,7 @@ ShellRoot {
                                     width: parent.width
                                     columns: 2
                                     columnSpacing: 8
-                                    rowSpacing: 7
+                                    rowSpacing: 6
 
                                     Repeater {
                                         model: [
