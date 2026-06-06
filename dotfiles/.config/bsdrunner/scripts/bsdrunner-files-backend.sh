@@ -3,6 +3,7 @@
 set -eu
 
 PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
+places_file="${BSDRUNNER_FILES_PLACES:-$HOME/.config/bsdrunner/files-places}"
 
 json_string() {
     printf '%s' "${1:-}" | awk '
@@ -228,6 +229,57 @@ add_media_shortcuts() {
     done
 }
 
+place_label() {
+    place_path="${1:-}"
+    if [ "$place_path" = "$HOME" ]; then
+        printf 'Home'
+    elif [ "$place_path" = "/" ]; then
+        printf '/'
+    else
+        printf '%s' "${place_path##*/}"
+    fi
+}
+
+add_custom_shortcuts() {
+    [ -f "$places_file" ] || return 0
+    while IFS= read -r custom_place || [ -n "$custom_place" ]; do
+        [ -n "$custom_place" ] || continue
+        custom_path="$(expand_path "$custom_place")"
+        [ -d "$custom_path" ] || continue
+        custom_real="$(canonical_path "$custom_path" 2>/dev/null || printf '%s\n' "$custom_path")"
+        add_shortcut "$(place_label "$custom_real")" "$custom_real"
+    done < "$places_file"
+}
+
+default_place_seen() {
+    target_real="$1"
+    for default_place in \
+        "$HOME" \
+        "$HOME/Desktop" \
+        "$HOME/Downloads" \
+        "$HOME/Documents" \
+        "$HOME/Pictures"
+    do
+        [ -d "$default_place" ] || continue
+        default_real="$(canonical_path "$default_place" 2>/dev/null || printf '%s\n' "$default_place")"
+        [ "$target_real" = "$default_real" ] && return 0
+    done
+    return 1
+}
+
+custom_place_seen() {
+    target_real="$1"
+    [ -f "$places_file" ] || return 1
+    while IFS= read -r custom_place || [ -n "$custom_place" ]; do
+        [ -n "$custom_place" ] || continue
+        custom_path="$(expand_path "$custom_place")"
+        [ -d "$custom_path" ] || continue
+        custom_real="$(canonical_path "$custom_path" 2>/dev/null || printf '%s\n' "$custom_path")"
+        [ "$target_real" = "$custom_real" ] && return 0
+    done < "$places_file"
+    return 1
+}
+
 snapshot() {
     path="$(resolve_directory "${1:-$HOME}")" || {
         json_error "Path is not a readable directory: ${1:-$HOME}"
@@ -265,6 +317,7 @@ snapshot() {
     add_shortcut "Downloads" "$HOME/Downloads"
     add_shortcut "Documents" "$HOME/Documents"
     add_shortcut "Pictures" "$HOME/Pictures"
+    add_custom_shortcuts
     add_media_shortcuts
 
     printf '{"ok":true,'
@@ -472,6 +525,24 @@ copy_path() {
     fi
 }
 
+add_place() {
+    target="$(resolve_directory "${1:-}")" || {
+        json_error "Place is not a directory: ${1:-}"
+        exit 1
+    }
+    target_real="$(canonical_path "$target" 2>/dev/null || printf '%s\n' "$target")"
+    target_label="$(place_label "$target_real")"
+
+    if default_place_seen "$target_real" || custom_place_seen "$target_real"; then
+        json_action true "$target_label is already in Places." "$target_real"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$places_file")"
+    printf '%s\n' "$target_real" >> "$places_file"
+    json_action true "Added $target_label to Places." "$target_real"
+}
+
 action="${1:-snapshot}"
 case "$action" in
     snapshot)
@@ -494,6 +565,9 @@ case "$action" in
         ;;
     copy-path)
         copy_path "${2:-}"
+        ;;
+    add-place)
+        add_place "${2:-}"
         ;;
     *)
         json_error "Unknown files backend action: $action"

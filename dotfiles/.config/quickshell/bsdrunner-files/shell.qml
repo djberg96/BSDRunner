@@ -71,6 +71,8 @@ ShellRoot {
     readonly property var breadcrumbs: breadcrumbEntries()
     readonly property var recentShortcuts: recentEntries()
     readonly property var contextMenuActions: buildContextMenuActions()
+    readonly property int contextMenuWidth: 188
+    readonly property int contextMenuHeight: 10 + (contextMenuKind === "item" ? 38 : 0) + (contextMenuActions.length * 34)
 
     function cleanPath(value) {
         var text = String(value || "").trim()
@@ -495,6 +497,7 @@ ShellRoot {
         if (contextMenuKind === "background") {
             return [
                 {"label": "New Folder", "action": "mkdir", "tone": "normal"},
+                {"label": "Add Current to Places", "action": "add-place", "tone": "normal"},
                 {"label": "Open Terminal Here", "action": "terminal-current", "tone": "normal"},
                 {"label": "Refresh", "action": "refresh", "tone": "normal"}
             ]
@@ -506,18 +509,28 @@ ShellRoot {
             {"label": "Copy Path", "action": "copy-path", "tone": "normal"}
         ]
 
-        if (contextMenuTargetKind === "directory")
+        if (contextMenuTargetKind === "directory") {
+            actions.push({"label": "Add to Places", "action": "add-place", "tone": "normal"})
             actions.push({"label": "Open Terminal Here", "action": "terminal-target", "tone": "normal"})
+        }
 
         actions.push({"label": "Move to Trash", "action": "trash", "tone": "danger"})
         return actions
     }
 
+    function contextMenuActionCount(kind, targetKind) {
+        if (kind === "background")
+            return 4
+        return targetKind === "directory" ? 6 : 4
+    }
+
+    function contextMenuHeightFor(kind, targetKind) {
+        return 10 + (kind === "item" ? 38 : 0) + (contextMenuActionCount(kind, targetKind) * 34)
+    }
+
     function openContextMenu(kind, x, y, entry) {
         closeActionDialog()
         contextMenuKind = kind
-        contextMenuX = Math.max(8, Math.min(x, window.width - 188))
-        contextMenuY = Math.max(8, Math.min(y, window.height - 220))
 
         if (entry) {
             selectedPath = entry.path
@@ -530,6 +543,9 @@ ShellRoot {
             contextMenuTargetKind = "directory"
         }
 
+        var menuHeight = contextMenuHeightFor(contextMenuKind, contextMenuTargetKind)
+        contextMenuX = Math.max(8, Math.min(x, window.width - contextMenuWidth - 8))
+        contextMenuY = Math.max(8, Math.min(y, window.height - menuHeight - 8))
         contextMenuOpen = true
     }
 
@@ -568,6 +584,9 @@ ShellRoot {
                 selectedPath = targetEntry.path
                 copySelectedPath()
             }
+            break
+        case "add-place":
+            runBackendAction("add-place", targetPath, "")
             break
         case "terminal-target":
             runBackendAction("terminal", targetPath, "")
@@ -1901,8 +1920,8 @@ ShellRoot {
                 Rectangle {
                     x: root.contextMenuX
                     y: root.contextMenuY
-                    width: 188
-                    height: 10 + (root.contextMenuKind === "item" ? 38 : 0) + (root.contextMenuActions.length * 34)
+                    width: root.contextMenuWidth
+                    height: root.contextMenuHeight
                     radius: 8
                     color: root.palette.cardBackground
                     border.width: 1
