@@ -26,6 +26,7 @@ ShellRoot {
     property var shortcuts: []
     property var recentPaths: []
     property string selectedPath: ""
+    property bool detailsOpen: false
     property var history: []
     property int historyIndex: -1
     property string queuedPath: ""
@@ -138,6 +139,27 @@ ShellRoot {
         return parts.join("  ")
     }
 
+    function entryTypeLabel(entry) {
+        if (!entry)
+            return "--"
+        switch (entry.kind) {
+        case "directory":
+            return "Folder"
+        case "symlink":
+            return "Link"
+        case "other":
+            return "Object"
+        default:
+            return "File"
+        }
+    }
+
+    function entrySizeLabel(entry) {
+        if (!entry || entry.kind === "directory")
+            return ""
+        return entry.size_label || "--"
+    }
+
     function baseName(path) {
         var text = String(path || "")
         if (text === "/")
@@ -240,6 +262,7 @@ ShellRoot {
         currentPath = nextPath
         pathInputText = nextPath
         selectedPath = ""
+        detailsOpen = false
         loading = true
         statusTone = "info"
         statusMessage = "Loading " + nextPath
@@ -328,25 +351,14 @@ ShellRoot {
 
     function selectedKindLabel() {
         var entry = selectedEntry()
-        if (!entry)
-            return "No Selection"
-        switch (entry.kind) {
-        case "directory":
-            return "Folder"
-        case "symlink":
-            return "Link"
-        case "other":
-            return "Object"
-        default:
-            return "File"
-        }
+        return entry ? entryTypeLabel(entry) : "No Selection"
     }
 
     function selectedSizeLabel() {
         var entry = selectedEntry()
         if (!entry)
             return "--"
-        return entry.kind === "directory" ? "--" : (entry.size_label || "--")
+        return entry.kind === "directory" ? "--" : entrySizeLabel(entry)
     }
 
     function selectedPermissionLabel() {
@@ -506,7 +518,8 @@ ShellRoot {
         var actions = [
             {"label": contextMenuTargetKind === "directory" ? "Open Folder" : "Open", "action": "open", "tone": "normal"},
             {"label": "Rename", "action": "rename", "tone": "normal"},
-            {"label": "Copy Path", "action": "copy-path", "tone": "normal"}
+            {"label": "Copy Path", "action": "copy-path", "tone": "normal"},
+            {"label": "Show Details", "action": "show-details", "tone": "normal"}
         ]
 
         if (contextMenuTargetKind === "directory") {
@@ -521,7 +534,7 @@ ShellRoot {
     function contextMenuActionCount(kind, targetKind) {
         if (kind === "background")
             return 4
-        return targetKind === "directory" ? 6 : 4
+        return targetKind === "directory" ? 7 : 5
     }
 
     function contextMenuHeightFor(kind, targetKind) {
@@ -583,6 +596,13 @@ ShellRoot {
             if (targetEntry) {
                 selectedPath = targetEntry.path
                 copySelectedPath()
+            }
+            break
+        case "show-details":
+            if (targetEntry) {
+                selectedPath = targetEntry.path
+                detailsOpen = true
+                focusList()
             }
             break
         case "add-place":
@@ -774,10 +794,13 @@ ShellRoot {
     onVisibleEntriesChanged: {
         if (visibleEntries.length === 0) {
             selectedPath = ""
+            detailsOpen = false
             return
         }
-        if (!entryByPath(selectedPath))
+        if (!entryByPath(selectedPath)) {
             selectedPath = visibleEntries[0].path
+            detailsOpen = false
+        }
     }
 
     Component.onCompleted: {
@@ -1467,12 +1490,80 @@ ShellRoot {
                         border.color: root.palette.panelBorder
                         clip: true
 
+                        Rectangle {
+                            id: entryHeader
+
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.topMargin: 8
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: root.detailsOpen && root.selectedEntry() ? 244 : 8
+                            height: 28
+                            radius: 6
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+
+                            readonly property int sizeColumnWidth: 86
+                            readonly property int typeColumnWidth: 76
+                            readonly property int iconColumnWidth: 52
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 10
+                                spacing: 10
+
+                                Item {
+                                    width: 42
+                                    height: parent.height
+                                }
+
+                                Text {
+                                    width: Math.max(80, parent.width - 42 - entryHeader.sizeColumnWidth - entryHeader.typeColumnWidth - (parent.spacing * 3))
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Name"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    width: entryHeader.sizeColumnWidth
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Size"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    width: entryHeader.typeColumnWidth
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Type"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
                         ListView {
                             id: entryList
 
-                            anchors.fill: parent
-                            anchors.margins: 8
-                            anchors.rightMargin: root.selectedEntry() ? 244 : 8
+                            anchors.top: entryHeader.bottom
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.topMargin: 6
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: root.detailsOpen && root.selectedEntry() ? 244 : 8
+                            anchors.bottomMargin: 8
                             clip: true
                             model: root.visibleEntries
                             currentIndex: 0
@@ -1549,7 +1640,7 @@ ShellRoot {
                                 readonly property bool selected: root.selectedPath === modelData.path
 
                                 width: entryList.width
-                                height: 42
+                                height: 34
                                 radius: 6
                                 color: selected || rowMouse.containsMouse
                                     ? root.palette.cardHover
@@ -1565,7 +1656,7 @@ ShellRoot {
 
                                     Rectangle {
                                         width: 42
-                                        height: 28
+                                        height: 24
                                         anchors.verticalCenter: parent.verticalCenter
                                         radius: 6
                                         color: Qt.alpha(themeLoader.actionAccent("files"), 0.16)
@@ -1581,27 +1672,33 @@ ShellRoot {
                                         }
                                     }
 
-                                    Column {
-                                        width: parent.width - 52
+                                    Text {
+                                        width: Math.max(80, parent.width - 42 - entryHeader.sizeColumnWidth - entryHeader.typeColumnWidth - (parent.spacing * 3))
                                         anchors.verticalCenter: parent.verticalCenter
-                                        spacing: 1
+                                        text: entryRow.modelData.name
+                                        color: entryRow.selected ? root.palette.accentStrong : root.palette.primaryText
+                                        font.pixelSize: 13
+                                        font.bold: entryRow.modelData.kind === "directory"
+                                        elide: Text.ElideRight
+                                    }
 
-                                        Text {
-                                            width: parent.width
-                                            text: entryRow.modelData.name
-                                            color: entryRow.selected ? root.palette.accentStrong : root.palette.primaryText
-                                            font.pixelSize: 13
-                                            font.bold: entryRow.modelData.kind === "directory"
-                                            elide: Text.ElideRight
-                                        }
+                                    Text {
+                                        width: entryHeader.sizeColumnWidth
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.entrySizeLabel(entryRow.modelData)
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        horizontalAlignment: Text.AlignRight
+                                        elide: Text.ElideRight
+                                    }
 
-                                        Text {
-                                            width: parent.width
-                                            text: root.metaText(entryRow.modelData)
-                                            color: root.palette.mutedText
-                                            font.pixelSize: 10
-                                            elide: Text.ElideRight
-                                        }
+                                    Text {
+                                        width: entryHeader.typeColumnWidth
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.entryTypeLabel(entryRow.modelData)
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
                                     }
                                 }
 
@@ -1632,7 +1729,7 @@ ShellRoot {
                         Rectangle {
                             id: detailsDrawer
 
-                            visible: root.selectedEntry() !== null
+                            visible: root.detailsOpen && root.selectedEntry() !== null
                             width: 228
                             anchors.top: parent.top
                             anchors.right: parent.right
@@ -1648,13 +1745,49 @@ ShellRoot {
                                 anchors.margins: 10
                                 spacing: 8
 
-                                Text {
+                                Row {
                                     width: parent.width
-                                    text: "Details"
-                                    color: root.palette.primaryText
-                                    font.pixelSize: 16
-                                    font.bold: true
-                                    elide: Text.ElideRight
+                                    height: 24
+                                    spacing: 8
+
+                                    Text {
+                                        width: parent.width - 32
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Details"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 16
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Rectangle {
+                                        width: 24
+                                        height: 24
+                                        radius: 6
+                                        color: closeDetailsMouse.containsMouse ? root.palette.cardHover : "transparent"
+                                        border.width: closeDetailsMouse.containsMouse ? 1 : 0
+                                        border.color: root.palette.frameBorder
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "X"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: closeDetailsMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.detailsOpen = false
+                                                root.focusList()
+                                            }
+                                        }
+                                    }
                                 }
 
                                 Row {
