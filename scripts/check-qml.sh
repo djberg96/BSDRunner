@@ -26,6 +26,9 @@ dotfiles/.config/quickshell/bsdrunner-battery/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-apps/shell.qml
 dotfiles/.config/quickshell/bsdrunner-apps/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-apps/ThemePalette.qml
+dotfiles/.config/quickshell/bsdrunner-files/shell.qml
+dotfiles/.config/quickshell/bsdrunner-files/ThemeLoader.qml
+dotfiles/.config/quickshell/bsdrunner-files/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-dns/shell.qml
 dotfiles/.config/quickshell/bsdrunner-dns/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-dns/ThemePalette.qml
