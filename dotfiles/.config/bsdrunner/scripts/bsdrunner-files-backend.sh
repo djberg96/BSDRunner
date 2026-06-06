@@ -37,6 +37,16 @@ json_error() {
     printf '{"ok":false,"message":%s,"path":"","parent":"","entries":[]}\n' "$(json_string "$message")"
 }
 
+json_action() {
+    ok="${1:-true}"
+    message="${2:-Done.}"
+    path="${3:-}"
+    printf '{"ok":%s,"message":%s,"path":%s,"parent":"","entries":[]}\n' \
+        "$ok" \
+        "$(json_string "$message")" \
+        "$(json_string "$path")"
+}
+
 expand_path() {
     raw="${1:-$HOME}"
     case "$raw" in
@@ -57,6 +67,36 @@ resolve_directory() {
     [ -n "$raw" ] || raw="$HOME"
     [ -d "$raw" ] || return 1
     (unset CDPATH; cd -P -- "$raw" 2>/dev/null && pwd -P)
+}
+
+clean_name() {
+    name="${1:-}"
+    case "$name" in
+        ""|"."|".."|*/*)
+            return 1
+            ;;
+    esac
+    printf '%s\n' "$name"
+}
+
+unique_destination() {
+    target_dir="$1"
+    target_name="$2"
+    destination="$target_dir/$target_name"
+    if [ ! -e "$destination" ] && [ ! -L "$destination" ]; then
+        printf '%s\n' "$destination"
+        return 0
+    fi
+
+    suffix=1
+    while :; do
+        destination="$target_dir/$target_name.$suffix"
+        if [ ! -e "$destination" ] && [ ! -L "$destination" ]; then
+            printf '%s\n' "$destination"
+            return 0
+        fi
+        suffix=$((suffix + 1))
+    done
 }
 
 stat_size() {
@@ -279,6 +319,115 @@ open_path() {
         "$(json_string "$target")"
 }
 
+create_folder() {
+    parent="$(resolve_directory "${1:-$HOME}")" || {
+        json_error "Parent is not a writable directory: ${1:-$HOME}"
+        exit 1
+    }
+    [ -w "$parent" ] || {
+        json_error "Directory is not writable: $parent"
+        exit 1
+    }
+
+    name="$(clean_name "${2:-}")" || {
+        json_error "Folder name cannot be empty or contain '/'."
+        exit 1
+    }
+    target="$parent/$name"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        json_error "A file or folder named '$name' already exists."
+        exit 1
+    fi
+
+    mkdir "$target"
+    json_action true "Created folder $name." "$target"
+}
+
+rename_path() {
+    target="$(expand_path "${1:-}")"
+    if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
+        json_error "Path does not exist: ${1:-}"
+        exit 1
+    fi
+    [ "$target" != "/" ] || {
+        json_error "Cannot rename root."
+        exit 1
+    }
+
+    name="$(clean_name "${2:-}")" || {
+        json_error "New name cannot be empty or contain '/'."
+        exit 1
+    }
+    parent="$(dirname "$target")"
+    destination="$parent/$name"
+    if [ "$destination" = "$target" ]; then
+        json_action true "Name unchanged." "$target"
+        return 0
+    fi
+    if [ -e "$destination" ] || [ -L "$destination" ]; then
+        json_error "A file or folder named '$name' already exists."
+        exit 1
+    fi
+
+    mv "$target" "$destination"
+    json_action true "Renamed to $name." "$destination"
+}
+
+trash_path() {
+    target="$(expand_path "${1:-}")"
+    if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
+        json_error "Path does not exist: ${1:-}"
+        exit 1
+    fi
+    [ "$target" != "/" ] || {
+        json_error "Cannot trash root."
+        exit 1
+    }
+
+    if command -v gio >/dev/null 2>&1; then
+        if gio trash "$target" >/dev/null 2>&1; then
+            json_action true "Moved ${target##*/} to trash." "$target"
+            return 0
+        fi
+    fi
+
+    trash_files="$HOME/.local/share/Trash/files"
+    trash_info="$HOME/.local/share/Trash/info"
+    mkdir -p "$trash_files" "$trash_info"
+
+    base="${target##*/}"
+    destination="$(unique_destination "$trash_files" "$base")"
+    mv "$target" "$destination"
+    info_name="${destination##*/}.trashinfo"
+    {
+        printf '[Trash Info]\n'
+        printf 'Path=%s\n' "$target"
+        date '+DeletionDate=%Y-%m-%dT%H:%M:%S'
+    } > "$trash_info/$info_name"
+
+    json_action true "Moved $base to trash." "$destination"
+}
+
+open_terminal() {
+    target="$(resolve_directory "${1:-$HOME}")" || {
+        json_error "Terminal path is not a directory: ${1:-$HOME}"
+        exit 1
+    }
+
+    if command -v kitty >/dev/null 2>&1; then
+        kitty --directory "$target" >/dev/null 2>&1 &
+    elif command -v foot >/dev/null 2>&1; then
+        foot --working-directory "$target" >/dev/null 2>&1 &
+    elif command -v alacritty >/dev/null 2>&1; then
+        alacritty --working-directory "$target" >/dev/null 2>&1 &
+    else
+        json_error "No supported terminal found."
+        exit 1
+    fi
+
+    json_action true "Opened terminal in $target." "$target"
+}
+
 action="${1:-snapshot}"
 case "$action" in
     snapshot)
@@ -286,6 +435,18 @@ case "$action" in
         ;;
     open)
         open_path "${2:-}"
+        ;;
+    mkdir)
+        create_folder "${2:-$HOME}" "${3:-}"
+        ;;
+    rename)
+        rename_path "${2:-}" "${3:-}"
+        ;;
+    trash)
+        trash_path "${2:-}"
+        ;;
+    terminal)
+        open_terminal "${2:-$HOME}"
         ;;
     *)
         json_error "Unknown files backend action: $action"

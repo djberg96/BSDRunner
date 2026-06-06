@@ -43,6 +43,23 @@ ShellRoot {
     property bool openExited: false
     property bool openStdoutFinished: false
     property bool openStderrFinished: false
+    property bool actionDialogOpen: false
+    property string actionDialogMode: ""
+    property string actionDialogTitle: ""
+    property string actionDialogMessage: ""
+    property string actionDialogValue: ""
+    property string actionDialogTargetPath: ""
+    property string actionDialogTargetName: ""
+    property string pendingActionId: ""
+    property string pendingActionArg1: ""
+    property string pendingActionArg2: ""
+    property string actionStdoutText: ""
+    property string actionStderrText: ""
+    property int actionExitCode: 0
+    property bool actionExited: false
+    property bool actionStdoutFinished: false
+    property bool actionStderrFinished: false
+    property bool runningAction: false
     readonly property var visibleEntries: filteredEntries()
     readonly property var breadcrumbs: breadcrumbEntries()
     readonly property var recentShortcuts: recentEntries()
@@ -293,6 +310,110 @@ ShellRoot {
         focusList()
     }
 
+    function selectedEntry() {
+        if (selectedPath.length === 0)
+            return null
+        return entryByPath(selectedPath)
+    }
+
+    function actionButtonEnabled(action) {
+        if (runningAction || loading)
+            return false
+        if (action === "rename" || action === "trash")
+            return selectedEntry() !== null
+        return true
+    }
+
+    function openActionDialog(mode) {
+        if (!actionButtonEnabled(mode))
+            return
+
+        var entry = selectedEntry()
+        actionDialogMode = mode
+        actionDialogValue = ""
+        actionDialogTargetPath = entry ? entry.path : ""
+        actionDialogTargetName = entry ? entry.name : ""
+
+        switch (mode) {
+        case "mkdir":
+            actionDialogTitle = "New Folder"
+            actionDialogMessage = "Create a folder in " + displayPath(currentPath)
+            actionDialogValue = "New Folder"
+            break
+        case "rename":
+            actionDialogTitle = "Rename"
+            actionDialogMessage = "Rename " + actionDialogTargetName
+            actionDialogValue = actionDialogTargetName
+            break
+        case "trash":
+            actionDialogTitle = "Move to Trash"
+            actionDialogMessage = "Move " + actionDialogTargetName + " to trash?"
+            break
+        default:
+            return
+        }
+
+        actionDialogOpen = true
+        actionDialogTimer.restart()
+    }
+
+    function closeActionDialog() {
+        actionDialogOpen = false
+        actionDialogMode = ""
+        actionDialogValue = ""
+        actionDialogTargetPath = ""
+        actionDialogTargetName = ""
+        focusList()
+    }
+
+    function runDialogAction() {
+        if (!actionDialogOpen || runningAction)
+            return
+
+        switch (actionDialogMode) {
+        case "mkdir":
+            runBackendAction("mkdir", currentPath, actionDialogValue)
+            break
+        case "rename":
+            runBackendAction("rename", actionDialogTargetPath, actionDialogValue)
+            break
+        case "trash":
+            runBackendAction("trash", actionDialogTargetPath, "")
+            break
+        }
+
+        actionDialogOpen = false
+    }
+
+    function openTerminalHere() {
+        if (runningAction)
+            return
+        var entry = selectedEntry()
+        var path = currentPath
+        if (entry && entry.kind === "directory")
+            path = entry.path
+        runBackendAction("terminal", path, "")
+    }
+
+    function runBackendAction(actionId, arg1, arg2) {
+        if (actionProcess.running)
+            return
+
+        pendingActionId = actionId
+        pendingActionArg1 = arg1 || ""
+        pendingActionArg2 = arg2 || ""
+        runningAction = true
+        statusTone = "info"
+        statusMessage = "Running " + actionId + "..."
+        actionStdoutText = ""
+        actionStderrText = ""
+        actionExitCode = 0
+        actionExited = false
+        actionStdoutFinished = false
+        actionStderrFinished = false
+        actionProcess.running = true
+    }
+
     function selectOffset(delta) {
         if (visibleEntries.length === 0)
             return
@@ -395,6 +516,39 @@ ShellRoot {
         }
     }
 
+    function maybeFinalizeAction() {
+        if (!actionExited || !actionStdoutFinished || !actionStderrFinished)
+            return
+        applyAction(actionStdoutText, actionExitCode, actionStderrText)
+    }
+
+    function applyAction(text, exitCode, stderrText) {
+        var payload = null
+
+        try {
+            payload = JSON.parse(text || "{}")
+        } catch (error) {
+            payload = null
+        }
+
+        runningAction = false
+        if (exitCode === 0 && payload && payload.ok) {
+            statusTone = "success"
+            statusMessage = payload.message || "Action completed."
+            if (pendingActionId !== "terminal")
+                refreshCurrent()
+        } else {
+            statusTone = "error"
+            statusMessage = payload && payload.message
+                ? payload.message
+                : (stderrText && stderrText.trim().length > 0 ? stderrText.trim() : "Action failed.")
+        }
+
+        pendingActionId = ""
+        pendingActionArg1 = ""
+        pendingActionArg2 = ""
+    }
+
     function statusColor() {
         if (statusTone === "error")
             return palette.danger
@@ -424,6 +578,21 @@ ShellRoot {
         history = [homeDir]
         historyIndex = 0
         requestSnapshot(homeDir, false)
+    }
+
+    Timer {
+        id: actionDialogTimer
+
+        interval: 20
+        repeat: false
+        onTriggered: {
+            if (root.actionDialogOpen && root.actionDialogMode !== "trash") {
+                actionInput.forceActiveFocus()
+                actionInput.selectAll()
+            } else if (root.actionDialogOpen) {
+                confirmButton.forceActiveFocus()
+            }
+        }
     }
 
     Process {
@@ -493,6 +662,42 @@ ShellRoot {
             openProcess.controller.openExitCode = exitCode
             openProcess.controller.openExited = true
             openProcess.controller.maybeFinalizeOpen()
+        }
+    }
+
+    Process {
+        id: actionProcess
+
+        property var controller: root
+
+        command: [
+            "sh",
+            root.backendScript,
+            root.pendingActionId,
+            root.pendingActionArg1,
+            root.pendingActionArg2
+        ]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                actionProcess.controller.actionStdoutText = this.text
+                actionProcess.controller.actionStdoutFinished = true
+                actionProcess.controller.maybeFinalizeAction()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                actionProcess.controller.actionStderrText = this.text
+                actionProcess.controller.actionStderrFinished = true
+                actionProcess.controller.maybeFinalizeAction()
+            }
+        }
+
+        onExited: function(exitCode, exitStatus) {
+            actionProcess.controller.actionExitCode = exitCode
+            actionProcess.controller.actionExited = true
+            actionProcess.controller.maybeFinalizeAction()
         }
     }
 
@@ -1014,9 +1219,92 @@ ShellRoot {
                         }
                     }
 
+                    Row {
+                        width: parent.width
+                        height: 32
+                        spacing: 8
+
+                        Repeater {
+                            model: [
+                                {
+                                    "label": "New Folder",
+                                    "action": "mkdir"
+                                },
+                                {
+                                    "label": "Rename",
+                                    "action": "rename"
+                                },
+                                {
+                                    "label": "Trash",
+                                    "action": "trash"
+                                },
+                                {
+                                    "label": "Terminal",
+                                    "action": "terminal"
+                                }
+                            ]
+
+                            delegate: Rectangle {
+                                id: actionButton
+
+                                required property var modelData
+                                readonly property bool buttonEnabled: root.actionButtonEnabled(modelData.action)
+
+                                width: 104
+                                height: parent.height
+                                radius: 6
+                                color: actionMouse.containsMouse && buttonEnabled
+                                    ? root.palette.cardHover
+                                    : root.palette.cardBackground
+                                opacity: buttonEnabled ? 1.0 : 0.45
+                                border.width: 1
+                                border.color: actionMouse.containsMouse && buttonEnabled
+                                    ? (modelData.action === "trash" ? root.palette.danger : root.palette.accent)
+                                    : root.palette.frameBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: actionButton.modelData.label
+                                    color: actionButton.modelData.action === "trash" && actionButton.buttonEnabled
+                                        ? root.palette.danger
+                                        : root.palette.secondaryText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: actionMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: actionButton.buttonEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: {
+                                        if (!actionButton.buttonEnabled)
+                                            return
+                                        if (actionButton.modelData.action === "terminal")
+                                            root.openTerminalHere()
+                                        else
+                                            root.openActionDialog(actionButton.modelData.action)
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            width: parent.width - (104 * 4) - (parent.spacing * 4)
+                            height: parent.height
+                            text: root.runningAction ? "Working..." : (root.selectedPath.length > 0 ? root.baseName(root.selectedPath) : "No selection")
+                            color: root.palette.mutedText
+                            font.pixelSize: 11
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: Text.AlignRight
+                            elide: Text.ElideMiddle
+                        }
+                    }
+
                     Rectangle {
                         width: parent.width
-                        height: parent.height - 34 - 30 - 34 - 28 - (parent.spacing * 4)
+                        height: parent.height - 34 - 30 - 34 - 32 - 28 - (parent.spacing * 5)
                         radius: 8
                         color: root.palette.cardBackground
                         border.width: 1
@@ -1047,6 +1335,12 @@ ShellRoot {
                                 } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_H) {
                                     root.showHidden = !root.showHidden
                                     event.accepted = true
+                                } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_N) {
+                                    root.openActionDialog("mkdir")
+                                    event.accepted = true
+                                } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_T) {
+                                    root.openTerminalHere()
+                                    event.accepted = true
                                 } else if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Left) {
                                     root.goBack()
                                     event.accepted = true
@@ -1076,6 +1370,12 @@ ShellRoot {
                                     event.accepted = true
                                 } else if (event.key === Qt.Key_Backspace) {
                                     root.goUp()
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_F2) {
+                                    root.openActionDialog("rename")
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Delete) {
+                                    root.openActionDialog("trash")
                                     event.accepted = true
                                 } else if (event.key === Qt.Key_Escape) {
                                     if (root.filterText.length > 0)
@@ -1208,6 +1508,178 @@ ShellRoot {
                             horizontalAlignment: Text.AlignRight
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                visible: root.actionDialogOpen
+                color: Qt.alpha("#000000", 0.45)
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.closeActionDialog()
+                }
+
+                Rectangle {
+                    width: 420
+                    height: root.actionDialogMode === "trash" ? 190 : 220
+                    anchors.centerIn: parent
+                    radius: 8
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accent
+
+                    MouseArea {
+                        anchors.fill: parent
+                    }
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 18
+                        spacing: 12
+
+                        Text {
+                            width: parent.width
+                            text: root.actionDialogTitle
+                            color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accentStrong
+                            font.pixelSize: 18
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: root.actionDialogMessage
+                            color: root.palette.secondaryText
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 36
+                            visible: root.actionDialogMode !== "trash"
+                            radius: 6
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: actionInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                            TextInput {
+                                id: actionInput
+
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                text: root.actionDialogValue
+                                color: root.palette.primaryText
+                                selectionColor: Qt.alpha(root.palette.accent, 0.35)
+                                selectedTextColor: root.palette.accentStrong
+                                font.pixelSize: 13
+                                verticalAlignment: TextInput.AlignVCenter
+                                clip: true
+                                onTextEdited: root.actionDialogValue = text
+                                onAccepted: root.runDialogAction()
+                                Keys.onPressed: function(event) {
+                                    if (event.key === Qt.Key_Escape) {
+                                        root.closeActionDialog()
+                                        event.accepted = true
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            width: parent.width
+                            height: root.actionDialogMode === "trash" ? 36 : 18
+                            text: root.actionDialogMode === "trash"
+                                ? "This moves the item to trash, not permanent deletion."
+                                : "Names cannot be empty or contain '/'."
+                            color: root.palette.mutedText
+                            font.pixelSize: 11
+                            wrapMode: Text.WordWrap
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        Row {
+                            width: parent.width
+                            height: 34
+                            spacing: 8
+
+                            Item {
+                                width: parent.width - cancelButton.width - confirmButton.width - (parent.spacing * 2)
+                                height: parent.height
+                            }
+
+                            Rectangle {
+                                id: cancelButton
+
+                                width: 88
+                                height: parent.height
+                                radius: 6
+                                color: cancelMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Cancel"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: cancelMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.closeActionDialog()
+                                }
+                            }
+
+                            Rectangle {
+                                id: confirmButton
+
+                                width: 104
+                                height: parent.height
+                                radius: 6
+                                color: confirmMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accent
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: root.actionDialogMode === "trash" ? "Move" : "Apply"
+                                    color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accentStrong
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: confirmMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.runDialogAction()
+                                }
+
+                                Keys.onPressed: function(event) {
+                                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                        root.runDialogAction()
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_Escape) {
+                                        root.closeActionDialog()
+                                        event.accepted = true
+                                    }
+                                }
+                            }
                         }
                     }
                 }
