@@ -147,6 +147,36 @@ shortcut_json_line() {
     printf '{"label":%s,"path":%s}\n' "$(json_string "$shortcut_label")" "$(json_string "$shortcut_path")"
 }
 
+shortcut_seen() {
+    shortcut_path="$1"
+    grep -F "\"path\":$(json_string "$shortcut_path")" "$shortcut_tmp" >/dev/null 2>&1
+}
+
+add_shortcut() {
+    shortcut_label="$1"
+    shortcut_path="$2"
+    [ -d "$shortcut_path" ] || return 0
+    shortcut_seen "$shortcut_path" && return 0
+    shortcut_json_line "$shortcut_label" "$shortcut_path" >> "$shortcut_tmp"
+}
+
+add_media_shortcuts() {
+    for media_root in \
+        "/media" \
+        "/mnt" \
+        "/run/media/${USER:-}" \
+        "/var/run/media/${USER:-}" \
+        "/Volumes"
+    do
+        [ -d "$media_root" ] || continue
+        add_shortcut "${media_root##*/}" "$media_root"
+        for media_entry in "$media_root"/*; do
+            [ -d "$media_entry" ] || continue
+            add_shortcut "${media_entry##*/}" "$media_entry"
+        done
+    done
+}
+
 snapshot() {
     path="$(resolve_directory "${1:-$HOME}")" || {
         json_error "Path is not a readable directory: ${1:-$HOME}"
@@ -179,15 +209,13 @@ snapshot() {
         done
     fi
 
-    shortcut_json_line "Home" "$HOME" >> "$shortcut_tmp"
-    shortcut_json_line "Desktop" "$HOME/Desktop" >> "$shortcut_tmp"
-    shortcut_json_line "Downloads" "$HOME/Downloads" >> "$shortcut_tmp"
-    shortcut_json_line "Documents" "$HOME/Documents" >> "$shortcut_tmp"
-    shortcut_json_line "Pictures" "$HOME/Pictures" >> "$shortcut_tmp"
-    shortcut_json_line "Root" "/" >> "$shortcut_tmp"
-    shortcut_json_line "Media" "/media" >> "$shortcut_tmp"
-    shortcut_json_line "Mounts" "/mnt" >> "$shortcut_tmp"
-    shortcut_json_line "Run Media" "/run/media/${USER:-}" >> "$shortcut_tmp"
+    add_shortcut "Home" "$HOME"
+    add_shortcut "Desktop" "$HOME/Desktop"
+    add_shortcut "Downloads" "$HOME/Downloads"
+    add_shortcut "Documents" "$HOME/Documents"
+    add_shortcut "Pictures" "$HOME/Pictures"
+    add_shortcut "Root" "/"
+    add_media_shortcuts
 
     printf '{"ok":true,'
     printf '"message":%s,' "$(json_string "Loaded $path")"

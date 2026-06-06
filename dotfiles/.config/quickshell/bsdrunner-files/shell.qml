@@ -24,6 +24,7 @@ ShellRoot {
     property bool showHidden: false
     property var entries: []
     property var shortcuts: []
+    property var recentPaths: []
     property string selectedPath: ""
     property var history: []
     property int historyIndex: -1
@@ -43,6 +44,8 @@ ShellRoot {
     property bool openStdoutFinished: false
     property bool openStderrFinished: false
     readonly property var visibleEntries: filteredEntries()
+    readonly property var breadcrumbs: breadcrumbEntries()
+    readonly property var recentShortcuts: recentEntries()
 
     function cleanPath(value) {
         var text = String(value || "").trim()
@@ -106,6 +109,87 @@ ShellRoot {
         if (entry.mtime_label && entry.mtime_label.length > 0)
             parts.push(entry.mtime_label)
         return parts.join("  ")
+    }
+
+    function baseName(path) {
+        var text = String(path || "")
+        if (text === "/")
+            return "/"
+        var pieces = text.split("/")
+        for (var i = pieces.length - 1; i >= 0; i -= 1) {
+            if (pieces[i].length > 0)
+                return pieces[i]
+        }
+        return text
+    }
+
+    function displayPath(path) {
+        if (path === homeDir)
+            return "Home"
+        if (path.indexOf(homeDir + "/") === 0)
+            return "~/" + path.slice(homeDir.length + 1)
+        return path
+    }
+
+    function rememberPath(path) {
+        if (!path || path.length === 0)
+            return
+
+        var next = [path]
+        for (var i = 0; i < recentPaths.length && next.length < 8; i += 1) {
+            if (recentPaths[i] !== path)
+                next.push(recentPaths[i])
+        }
+        recentPaths = next
+    }
+
+    function recentEntries() {
+        var result = []
+        for (var i = 0; i < recentPaths.length; i += 1) {
+            var path = recentPaths[i]
+            if (path === currentPath)
+                continue
+            result.push({
+                "label": displayPath(path),
+                "path": path
+            })
+            if (result.length >= 5)
+                break
+        }
+        return result
+    }
+
+    function breadcrumbEntries() {
+        var path = currentPath || "/"
+        var result = []
+
+        if (path === "/")
+            return [{"label": "/", "path": "/"}]
+
+        if (path === homeDir || path.indexOf(homeDir + "/") === 0) {
+            result.push({"label": "Home", "path": homeDir})
+            var relative = path === homeDir ? "" : path.slice(homeDir.length + 1)
+            var relativeParts = relative.length > 0 ? relative.split("/") : []
+            var homeWalk = homeDir
+            for (var h = 0; h < relativeParts.length; h += 1) {
+                if (relativeParts[h].length === 0)
+                    continue
+                homeWalk += "/" + relativeParts[h]
+                result.push({"label": relativeParts[h], "path": homeWalk})
+            }
+            return result
+        }
+
+        result.push({"label": "/", "path": "/"})
+        var parts = path.split("/")
+        var walk = ""
+        for (var i = 0; i < parts.length; i += 1) {
+            if (parts[i].length === 0)
+                continue
+            walk += "/" + parts[i]
+            result.push({"label": parts[i], "path": walk})
+        }
+        return result
     }
 
     function pushHistory(path) {
@@ -190,6 +274,25 @@ ShellRoot {
         activate(entryByPath(selectedPath))
     }
 
+    function focusList() {
+        entryList.forceActiveFocus()
+    }
+
+    function focusPathInput() {
+        pathInput.forceActiveFocus()
+        pathInput.selectAll()
+    }
+
+    function focusFilter() {
+        filterInput.forceActiveFocus()
+        filterInput.selectAll()
+    }
+
+    function clearFilter() {
+        filterText = ""
+        focusList()
+    }
+
     function selectOffset(delta) {
         if (visibleEntries.length === 0)
             return
@@ -253,6 +356,7 @@ ShellRoot {
             shortcuts = payload.shortcuts || []
             if (historyIndex >= 0 && historyIndex < history.length)
                 history[historyIndex] = currentPath
+            rememberPath(currentPath)
             statusTone = "info"
             statusMessage = payload.message || "Loaded " + currentPath
         }
@@ -452,49 +556,127 @@ ShellRoot {
                             elide: Text.ElideRight
                         }
 
-                        Column {
+                        Flickable {
                             width: parent.width
-                            spacing: 6
+                            height: parent.height - 62
+                            clip: true
+                            contentHeight: railContent.height
+                            boundsBehavior: Flickable.StopAtBounds
 
-                            Repeater {
-                                model: root.shortcuts
+                            Column {
+                                id: railContent
 
-                                delegate: Rectangle {
-                                    id: shortcutRow
+                                width: parent.width
+                                spacing: 10
 
-                                    required property var modelData
-
+                                Text {
                                     width: parent.width
-                                    height: 34
-                                    radius: 6
-                                    color: shortcutMouse.containsMouse || root.currentPath === modelData.path
-                                        ? root.palette.cardHover
-                                        : "transparent"
-                                    border.width: root.currentPath === modelData.path ? 1 : 0
-                                    border.color: root.palette.accent
+                                    text: "Places"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
 
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        anchors.leftMargin: 10
-                                        anchors.rightMargin: 10
-                                        text: shortcutRow.modelData.label
-                                        color: root.currentPath === shortcutRow.modelData.path
-                                            ? root.palette.accentStrong
-                                            : root.palette.secondaryText
-                                        font.pixelSize: 13
-                                        font.bold: root.currentPath === shortcutRow.modelData.path
-                                        elide: Text.ElideRight
+                                Column {
+                                    width: parent.width
+                                    spacing: 5
+
+                                    Repeater {
+                                        model: root.shortcuts
+
+                                        delegate: Rectangle {
+                                            id: shortcutRow
+
+                                            required property var modelData
+
+                                            width: parent.width
+                                            height: 30
+                                            radius: 6
+                                            color: shortcutMouse.containsMouse || root.currentPath === modelData.path
+                                                ? root.palette.cardHover
+                                                : "transparent"
+                                            border.width: root.currentPath === modelData.path ? 1 : 0
+                                            border.color: root.palette.accent
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                text: shortcutRow.modelData.label
+                                                color: root.currentPath === shortcutRow.modelData.path
+                                                    ? root.palette.accentStrong
+                                                    : root.palette.secondaryText
+                                                font.pixelSize: 12
+                                                font.bold: root.currentPath === shortcutRow.modelData.path
+                                                elide: Text.ElideRight
+                                            }
+
+                                            MouseArea {
+                                                id: shortcutMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.navigate(shortcutRow.modelData.path)
+                                            }
+                                        }
                                     }
+                                }
 
-                                    MouseArea {
-                                        id: shortcutMouse
+                                Text {
+                                    width: parent.width
+                                    visible: root.recentShortcuts.length > 0
+                                    text: "Recent"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
 
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.navigate(shortcutRow.modelData.path)
+                                Column {
+                                    width: parent.width
+                                    visible: root.recentShortcuts.length > 0
+                                    spacing: 5
+
+                                    Repeater {
+                                        model: root.recentShortcuts
+
+                                        delegate: Rectangle {
+                                            id: recentRow
+
+                                            required property var modelData
+
+                                            width: parent.width
+                                            height: 30
+                                            radius: 6
+                                            color: recentMouse.containsMouse ? root.palette.cardHover : "transparent"
+                                            border.width: 0
+                                            border.color: root.palette.frameBorder
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                text: recentRow.modelData.label
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 12
+                                                elide: Text.ElideRight
+                                            }
+
+                                            MouseArea {
+                                                id: recentMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.navigate(recentRow.modelData.path)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -621,6 +803,17 @@ ShellRoot {
                                 clip: true
                                 onTextEdited: root.pathInputText = text
                                 onAccepted: root.navigate(text)
+                                Keys.onPressed: function(event) {
+                                    if (event.key === Qt.Key_Escape) {
+                                        text = root.currentPath
+                                        root.pathInputText = root.currentPath
+                                        root.focusList()
+                                        event.accepted = true
+                                    } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+                                        root.focusFilter()
+                                        event.accepted = true
+                                    }
+                                }
                             }
                         }
 
@@ -647,6 +840,95 @@ ShellRoot {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: Qt.quit()
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 30
+                        radius: 6
+                        color: root.palette.cardBackground
+                        border.width: 1
+                        border.color: root.palette.frameBorder
+                        clip: true
+
+                        Flickable {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            contentWidth: breadcrumbRow.width
+                            contentHeight: height
+                            flickableDirection: Flickable.HorizontalFlick
+                            boundsBehavior: Flickable.StopAtBounds
+
+                            Row {
+                                id: breadcrumbRow
+
+                                height: parent.height
+                                spacing: 4
+
+                                Repeater {
+                                    model: root.breadcrumbs
+
+                                    delegate: Row {
+                                        id: crumbWrap
+
+                                        required property var modelData
+                                        required property int index
+
+                                        height: breadcrumbRow.height
+                                        spacing: 4
+
+                                        Rectangle {
+                                            width: Math.min(170, Math.max(34, crumbText.implicitWidth + 20))
+                                            height: 24
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            radius: 6
+                                            color: crumbMouse.containsMouse || root.currentPath === crumbWrap.modelData.path
+                                                ? root.palette.cardHover
+                                                : "transparent"
+                                            border.width: root.currentPath === crumbWrap.modelData.path ? 1 : 0
+                                            border.color: root.palette.accent
+
+                                            Text {
+                                                id: crumbText
+
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: 8
+                                                anchors.rightMargin: 8
+                                                text: crumbWrap.modelData.label
+                                                color: root.currentPath === crumbWrap.modelData.path
+                                                    ? root.palette.accentStrong
+                                                    : root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                font.bold: root.currentPath === crumbWrap.modelData.path
+                                                horizontalAlignment: Text.AlignHCenter
+                                                elide: Text.ElideMiddle
+                                            }
+
+                                            MouseArea {
+                                                id: crumbMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.navigate(crumbWrap.modelData.path)
+                                            }
+                                        }
+
+                                        Text {
+                                            height: parent.height
+                                            visible: crumbWrap.index < root.breadcrumbs.length - 1
+                                            text: "/"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -678,6 +960,16 @@ ShellRoot {
                                 verticalAlignment: TextInput.AlignVCenter
                                 clip: true
                                 onTextEdited: root.filterText = text
+                                onAccepted: root.focusList()
+                                Keys.onPressed: function(event) {
+                                    if (event.key === Qt.Key_Escape) {
+                                        root.clearFilter()
+                                        event.accepted = true
+                                    } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_L) {
+                                        root.focusPathInput()
+                                        event.accepted = true
+                                    }
+                                }
                             }
 
                             Text {
@@ -724,7 +1016,7 @@ ShellRoot {
 
                     Rectangle {
                         width: parent.width
-                        height: parent.height - 34 - 34 - 28 - (parent.spacing * 3)
+                        height: parent.height - 34 - 30 - 34 - 28 - (parent.spacing * 4)
                         radius: 8
                         color: root.palette.cardBackground
                         border.width: 1
@@ -743,7 +1035,25 @@ ShellRoot {
                             boundsBehavior: Flickable.StopAtBounds
 
                             Keys.onPressed: function(event) {
-                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_L) {
+                                    root.focusPathInput()
+                                    event.accepted = true
+                                } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+                                    root.focusFilter()
+                                    event.accepted = true
+                                } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_R) {
+                                    root.refreshCurrent()
+                                    event.accepted = true
+                                } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_H) {
+                                    root.showHidden = !root.showHidden
+                                    event.accepted = true
+                                } else if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Left) {
+                                    root.goBack()
+                                    event.accepted = true
+                                } else if ((event.modifiers & Qt.AltModifier) && event.key === Qt.Key_Right) {
+                                    root.goForward()
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                                     root.activateSelected()
                                     event.accepted = true
                                 } else if (event.key === Qt.Key_Up) {
@@ -752,8 +1062,24 @@ ShellRoot {
                                 } else if (event.key === Qt.Key_Down) {
                                     root.selectOffset(1)
                                     event.accepted = true
+                                } else if (event.key === Qt.Key_PageUp) {
+                                    root.selectOffset(-10)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_PageDown) {
+                                    root.selectOffset(10)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Home) {
+                                    root.selectOffset(-root.visibleEntries.length)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_End) {
+                                    root.selectOffset(root.visibleEntries.length)
+                                    event.accepted = true
                                 } else if (event.key === Qt.Key_Backspace) {
                                     root.goUp()
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Escape) {
+                                    if (root.filterText.length > 0)
+                                        root.clearFilter()
                                     event.accepted = true
                                 }
                             }
