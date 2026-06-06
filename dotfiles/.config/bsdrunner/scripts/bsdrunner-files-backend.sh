@@ -187,17 +187,28 @@ shortcut_json_line() {
     printf '{"label":%s,"path":%s}\n' "$(json_string "$shortcut_label")" "$(json_string "$shortcut_path")"
 }
 
+canonical_path() {
+    candidate="${1:-}"
+    [ -d "$candidate" ] || return 1
+    (unset CDPATH; cd -P -- "$candidate" 2>/dev/null && pwd -P)
+}
+
 shortcut_seen() {
     shortcut_path="$1"
-    grep -F "\"path\":$(json_string "$shortcut_path")" "$shortcut_tmp" >/dev/null 2>&1
+    shortcut_real="$(canonical_path "$shortcut_path" 2>/dev/null || printf '%s\n' "$shortcut_path")"
+    grep -F "\"real_path\":$(json_string "$shortcut_real")" "$shortcut_tmp" >/dev/null 2>&1
 }
 
 add_shortcut() {
     shortcut_label="$1"
     shortcut_path="$2"
     [ -d "$shortcut_path" ] || return 0
+    shortcut_real="$(canonical_path "$shortcut_path" 2>/dev/null || printf '%s\n' "$shortcut_path")"
     shortcut_seen "$shortcut_path" && return 0
-    shortcut_json_line "$shortcut_label" "$shortcut_path" >> "$shortcut_tmp"
+    printf '{"label":%s,"path":%s,"real_path":%s}\n' \
+        "$(json_string "$shortcut_label")" \
+        "$(json_string "$shortcut_path")" \
+        "$(json_string "$shortcut_real")" >> "$shortcut_tmp"
 }
 
 add_media_shortcuts() {
@@ -211,6 +222,7 @@ add_media_shortcuts() {
         [ -d "$media_root" ] || continue
         for media_entry in "$media_root"/*; do
             [ -d "$media_entry" ] || continue
+            [ "${media_entry##*/}" = "home" ] && [ -d "$HOME" ] && continue
             add_shortcut "${media_entry##*/} (${media_root##*/})" "$media_entry"
         done
     done
