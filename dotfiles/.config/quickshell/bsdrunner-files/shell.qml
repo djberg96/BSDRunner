@@ -324,6 +324,65 @@ ShellRoot {
         return entryByPath(selectedPath)
     }
 
+    function selectedKindLabel() {
+        var entry = selectedEntry()
+        if (!entry)
+            return "No Selection"
+        switch (entry.kind) {
+        case "directory":
+            return "Folder"
+        case "symlink":
+            return "Link"
+        case "other":
+            return "Object"
+        default:
+            return "File"
+        }
+    }
+
+    function selectedSizeLabel() {
+        var entry = selectedEntry()
+        if (!entry)
+            return "--"
+        return entry.kind === "directory" ? "Folder" : (entry.size_label || "--")
+    }
+
+    function selectedPermissionLabel() {
+        var entry = selectedEntry()
+        if (!entry)
+            return "--"
+
+        var parts = []
+        if (entry.readable)
+            parts.push("Read")
+        if (entry.writable)
+            parts.push("Write")
+        if (entry.executable)
+            parts.push("Execute")
+        return parts.length > 0 ? parts.join(" / ") : "No access"
+    }
+
+    function detailsValue(key) {
+        var entry = selectedEntry()
+        if (!entry)
+            return "--"
+
+        switch (key) {
+        case "type":
+            return selectedKindLabel()
+        case "size":
+            return selectedSizeLabel()
+        case "modified":
+            return entry.mtime_label || "--"
+        case "permissions":
+            return selectedPermissionLabel()
+        case "hidden":
+            return entry.hidden ? "Yes" : "No"
+        default:
+            return "--"
+        }
+    }
+
     function actionButtonEnabled(action) {
         if (runningAction || loading)
             return false
@@ -1426,6 +1485,7 @@ ShellRoot {
 
                             anchors.fill: parent
                             anchors.margins: 8
+                            anchors.rightMargin: root.selectedEntry() ? 244 : 8
                             clip: true
                             model: root.visibleEntries
                             currentIndex: 0
@@ -1577,6 +1637,222 @@ ShellRoot {
                                     onDoubleClicked: function(mouse) {
                                         if (mouse.button === Qt.LeftButton)
                                             root.activate(entryRow.modelData)
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            id: detailsDrawer
+
+                            visible: root.selectedEntry() !== null
+                            width: 228
+                            anchors.top: parent.top
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 8
+                            radius: 8
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 8
+
+                                Text {
+                                    width: parent.width
+                                    text: "Details"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Row {
+                                    width: parent.width
+                                    height: 38
+                                    spacing: 8
+
+                                    Rectangle {
+                                        width: 40
+                                        height: 30
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        radius: 6
+                                        color: Qt.alpha(themeLoader.actionAccent("files"), 0.16)
+                                        border.width: 1
+                                        border.color: themeLoader.actionAccent("files")
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.selectedEntry() ? root.kindIcon(root.selectedEntry().kind) : "--"
+                                            color: themeLoader.actionAccent("files")
+                                            font.pixelSize: 9
+                                            font.bold: true
+                                        }
+                                    }
+
+                                    Column {
+                                        width: parent.width - 48
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 2
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.selectedEntry() ? root.selectedEntry().name : ""
+                                            color: root.palette.accentStrong
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            elide: Text.ElideMiddle
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.selectedKindLabel()
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 10
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+
+                                Grid {
+                                    width: parent.width
+                                    columns: 2
+                                    columnSpacing: 10
+                                    rowSpacing: 6
+
+                                    Repeater {
+                                        model: [
+                                            {"label": "Size", "key": "size"},
+                                            {"label": "Modified", "key": "modified"},
+                                            {"label": "Access", "key": "permissions"},
+                                            {"label": "Hidden", "key": "hidden"}
+                                        ]
+
+                                        delegate: Column {
+                                            id: detailCell
+
+                                            required property var modelData
+
+                                            width: (detailsDrawer.width - 30) / 2
+                                            spacing: 1
+
+                                            Text {
+                                                width: parent.width
+                                                text: detailCell.modelData.label
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 9
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.detailsValue(detailCell.modelData.key)
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 10
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Column {
+                                    width: parent.width
+                                    spacing: 2
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Path"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        height: 46
+                                        text: root.selectedEntry() ? root.selectedEntry().path : ""
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 10
+                                        wrapMode: Text.WrapAnywhere
+                                        maximumLineCount: 3
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 1
+                                    color: root.palette.frameBorder
+                                }
+
+                                Grid {
+                                    width: parent.width
+                                    columns: 2
+                                    columnSpacing: 8
+                                    rowSpacing: 6
+
+                                    Repeater {
+                                        model: [
+                                            {"label": "Open", "action": "open"},
+                                            {"label": "Rename", "action": "rename"},
+                                            {"label": "Copy", "action": "copy-path"},
+                                            {"label": "Terminal", "action": "terminal-target"},
+                                            {"label": "Trash", "action": "trash"}
+                                        ]
+
+                                        delegate: Rectangle {
+                                            id: drawerAction
+
+                                            required property var modelData
+                                            readonly property bool isTerminal: modelData.action === "terminal-target"
+                                            readonly property bool hasSelection: root.selectedEntry() !== null
+                                            readonly property bool terminalEnabled: hasSelection && root.selectedEntry().kind === "directory"
+                                            readonly property bool enabledAction: hasSelection && (!isTerminal || terminalEnabled)
+
+                                            width: (detailsDrawer.width - 30) / 2
+                                            height: 28
+                                            radius: 6
+                                            opacity: enabledAction ? 1.0 : 0.45
+                                            color: drawerActionMouse.containsMouse && enabledAction
+                                                ? root.palette.cardHover
+                                                : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: drawerActionMouse.containsMouse && enabledAction
+                                                ? (modelData.action === "trash" ? root.palette.danger : root.palette.accent)
+                                                : root.palette.frameBorder
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: drawerAction.modelData.label
+                                                color: drawerAction.modelData.action === "trash" && drawerAction.enabledAction
+                                                    ? root.palette.danger
+                                                    : root.palette.secondaryText
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            MouseArea {
+                                                id: drawerActionMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: drawerAction.enabledAction ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: {
+                                                    if (!drawerAction.enabledAction)
+                                                        return
+                                                    root.contextMenuTargetPath = root.selectedEntry().path
+                                                    root.contextMenuTargetName = root.selectedEntry().name
+                                                    root.contextMenuTargetKind = root.selectedEntry().kind
+                                                    root.runContextMenuAction(drawerAction.modelData.action)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1746,6 +2022,7 @@ ShellRoot {
                         }
                     }
                 }
+
             }
 
             Rectangle {
