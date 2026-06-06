@@ -1649,7 +1649,6 @@ ShellRoot {
                                     Column {
                                         width: parent.width - 48
                                         anchors.verticalCenter: parent.verticalCenter
-                                        spacing: 2
 
                                         Text {
                                             width: parent.width
@@ -1658,14 +1657,6 @@ ShellRoot {
                                             font.pixelSize: 12
                                             font.bold: true
                                             elide: Text.ElideMiddle
-                                        }
-
-                                        Text {
-                                            width: parent.width
-                                            text: root.selectedKindLabel()
-                                            color: root.palette.secondaryText
-                                            font.pixelSize: 10
-                                            elide: Text.ElideRight
                                         }
                                     }
                                 }
