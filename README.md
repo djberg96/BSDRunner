@@ -87,7 +87,7 @@ Return to the neutral baseline:
 
 - `Super+Q`: open `kitty`
 - `Super+C`: close focused window
-- `Super+E`: open `dolphin`
+- `Super+E`: open BSDRunner Files
 - `Super+D`: open `rofi -show drun`
 - `Super+F`: open `firefox`
 - `Super+V`: toggle floating
@@ -101,11 +101,28 @@ The following have been tested in the current FreeBSD/Hyprland bring-up:
 - terminal: `kitty`
 - browser: `firefox`
 - launcher: `rofi`
-- file manager: `dolphin`
+- file manager: BSDRunner Files (`quickshell` + `xdg-open`)
+
+Validated fallback:
+
+- `dolphin`
 
 Possible lighter Qt alternative:
 
 - `pcmanfm-qt`
+
+## Files
+
+BSDRunner includes a lightweight Quickshell file manager for normal directory
+navigation and opening files with the system default application.
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-files.sh
+```
+
+V1 is browse/open only. Dolphin remains a useful fallback for heavier file
+operations such as copy, move, rename, trash, archive handling, and remote
+locations.
 
 ## Theme Switching
 

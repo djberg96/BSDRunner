@@ -15,6 +15,13 @@ ShellRoot {
     property string pendingAction: ""
     property var apps: [
         {
+            "action": "files",
+            "icon": "FILE",
+            "label": "Files",
+            "detail": "Browse local folders",
+            "tone": "files"
+        },
+        {
             "action": "software",
             "icon": "PKG",
             "label": "Package Manager",
@@ -63,6 +70,8 @@ ShellRoot {
             return themeLoader.actionAccent("storage")
         case "browser":
             return themeLoader.actionAccent("browser")
+        case "files":
+            return themeLoader.actionAccent("files")
         default:
             return themeLoader.actionAccent("apps")
         }
@@ -70,6 +79,11 @@ ShellRoot {
 
     function commandFor(action) {
         switch (action) {
+        case "files":
+            return [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-files.sh"
+            ]
         case "software":
             return [
                 "sh",
@@ -152,7 +166,7 @@ ShellRoot {
 
         visible: true
         implicitWidth: 330
-        implicitHeight: 348
+        implicitHeight: 408
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 

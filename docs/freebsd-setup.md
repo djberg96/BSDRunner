@@ -28,13 +28,18 @@ sudo pkg install \
   xdg-desktop-portal \
   xdg-desktop-portal-hyprland \
   xdg-desktop-portal-gtk \
+  xdg-utils \
   pipewire \
   wireplumber \
   pavucontrol \
   playerctl
 ```
 
-If you want the file manager currently validated in BSDRunner testing, also install:
+BSDRunner Files uses `xdg-open` from `xdg-utils` to open files with their
+default applications.
+
+If you want the heavier fallback file manager validated in BSDRunner testing,
+also install:
 
 ```sh
 sudo pkg install dolphin
@@ -134,7 +139,9 @@ The currently validated application stack for the early BSDRunner setup is:
 - terminal: `kitty`
 - browser: `firefox`
 - launcher: `rofi`
-- file manager: `dolphin`
+- file manager: BSDRunner Files
+
+Dolphin remains the validated fallback for heavier file operations.
 
 On some FreeBSD Hyprland sessions, Waybar may need a DBus session wrapper even when manual launch works. BSDRunner currently autostarts it with:
 
