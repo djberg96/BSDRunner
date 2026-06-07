@@ -173,6 +173,7 @@ entry_json_line() {
     printf '"path":%s,' "$(json_string "$entry")"
     printf '"kind":%s,' "$(json_string "$kind")"
     printf '"hidden":%s,' "$hidden"
+    printf '"size_bytes":%s,' "$bytes"
     printf '"size_label":%s,' "$(json_string "$label")"
     printf '"mtime_label":%s,' "$(json_string "$(stat_mtime "$entry")")"
     printf '"readable":%s,' "$readable"
