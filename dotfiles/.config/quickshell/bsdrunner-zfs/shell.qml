@@ -1307,13 +1307,13 @@ ShellRoot {
 
                                     Column {
                                         anchors.fill: parent
-                                        anchors.margins: 10
-                                        spacing: 8
+                                        anchors.margins: 8
+                                        spacing: 4
 
                                         Text {
                                             text: "Selected Dataset"
                                             color: root.palette.accent
-                                            font.pixelSize: 15
+                                            font.pixelSize: 14
                                             font.bold: true
                                         }
 
@@ -1331,26 +1331,26 @@ ShellRoot {
                                                 required property var modelData
 
                                                 width: parent.width
-                                                height: 22
+                                                height: 18
 
                                                 Text {
                                                     anchors.left: parent.left
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    width: 86
+                                                    width: 78
                                                     text: modelData.label
                                                     color: root.palette.mutedText
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: 11
                                                     elide: Text.ElideRight
                                                 }
 
                                                 Text {
                                                     anchors.left: parent.left
-                                                    anchors.leftMargin: 96
+                                                    anchors.leftMargin: 86
                                                     anchors.right: parent.right
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: modelData.value
                                                     color: root.palette.primaryText
-                                                    font.pixelSize: 13
+                                                    font.pixelSize: 12
                                                     font.bold: true
                                                     elide: Text.ElideRight
                                                 }
@@ -1363,7 +1363,7 @@ ShellRoot {
                             Rectangle {
                                 visible: root.rightPaneMode === "snapshots"
                                 width: parent.width
-                                height: visible ? 226 : 0
+                                height: visible ? 274 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1397,6 +1397,34 @@ ShellRoot {
                                         color: root.palette.mutedText
                                         font.pixelSize: 12
                                         elide: Text.ElideRight
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 40
+                                        radius: 8
+                                        color: snapshotDatasetsMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.palette.accent
+                                        opacity: root.selectedDatasetName && !root.runningAction ? 1 : 0.45
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Datasets"
+                                            color: root.palette.accent
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: snapshotDatasetsMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: root.selectedDatasetName ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            enabled: root.selectedDatasetName && !root.runningAction
+                                            onClicked: root.showDatasetDetails()
+                                        }
                                     }
 
                                     Rectangle {
