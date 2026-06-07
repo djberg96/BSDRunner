@@ -59,6 +59,27 @@ ShellRoot {
     readonly property var visiblePackages: packageData
     readonly property var selectedPackage: findPackage(selectedPackageName)
     readonly property string appVersion: "1.0.1"
+    readonly property var protectedPackageNames: [
+        "dbus",
+        "dolphin",
+        "foot",
+        "hyprland",
+        "hyprlauncher",
+        "kitty",
+        "mate-polkit",
+        "polkit",
+        "quickshell",
+        "rofi",
+        "rofi-wayland",
+        "seatd",
+        "swww",
+        "waybar",
+        "wlogout",
+        "xdg-desktop-portal",
+        "xdg-desktop-portal-gtk",
+        "xdg-desktop-portal-hyprland",
+        "xdg-utils"
+    ]
 
     function normalize(value) {
         return (value || "").toLowerCase()
@@ -278,6 +299,13 @@ ShellRoot {
 
     function isInstalledPackage(pkg) {
         return !!pkg && isTruthyFlag(pkg.installed)
+    }
+
+    function isProtectedPackage(pkg) {
+        if (!pkg || !pkg.name)
+            return false
+
+        return protectedPackageNames.indexOf(pkg.name) !== -1
     }
 
     function hasAvailableUpgrade(pkg) {
@@ -1284,9 +1312,9 @@ ShellRoot {
 
                                                             visible: root.currentView === "browse" && root.isInstalledPackage(packageCard.pkg)
                                                             height: 24
-                                                            text: "*"
-                                                            color: root.palette.success
-                                                            font.pixelSize: 18
+                                                            text: root.isProtectedPackage(packageCard.pkg) ? "🔒" : "*"
+                                                            color: root.isProtectedPackage(packageCard.pkg) ? root.palette.warning : root.palette.success
+                                                            font.pixelSize: root.isProtectedPackage(packageCard.pkg) ? 15 : 18
                                                             font.bold: true
                                                             verticalAlignment: Text.AlignVCenter
                                                             horizontalAlignment: Text.AlignHCenter
@@ -1587,7 +1615,7 @@ ShellRoot {
                                                     "id": "remove",
                                                     "label": "Remove",
                                                     "tone": "danger",
-                                                    "available": root.isInstalledPackage(root.selectedPackage)
+                                                    "available": root.isInstalledPackage(root.selectedPackage) && !root.isProtectedPackage(root.selectedPackage)
                                                 }
                                             ] : []
 
