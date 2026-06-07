@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 action="${1:-}"
 package_name="${2:-}"
@@ -50,12 +51,20 @@ write_log_file() {
     target="$1"
     stdout_file="$2"
     stderr_file="$3"
+    preview_stdout_file="${4:-}"
+    preview_stderr_file="${5:-}"
 
     {
         printf 'BSDRunner package action log\n'
         printf 'action: %s\n' "$action"
         printf 'package: %s\n' "$package_name"
         printf 'timestamp: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+        if [ -n "$preview_stdout_file" ] || [ -n "$preview_stderr_file" ]; then
+            printf '\n[pkg dry-run stdout]\n'
+            cat "$preview_stdout_file" 2>/dev/null || true
+            printf '\n[pkg dry-run stderr]\n'
+            cat "$preview_stderr_file" 2>/dev/null || true
+        fi
         printf '\n[stdout]\n'
         cat "$stdout_file" 2>/dev/null || true
         printf '\n[stderr]\n'
@@ -101,16 +110,115 @@ verify_expected_state() {
     esac
 }
 
+planned_removed_packages() {
+    awk '
+        /^Installed packages to be REMOVED:/ {
+            in_removed = 1
+            next
+        }
+
+        in_removed && /^[[:space:]]*$/ {
+            in_removed = 0
+            next
+        }
+
+        in_removed && /^[[:space:]]+[A-Za-z0-9._+-]+:/ {
+            line = $0
+            sub(/^[[:space:]]+/, "", line)
+            sub(/:.*/, "", line)
+            if (line != "")
+                print line
+        }
+    ' "$1" | sort -u
+}
+
+protected_package() {
+    case "$1" in
+        dbus|dolphin|foot|hyprland|hyprlauncher|kitty|mate-polkit|polkit|quickshell|rofi|rofi-wayland|seatd|swww|waybar|wlogout|xdg-desktop-portal|xdg-desktop-portal-gtk|xdg-desktop-portal-hyprland|xdg-utils)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+protected_removed_packages() {
+    while IFS= read -r removed_package; do
+        [ -n "$removed_package" ] || continue
+        if protected_package "$removed_package"; then
+            printf '%s\n' "$removed_package"
+        fi
+    done
+}
+
+run_preview() {
+    stdout_file="$1"
+    stderr_file="$2"
+
+    case "$action" in
+        install|upgrade)
+            pkg install -n -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            ;;
+        reinstall)
+            pkg install -n -f -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            ;;
+        remove)
+            pkg delete -n -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+validate_preview() {
+    preview_stdout_file="$1"
+    preview_stderr_file="$2"
+    log_file="$3"
+
+    if ! run_preview "$preview_stdout_file" "$preview_stderr_file"; then
+        write_log_file "$log_file" /dev/null /dev/null "$preview_stdout_file" "$preview_stderr_file"
+        emit_json false "pkg could not plan $action for $package_name." "See log: $log_file" "$log_file"
+        return 1
+    fi
+
+    planned_removals="$(planned_removed_packages "$preview_stdout_file")"
+    case "$action" in
+        install|reinstall|upgrade)
+            if [ -n "$planned_removals" ]; then
+                write_log_file "$log_file" /dev/null /dev/null "$preview_stdout_file" "$preview_stderr_file"
+                details="$(printf 'BSDRunner blocked this action because pkg planned to remove installed packages:\n%s\n\nUse the terminal if you intentionally want to resolve this conflict manually.' "$planned_removals")"
+                emit_json false "Blocked $action for $package_name because pkg planned removals." "$details" "$log_file"
+                return 1
+            fi
+            ;;
+        remove)
+            protected_removals="$(printf '%s\n' "$planned_removals" | protected_removed_packages)"
+            if [ -n "$protected_removals" ]; then
+                write_log_file "$log_file" /dev/null /dev/null "$preview_stdout_file" "$preview_stderr_file"
+                details="$(printf 'BSDRunner blocked this removal because pkg planned to remove protected desktop packages:\n%s\n\nUse the terminal if you intentionally want to change the desktop stack.' "$protected_removals")"
+                emit_json false "Blocked removal because protected BSDRunner desktop packages would be removed." "$details" "$log_file"
+                return 1
+            fi
+            ;;
+    esac
+}
+
 run_action() {
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-software-action.XXXXXX")"
     trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
+    preview_stdout_file="$tmp_dir/preview-stdout.log"
+    preview_stderr_file="$tmp_dir/preview-stderr.log"
     stdout_file="$tmp_dir/stdout.log"
     stderr_file="$tmp_dir/stderr.log"
     log_file="$(log_file_for_action)"
 
+    validate_preview "$preview_stdout_file" "$preview_stderr_file" "$log_file" || return 1
+
     if "$@" >"$stdout_file" 2>"$stderr_file"; then
-        write_log_file "$log_file" "$stdout_file" "$stderr_file"
+        write_log_file "$log_file" "$stdout_file" "$stderr_file" "$preview_stdout_file" "$preview_stderr_file"
 
         if ! verify_expected_state; then
             current_version="$(installed_version)"
@@ -138,7 +246,7 @@ run_action() {
         return 0
     fi
 
-    write_log_file "$log_file" "$stdout_file" "$stderr_file"
+    write_log_file "$log_file" "$stdout_file" "$stderr_file" "$preview_stdout_file" "$preview_stderr_file"
 
     emit_json false "$failure_message" "See log: $log_file" "$log_file"
     return 1
