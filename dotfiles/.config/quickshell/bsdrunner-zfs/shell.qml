@@ -35,6 +35,7 @@ ShellRoot {
     property string selectedDatasetName: ""
     property string selectedSnapshotName: ""
     property string centerPaneMode: "details"
+    property string rightPaneMode: "dataset"
     property var pools: []
     property var datasets: []
     property var snapshots: []
@@ -172,7 +173,7 @@ ShellRoot {
     }
 
     function ensureSnapshotSelection() {
-        if (centerPaneMode !== "snapshots") {
+        if (rightPaneMode !== "snapshots") {
             selectedSnapshotName = ""
             return
         }
@@ -185,6 +186,7 @@ ShellRoot {
 
     function showDatasetDetails() {
         centerPaneMode = "details"
+        rightPaneMode = "dataset"
         selectedSnapshotName = ""
     }
 
@@ -192,6 +194,7 @@ ShellRoot {
         if (!selectedDatasetName)
             return
         centerPaneMode = "snapshots"
+        rightPaneMode = "snapshots"
         ensureSnapshotSelection()
     }
 
@@ -389,6 +392,7 @@ ShellRoot {
                 datasetToSelectAfterRefresh = activeActionArg1 + "/" + activeActionArg2
                 datasetChildName = ""
                 centerPaneMode = "details"
+                rightPaneMode = "dataset"
             }
         } else if (payload) {
             statusTone = "error"
@@ -564,7 +568,7 @@ ShellRoot {
 
                         readonly property int visiblePoolCount: root.pools.length > 0 ? Math.min(root.pools.length, 2) : 1
 
-                        width: 360
+                        width: 430
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -582,7 +586,7 @@ ShellRoot {
                                 delegate: Rectangle {
                                     required property var modelData
 
-                                    width: Math.floor((poolSummaryCard.width - 28 - 114 - (poolSummaryCard.visiblePoolCount * 10)) / poolSummaryCard.visiblePoolCount)
+                                    width: Math.floor((poolSummaryCard.width - 28 - 176 - 8 - (poolSummaryCard.visiblePoolCount * 10)) / poolSummaryCard.visiblePoolCount)
                                     height: 80
                                     radius: 8
                                     color: root.palette.panelBackground
@@ -623,7 +627,7 @@ ShellRoot {
                             }
 
                             Rectangle {
-                                width: 114
+                                width: 84
                                 height: 80
                                 radius: 8
                                 color: refreshMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
@@ -652,11 +656,42 @@ ShellRoot {
                                     onClicked: root.refreshSnapshot()
                                 }
                             }
+
+                            Rectangle {
+                                width: 84
+                                height: 80
+                                radius: 8
+                                color: snapshotsTopMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.rightPaneMode === "snapshots" ? root.palette.accent : root.palette.panelBorder
+                                opacity: root.selectedDatasetName && !root.runningAction ? 1 : 0.45
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    width: parent.width - 10
+                                    text: "Snapshots"
+                                    color: root.rightPaneMode === "snapshots" ? root.palette.accent : root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+
+                                MouseArea {
+                                    id: snapshotsTopMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: root.selectedDatasetName ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    enabled: root.selectedDatasetName && !root.runningAction
+                                    onClicked: root.showSnapshots()
+                                }
+                            }
                         }
                     }
 
                     Rectangle {
-                        width: parent.width - 320 - 360 - 28
+                        width: parent.width - 320 - 430 - 28
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -810,53 +845,11 @@ ShellRoot {
                             anchors.margins: 14
                             spacing: 10
 
-                            Row {
-                                width: parent.width
-                                height: 24
-                                spacing: 8
-
-                                Text {
-                                    width: parent.width - (root.centerPaneMode !== "snapshots" ? 108 : 0) - parent.spacing
-                                    height: parent.height
-                                    text: root.centerPaneMode === "snapshots" ? "Snapshots" : "Dataset Details"
-                                    color: root.palette.accent
-                                    font.pixelSize: 15
-                                    font.bold: true
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-
-                                Rectangle {
-                                    visible: root.centerPaneMode !== "snapshots"
-                                    width: visible ? 108 : 0
-                                    height: parent.height
-                                    radius: 7
-                                    color: newDatasetMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.12)
-                                    border.width: 1
-                                    border.color: root.palette.success
-                                    opacity: root.selectedDatasetCanHaveChildren() && !root.runningAction ? 1 : 0.45
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        width: parent.width - 10
-                                        text: "New Dataset"
-                                        color: root.palette.success
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter
-                                        elide: Text.ElideRight
-                                    }
-
-                                    MouseArea {
-                                        id: newDatasetMouse
-
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: root.selectedDatasetCanHaveChildren() ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        enabled: root.selectedDatasetCanHaveChildren() && !root.runningAction
-                                        onClicked: root.openCreateDatasetDialog()
-                                    }
-                                }
+                            Text {
+                                text: root.centerPaneMode === "snapshots" ? "Snapshots" : "Dataset Details"
+                                color: root.palette.accent
+                                font.pixelSize: 15
+                                font.bold: true
                             }
 
                             ListView {
@@ -1123,9 +1116,254 @@ ShellRoot {
                             anchors.margins: 14
                             spacing: 10
 
-                            Rectangle {
+                            Column {
+                                visible: root.rightPaneMode === "dataset"
                                 width: parent.width
-                                height: 226
+                                height: visible ? parent.height : 0
+                                spacing: 10
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 196
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 8
+
+                                        Text {
+                                            text: "Dataset Management"
+                                            color: root.palette.accent
+                                            font.pixelSize: 15
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.selectedDatasetName || "No dataset selected"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 17
+                                            minimumPixelSize: 12
+                                            fontSizeMode: Text.HorizontalFit
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.selectedDatasetDetail()
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 12
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 40
+                                            radius: 8
+                                            color: datasetManageCreateMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.12)
+                                            border.width: 1
+                                            border.color: root.palette.success
+                                            opacity: root.selectedDatasetCanHaveChildren() && !root.runningAction ? 1 : 0.45
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "New Child Dataset"
+                                                color: root.palette.success
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: datasetManageCreateMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: root.selectedDatasetCanHaveChildren() ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                enabled: root.selectedDatasetCanHaveChildren() && !root.runningAction
+                                                onClicked: root.openCreateDatasetDialog()
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 40
+                                            radius: 8
+                                            color: datasetManageSnapshotsMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.palette.accent
+                                            opacity: root.selectedDatasetName && !root.runningAction ? 1 : 0.45
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Snapshots"
+                                                color: root.palette.accent
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: datasetManageSnapshotsMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: root.selectedDatasetName ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                enabled: root.selectedDatasetName && !root.runningAction
+                                                onClicked: root.showSnapshots()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 128
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 8
+
+                                        Text {
+                                            text: "Jail Storage"
+                                            color: root.palette.accent
+                                            font.pixelSize: 15
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.selectedDatasetName ? root.selectedDatasetName + "/bastille" : "Select a parent dataset"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Row {
+                                            width: parent.width
+                                            spacing: 8
+
+                                            Repeater {
+                                                model: ["bastille", "jails"]
+
+                                                Rectangle {
+                                                    id: jailDatasetChip
+
+                                                    required property string modelData
+
+                                                    width: Math.floor((parent.width - 8) / 2)
+                                                    height: 36
+                                                    radius: 8
+                                                    color: jailDatasetMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: root.palette.frameBorder
+                                                    opacity: root.selectedDatasetCanHaveChildren() && !root.runningAction ? 1 : 0.45
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        width: parent.width - 10
+                                                        text: jailDatasetChip.modelData
+                                                        color: root.palette.secondaryText
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    MouseArea {
+                                                        id: jailDatasetMouse
+
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: root.selectedDatasetCanHaveChildren() ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        enabled: root.selectedDatasetCanHaveChildren() && !root.runningAction
+                                                        onClicked: {
+                                                            root.openCreateDatasetDialog()
+                                                            root.datasetChildName = jailDatasetChip.modelData
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: parent.height - 196 - 128 - 20
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 8
+
+                                        Text {
+                                            text: "Selected Dataset"
+                                            color: root.palette.accent
+                                            font.pixelSize: 15
+                                            font.bold: true
+                                        }
+
+                                        Repeater {
+                                            model: root.selectedDataset ? [
+                                                {"label": "Type", "value": root.selectedDataset.type},
+                                                {"label": "Mountpoint", "value": root.propertyValue(root.selectedDataset.mountpoint)},
+                                                {"label": "Encryption", "value": root.propertyValue(root.selectedDataset.encryption)},
+                                                {"label": "Snapshots", "value": root.selectedDatasetSnapshotCount().toString()}
+                                            ] : [
+                                                {"label": "Dataset", "value": "None selected"}
+                                            ]
+
+                                            delegate: Item {
+                                                required property var modelData
+
+                                                width: parent.width
+                                                height: 22
+
+                                                Text {
+                                                    anchors.left: parent.left
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    width: 86
+                                                    text: modelData.label
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 12
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: 96
+                                                    anchors.right: parent.right
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: modelData.value
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                visible: root.rightPaneMode === "snapshots"
+                                width: parent.width
+                                height: visible ? 226 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1279,8 +1517,9 @@ ShellRoot {
                             }
 
                             Item {
+                                visible: root.rightPaneMode === "snapshots"
                                 width: parent.width
-                                height: 14
+                                height: visible ? 14 : 0
 
                                 Rectangle {
                                     anchors.left: parent.left
@@ -1292,13 +1531,15 @@ ShellRoot {
                             }
 
                             Item {
+                                visible: root.rightPaneMode === "snapshots"
                                 width: parent.width
-                                height: 16
+                                height: visible ? 16 : 0
                             }
 
                             Rectangle {
+                                visible: root.rightPaneMode === "snapshots"
                                 width: parent.width
-                                height: 164
+                                height: visible ? 164 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
