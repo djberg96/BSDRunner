@@ -1,8 +1,16 @@
 #!/bin/sh
 
 set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 [ -f "$HOME/.config/bsdrunner/show-welcome-at-startup" ] || exit 0
-command -v qs >/dev/null 2>&1 || exit 0
 
-exec qs -c bsdrunner-welcome
+if command -v qs >/dev/null 2>&1; then
+    exec qs -c bsdrunner-welcome
+fi
+
+if command -v quickshell >/dev/null 2>&1; then
+    exec quickshell -c bsdrunner-welcome
+fi
+
+exit 0

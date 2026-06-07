@@ -368,11 +368,15 @@ Install flow:
 3. User clicks `Install`.
 4. UI shows dependency and confirmation copy.
 5. UI starts the action backend.
-6. Backend runs the validated install command through `mdo`.
-7. Progress text appears in a dedicated dialog or log pane.
-8. On success, the UI refreshes installed and update state.
+6. Backend runs a `pkg -n` dry run and blocks install, reinstall, or upgrade
+   actions that would remove installed packages.
+7. Backend runs the validated install command through `mdo`.
+8. Progress text appears in a dedicated dialog or log pane.
+9. On success, the UI refreshes installed and update state.
 
-Remove and upgrade flows should follow the same shape.
+Remove and upgrade flows should follow the same shape. Remove actions also
+block plans that would remove protected BSDRunner desktop packages such as
+Hyprland, Quickshell, Waybar, Kitty, Rofi, and portal/session components.
 
 ## Error Handling
 
@@ -383,6 +387,7 @@ Expected failure classes:
 - repo refresh failure
 - permission or policy failure from `mdo`
 - dependency resolution failure
+- dry-run guard blocked planned package removals
 - network failure during fetch
 
 The UI should translate these into friendly summaries plus an expandable details area.

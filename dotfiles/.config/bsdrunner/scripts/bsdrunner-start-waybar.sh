@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 config_home="$HOME/.config"
 waybar_config="$config_home/waybar/config"

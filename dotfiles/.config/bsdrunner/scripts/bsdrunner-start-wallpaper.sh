@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 wallpaper_file="$HOME/.config/bsdrunner/current-wallpaper"
 theme_file="$HOME/.config/bsdrunner/current-theme"

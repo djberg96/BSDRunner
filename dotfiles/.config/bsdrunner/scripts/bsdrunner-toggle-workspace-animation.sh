@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -eu
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 mode="${1:-toggle}"
 runner_home="$HOME/.config/bsdrunner"
