@@ -84,6 +84,23 @@ V1 should not create, destroy, clone, template, upgrade, or deeply edit jail
 networking. Those are later features once the status and lifecycle workflow
 feels trustworthy.
 
+### Jail Storage
+
+Jails should use a dedicated ZFS dataset when ZFS is available. The suggested
+default for a normal BSDRunner install is:
+
+```text
+zroot/bastille
+```
+
+Use `POOL/bastille` as the general pattern when the primary pool is not named
+`zroot`. This should be a dataset created inside an existing pool, not a new
+pool created from an existing pool.
+
+The Jails app should eventually detect whether Bastille is using a dedicated
+ZFS-backed storage location. Creating that dataset belongs in a future ZFS GUI
+`Create Dataset` workflow, not in Jails V1.
+
 ## WireGuard V1
 
 WireGuard should focus on laptop client VPN workflows, not router or server
