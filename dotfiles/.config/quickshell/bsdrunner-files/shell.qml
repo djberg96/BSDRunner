@@ -32,6 +32,7 @@ ShellRoot {
     property real nameColumnWidth: 260
     property real sizeColumnWidth: 118
     property real typeColumnWidth: 108
+    property real modifiedColumnWidth: 132
     property var history: []
     property int historyIndex: -1
     property string queuedPath: ""
@@ -164,6 +165,10 @@ ShellRoot {
             result = compareText(entryTypeLabel(left), entryTypeLabel(right))
             if (result === 0)
                 result = compareText(left.name, right.name)
+        } else if (sortColumn === "modified") {
+            result = compareText(left.mtime_label, right.mtime_label)
+            if (result === 0)
+                result = compareText(left.name, right.name)
         } else {
             result = compareText(left.name, right.name)
         }
@@ -238,6 +243,12 @@ ShellRoot {
         if (!entry || entry.kind === "directory")
             return ""
         return entry.size_label || "--"
+    }
+
+    function entryModifiedLabel(entry) {
+        if (!entry)
+            return "--"
+        return entry.mtime_label || "--"
     }
 
     function baseName(path) {
@@ -1588,10 +1599,11 @@ ShellRoot {
                             readonly property real iconColumnWidth: 42
                             readonly property real columnSpacing: 10
                             readonly property real horizontalPadding: 18
-                            readonly property real availableColumnWidth: Math.max(260, width - horizontalPadding - iconColumnWidth - (columnSpacing * 3))
-                            readonly property real actualTypeColumnWidth: Math.max(64, Math.min(root.typeColumnWidth, Math.max(64, availableColumnWidth - 210)))
-                            readonly property real actualSizeColumnWidth: Math.max(76, Math.min(root.sizeColumnWidth, Math.max(76, availableColumnWidth - actualTypeColumnWidth - 120)))
-                            readonly property real actualNameColumnWidth: Math.max(80, Math.min(root.nameColumnWidth, Math.max(80, availableColumnWidth - actualSizeColumnWidth - actualTypeColumnWidth)))
+                            readonly property real availableColumnWidth: Math.max(340, width - horizontalPadding - iconColumnWidth - (columnSpacing * 4))
+                            readonly property real actualModifiedColumnWidth: Math.max(104, Math.min(root.modifiedColumnWidth, Math.max(104, availableColumnWidth - 300)))
+                            readonly property real actualTypeColumnWidth: Math.max(64, Math.min(root.typeColumnWidth, Math.max(64, availableColumnWidth - actualModifiedColumnWidth - 210)))
+                            readonly property real actualSizeColumnWidth: Math.max(76, Math.min(root.sizeColumnWidth, Math.max(76, availableColumnWidth - actualModifiedColumnWidth - actualTypeColumnWidth - 120)))
+                            readonly property real actualNameColumnWidth: Math.max(80, Math.min(root.nameColumnWidth, Math.max(80, availableColumnWidth - actualSizeColumnWidth - actualTypeColumnWidth - actualModifiedColumnWidth)))
 
                             Row {
                                 anchors.fill: parent
@@ -1654,6 +1666,24 @@ ShellRoot {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: root.sortBy("type")
+                                    }
+                                }
+
+                                Text {
+                                    width: entryHeader.actualModifiedColumnWidth
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Modified" + root.sortIndicator("modified")
+                                    color: root.sortColumn === "modified" ? root.palette.accentStrong : root.palette.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.sortBy("modified")
                                     }
                                 }
                             }
@@ -1742,6 +1772,50 @@ ShellRoot {
                                     onPositionChanged: function(mouse) {
                                         if (pressed)
                                             root.sizeColumnWidth = Math.max(76, Math.min(260, startWidth + sizeResizeGrip.x + mouse.x - startPointerX))
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: typeResizeGrip
+
+                                x: 8 + entryHeader.iconColumnWidth + (entryHeader.columnSpacing * 3) + entryHeader.actualNameColumnWidth + entryHeader.actualSizeColumnWidth + entryHeader.actualTypeColumnWidth + (entryHeader.columnSpacing / 2) - (width / 2)
+                                y: 2
+                                width: 16
+                                height: parent.height - 4
+                                radius: 4
+                                color: typeResizeMouse.containsMouse || typeResizeMouse.pressed
+                                    ? Qt.alpha(root.palette.accent, 0.18)
+                                    : "transparent"
+
+                                Rectangle {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    anchors.topMargin: 3
+                                    anchors.bottomMargin: 3
+                                    width: 2
+                                    radius: 1
+                                    color: typeResizeMouse.containsMouse || typeResizeMouse.pressed
+                                        ? root.palette.accent
+                                        : root.palette.frameBorder
+                                }
+
+                                MouseArea {
+                                    id: typeResizeMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.SizeHorCursor
+                                    property real startPointerX: 0
+                                    property real startWidth: 0
+                                    onPressed: function(mouse) {
+                                        startPointerX = typeResizeGrip.x + mouse.x
+                                        startWidth = root.typeColumnWidth
+                                    }
+                                    onPositionChanged: function(mouse) {
+                                        if (pressed)
+                                            root.typeColumnWidth = Math.max(64, Math.min(220, startWidth + typeResizeGrip.x + mouse.x - startPointerX))
                                     }
                                 }
                             }
@@ -1890,6 +1964,16 @@ ShellRoot {
                                         width: entryHeader.actualTypeColumnWidth
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: root.entryTypeLabel(entryRow.modelData)
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 12
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        width: entryHeader.actualModifiedColumnWidth
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.entryModifiedLabel(entryRow.modelData)
                                         color: root.palette.mutedText
                                         font.pixelSize: 12
                                         horizontalAlignment: Text.AlignHCenter
