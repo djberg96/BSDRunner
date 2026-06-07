@@ -1401,34 +1401,6 @@ ShellRoot {
 
                                     Rectangle {
                                         width: parent.width
-                                        height: 40
-                                        radius: 8
-                                        color: snapshotDatasetsMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
-                                        border.width: 1
-                                        border.color: root.palette.accent
-                                        opacity: root.selectedDatasetName && !root.runningAction ? 1 : 0.45
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "Datasets"
-                                            color: root.palette.accent
-                                            font.pixelSize: 13
-                                            font.bold: true
-                                        }
-
-                                        MouseArea {
-                                            id: snapshotDatasetsMouse
-
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: root.selectedDatasetName ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                            enabled: root.selectedDatasetName && !root.runningAction
-                                            onClicked: root.showDatasetDetails()
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        width: parent.width
                                         height: 42
                                         radius: 8
                                         color: root.palette.cardBackground
@@ -1541,13 +1513,41 @@ ShellRoot {
                                             )
                                         }
                                     }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 40
+                                        radius: 8
+                                        color: snapshotDatasetsMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.palette.accent
+                                        opacity: root.selectedDatasetName && !root.runningAction ? 1 : 0.45
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Datasets"
+                                            color: root.palette.accent
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: snapshotDatasetsMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: root.selectedDatasetName ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            enabled: root.selectedDatasetName && !root.runningAction
+                                            onClicked: root.showDatasetDetails()
+                                        }
+                                    }
                                 }
                             }
 
                             Item {
                                 visible: root.rightPaneMode === "snapshots"
                                 width: parent.width
-                                height: visible ? 14 : 0
+                                height: visible ? 6 : 0
 
                                 Rectangle {
                                     anchors.left: parent.left
@@ -1559,15 +1559,15 @@ ShellRoot {
                             }
 
                             Item {
-                                visible: root.rightPaneMode === "snapshots"
+                                visible: false
                                 width: parent.width
-                                height: visible ? 16 : 0
+                                height: 0
                             }
 
                             Rectangle {
                                 visible: root.rightPaneMode === "snapshots"
                                 width: parent.width
-                                height: visible ? 164 : 0
+                                height: visible ? 174 : 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
