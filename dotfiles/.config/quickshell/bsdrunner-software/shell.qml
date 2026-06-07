@@ -154,13 +154,29 @@ ShellRoot {
         pendingActionPackageName = ""
     }
 
+    function clearActionFeedback() {
+        actionFeedbackTone = "info"
+        actionFeedbackTitle = ""
+        actionFeedbackDetails = ""
+    }
+
+    function selectPackage(pkgName) {
+        if (!pkgName || runningAction)
+            return
+
+        if (selectedPackageName === pkgName)
+            return
+
+        clearPendingAction()
+        clearActionFeedback()
+        selectedPackageName = pkgName
+    }
+
     function requestAction(actionId, actionLabel, pkgName) {
         if (runningAction || !pkgName)
             return
 
-        actionFeedbackTone = "info"
-        actionFeedbackTitle = ""
-        actionFeedbackDetails = ""
+        clearActionFeedback()
         pendingActionId = actionId
         pendingActionLabel = actionLabel
         pendingActionPackageName = pkgName
@@ -1376,7 +1392,7 @@ ShellRoot {
                                                     hoverEnabled: enabled
                                                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
-                                                    onClicked: root.selectedPackageName = parent.modelData.name
+                                                    onClicked: root.selectPackage(parent.modelData.name)
                                                 }
                                             }
                                         }
