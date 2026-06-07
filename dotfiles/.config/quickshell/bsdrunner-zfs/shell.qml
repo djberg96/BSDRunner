@@ -1172,7 +1172,7 @@ ShellRoot {
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: "New Child Dataset"
+                                                text: "New Dataset"
                                                 color: root.palette.success
                                                 font.pixelSize: 13
                                                 font.bold: true
@@ -1221,85 +1221,7 @@ ShellRoot {
 
                                 Rectangle {
                                     width: parent.width
-                                    height: 128
-                                    radius: 8
-                                    color: root.palette.panelBackground
-                                    border.width: 1
-                                    border.color: root.palette.frameBorder
-
-                                    Column {
-                                        anchors.fill: parent
-                                        anchors.margins: 10
-                                        spacing: 8
-
-                                        Text {
-                                            text: "Jail Storage"
-                                            color: root.palette.accent
-                                            font.pixelSize: 15
-                                            font.bold: true
-                                        }
-
-                                        Text {
-                                            width: parent.width
-                                            text: root.selectedDatasetName ? root.selectedDatasetName + "/bastille" : "Select a parent dataset"
-                                            color: root.palette.primaryText
-                                            font.pixelSize: 13
-                                            font.bold: true
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Row {
-                                            width: parent.width
-                                            spacing: 8
-
-                                            Repeater {
-                                                model: ["bastille", "jails"]
-
-                                                Rectangle {
-                                                    id: jailDatasetChip
-
-                                                    required property string modelData
-
-                                                    width: Math.floor((parent.width - 8) / 2)
-                                                    height: 36
-                                                    radius: 8
-                                                    color: jailDatasetMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
-                                                    border.width: 1
-                                                    border.color: root.palette.frameBorder
-                                                    opacity: root.selectedDatasetCanHaveChildren() && !root.runningAction ? 1 : 0.45
-
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        width: parent.width - 10
-                                                        text: jailDatasetChip.modelData
-                                                        color: root.palette.secondaryText
-                                                        font.pixelSize: 12
-                                                        font.bold: true
-                                                        horizontalAlignment: Text.AlignHCenter
-                                                        elide: Text.ElideRight
-                                                    }
-
-                                                    MouseArea {
-                                                        id: jailDatasetMouse
-
-                                                        anchors.fill: parent
-                                                        hoverEnabled: true
-                                                        cursorShape: root.selectedDatasetCanHaveChildren() ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                        enabled: root.selectedDatasetCanHaveChildren() && !root.runningAction
-                                                        onClicked: {
-                                                            root.openCreateDatasetDialog()
-                                                            root.datasetChildName = jailDatasetChip.modelData
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Rectangle {
-                                    width: parent.width
-                                    height: parent.height - 196 - 128 - 20
+                                    height: parent.height - 196 - 10
                                     radius: 8
                                     color: root.palette.panelBackground
                                     border.width: 1
@@ -1715,7 +1637,7 @@ ShellRoot {
                 Rectangle {
                     anchors.centerIn: parent
                     width: 420
-                    height: 318
+                    height: 364
                     radius: 8
                     color: root.palette.cardBackground
                     border.width: 1
