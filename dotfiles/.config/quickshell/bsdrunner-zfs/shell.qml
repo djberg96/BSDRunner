@@ -13,8 +13,10 @@ ShellRoot {
 
     readonly property var palette: themeLoader.palette
     readonly property var snapshotPresets: ["manual", "before-update", "experiment"]
+    readonly property var datasetNamePresets: ["bastille", "jails", "data"]
     property bool loading: false
     property bool runningAction: false
+    property bool datasetDialogOpen: false
     property string statusTone: "info"
     property string statusMessage: "Loading ZFS status..."
     property string actionDetails: ""
@@ -28,6 +30,8 @@ ShellRoot {
     property string pendingActionDescription: ""
     property bool pendingSnapshotRecursive: false
     property string snapshotName: ""
+    property string datasetChildName: ""
+    property string datasetToSelectAfterRefresh: ""
     property string selectedDatasetName: ""
     property string selectedSnapshotName: ""
     property string centerPaneMode: "details"
@@ -147,6 +151,16 @@ ShellRoot {
         return selectedDataset.used + " used / " + selectedDataset.avail + " free"
     }
 
+    function selectedDatasetCanHaveChildren() {
+        return selectedDataset && selectedDataset.type === "filesystem"
+    }
+
+    function datasetFullName() {
+        if (!selectedDatasetName || !datasetChildName)
+            return ""
+        return selectedDatasetName + "/" + datasetChildName
+    }
+
     function selectedDatasetSnapshotCount() {
         return visibleSnapshots.length
     }
@@ -228,6 +242,25 @@ ShellRoot {
         pendingSnapshotRecursive = false
     }
 
+    function openCreateDatasetDialog() {
+        if (!selectedDatasetCanHaveChildren() || runningAction)
+            return
+        datasetDialogOpen = true
+        datasetChildName = ""
+        clearPendingAction()
+    }
+
+    function requestCreateDataset() {
+        if (!selectedDatasetCanHaveChildren() || !datasetChildName || runningAction)
+            return
+        datasetDialogOpen = false
+        requestAction(
+            "create-dataset",
+            "Create dataset",
+            "Create " + datasetFullName() + "?"
+        )
+    }
+
     function clearPendingAction() {
         pendingActionId = ""
         pendingActionLabel = ""
@@ -241,9 +274,19 @@ ShellRoot {
 
         activeActionId = pendingActionId
         activeActionLabel = pendingActionLabel
-        activeActionArg1 = pendingActionId === "create-snapshot" ? selectedDatasetName : selectedSnapshotName
-        activeActionArg2 = pendingActionId === "create-snapshot" ? snapshotName : ""
-        activeActionArg3 = pendingActionId === "create-snapshot" && pendingSnapshotRecursive ? "recursive" : ""
+        if (pendingActionId === "create-snapshot") {
+            activeActionArg1 = selectedDatasetName
+            activeActionArg2 = snapshotName
+            activeActionArg3 = pendingSnapshotRecursive ? "recursive" : ""
+        } else if (pendingActionId === "create-dataset") {
+            activeActionArg1 = selectedDatasetName
+            activeActionArg2 = datasetChildName
+            activeActionArg3 = ""
+        } else {
+            activeActionArg1 = selectedSnapshotName
+            activeActionArg2 = ""
+            activeActionArg3 = ""
+        }
         clearPendingAction()
         runActionProcess()
     }
@@ -316,8 +359,12 @@ ShellRoot {
         statusTone = lastResultTone
         statusMessage = payload.message || "Loaded ZFS status."
 
-        if ((!selectedDatasetName || !findByName(datasets, selectedDatasetName)) && datasets.length > 0)
+        if (datasetToSelectAfterRefresh.length > 0 && findByName(datasets, datasetToSelectAfterRefresh)) {
+            selectedDatasetName = datasetToSelectAfterRefresh
+            datasetToSelectAfterRefresh = ""
+        } else if ((!selectedDatasetName || !findByName(datasets, selectedDatasetName)) && datasets.length > 0) {
             selectedDatasetName = datasets[0].name
+        }
 
         ensureSnapshotSelection()
     }
@@ -333,10 +380,16 @@ ShellRoot {
         }
 
         if (payload && payload.ok && exitCode === 0) {
-            statusTone = activeActionId === "create-snapshot" ? "success" : "warning"
+            statusTone = (activeActionId === "create-snapshot" || activeActionId === "create-dataset") ? "success" : "warning"
             statusMessage = payload.message || "ZFS action completed."
             actionDetails = payload.details || ""
-            snapshotName = ""
+            if (activeActionId === "create-snapshot")
+                snapshotName = ""
+            if (activeActionId === "create-dataset") {
+                datasetToSelectAfterRefresh = activeActionArg1 + "/" + activeActionArg2
+                datasetChildName = ""
+                centerPaneMode = "details"
+            }
         } else if (payload) {
             statusTone = "error"
             statusMessage = payload.message || "ZFS action failed."
@@ -757,11 +810,53 @@ ShellRoot {
                             anchors.margins: 14
                             spacing: 10
 
-                            Text {
-                                text: root.centerPaneMode === "snapshots" ? "Snapshots" : "Dataset Details"
-                                color: root.palette.accent
-                                font.pixelSize: 15
-                                font.bold: true
+                            Row {
+                                width: parent.width
+                                height: 24
+                                spacing: 8
+
+                                Text {
+                                    width: parent.width - (root.centerPaneMode !== "snapshots" ? 108 : 0) - parent.spacing
+                                    height: parent.height
+                                    text: root.centerPaneMode === "snapshots" ? "Snapshots" : "Dataset Details"
+                                    color: root.palette.accent
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+
+                                Rectangle {
+                                    visible: root.centerPaneMode !== "snapshots"
+                                    width: visible ? 108 : 0
+                                    height: parent.height
+                                    radius: 7
+                                    color: newDatasetMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.12)
+                                    border.width: 1
+                                    border.color: root.palette.success
+                                    opacity: root.selectedDatasetCanHaveChildren() && !root.runningAction ? 1 : 0.45
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        width: parent.width - 10
+                                        text: "New Dataset"
+                                        color: root.palette.success
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                    }
+
+                                    MouseArea {
+                                        id: newDatasetMouse
+
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: root.selectedDatasetCanHaveChildren() ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        enabled: root.selectedDatasetCanHaveChildren() && !root.runningAction
+                                        onClicked: root.openCreateDatasetDialog()
+                                    }
+                                }
                             }
 
                             ListView {
@@ -1338,6 +1433,230 @@ ShellRoot {
                                 }
                             }
 
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.datasetDialogOpen
+                anchors.fill: parent
+                color: Qt.rgba(0, 0, 0, 0.55)
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 420
+                    height: 318
+                    radius: 8
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.palette.success
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 18
+                        spacing: 12
+
+                        Text {
+                            width: parent.width
+                            text: "Create Dataset"
+                            color: root.palette.primaryText
+                            font.pixelSize: 22
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 54
+                            radius: 8
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 3
+
+                                Text {
+                                    text: "Parent"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: root.selectedDatasetName || "No dataset selected"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 42
+                            radius: 8
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: datasetNameInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.LeftButton
+                                onClicked: datasetNameInput.forceActiveFocus()
+                            }
+
+                            TextInput {
+                                id: datasetNameInput
+
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                text: root.datasetChildName
+                                color: root.palette.primaryText
+                                selectionColor: root.palette.accent
+                                selectedTextColor: root.palette.frameBackground
+                                font.pixelSize: 14
+                                clip: true
+                                onTextChanged: root.datasetChildName = text
+                                onAccepted: root.requestCreateDataset()
+
+                                Text {
+                                    anchors.fill: parent
+                                    visible: datasetNameInput.text.length === 0 && !datasetNameInput.activeFocus
+                                    text: "child dataset name"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 14
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            spacing: 8
+
+                            Repeater {
+                                model: root.datasetNamePresets
+
+                                Rectangle {
+                                    id: datasetPresetChip
+
+                                    required property string modelData
+
+                                    width: Math.floor((parent.width - 16) / 3)
+                                    height: 28
+                                    radius: 7
+                                    color: datasetPresetMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.datasetChildName === modelData ? root.palette.accent : root.palette.frameBorder
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        width: parent.width - 10
+                                        text: datasetPresetChip.modelData
+                                        color: root.datasetChildName === datasetPresetChip.modelData ? root.palette.accent : root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        font.bold: root.datasetChildName === datasetPresetChip.modelData
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                    }
+
+                                    MouseArea {
+                                        id: datasetPresetMouse
+
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.datasetChildName = datasetPresetChip.modelData
+                                            datasetNameInput.forceActiveFocus()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 42
+                            radius: 8
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: root.datasetFullName().length > 0 ? root.palette.success : root.palette.frameBorder
+
+                            Text {
+                                anchors.fill: parent
+                                anchors.margins: 9
+                                text: root.datasetFullName().length > 0 ? root.datasetFullName() : "Select a parent and name"
+                                color: root.datasetFullName().length > 0 ? root.palette.success : root.palette.mutedText
+                                font.pixelSize: 13
+                                font.bold: root.datasetFullName().length > 0
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Row {
+                            spacing: 10
+
+                            Rectangle {
+                                width: 185
+                                height: 42
+                                radius: 8
+                                color: datasetCreateMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.12)
+                                border.width: 1
+                                border.color: root.palette.success
+                                opacity: root.datasetChildName.length > 0 && root.selectedDatasetCanHaveChildren() && !root.runningAction ? 1 : 0.45
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Create Dataset"
+                                    color: root.palette.success
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: datasetCreateMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: root.datasetChildName.length > 0 && root.selectedDatasetCanHaveChildren() && !root.runningAction
+                                    onClicked: root.requestCreateDataset()
+                                }
+                            }
+
+                            Rectangle {
+                                width: 185
+                                height: 42
+                                radius: 8
+                                color: datasetCancelMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Cancel"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: datasetCancelMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.datasetDialogOpen = false
+                                }
+                            }
                         }
                     }
                 }

@@ -67,6 +67,20 @@ valid_snapshot_label() {
     esac
 }
 
+valid_dataset_child() {
+    case "${1:-}" in
+        ""|*[!A-Za-z0-9_.:-]*)
+            return 1
+            ;;
+        "."|"..")
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
 write_last_result() {
     tone="$1"
     message="$2"
@@ -244,6 +258,47 @@ do_create_snapshot() {
     fi
 }
 
+do_create_dataset() {
+    parent_dataset="$1"
+    child_name="$2"
+
+    valid_dataset "$parent_dataset" || {
+        emit_action_result false "Invalid parent dataset." "Select an existing filesystem dataset from the list."
+        exit 1
+    }
+
+    valid_dataset_child "$child_name" || {
+        emit_action_result false "Invalid dataset name." "Use only letters, numbers, dot, underscore, hyphen, or colon."
+        exit 1
+    }
+
+    if ! zfs list -H -o name "$parent_dataset" >/dev/null 2>&1; then
+        emit_action_result false "Parent dataset was not found." "$parent_dataset"
+        exit 1
+    fi
+
+    parent_type="$(zfs get -H -o value type "$parent_dataset" 2>/dev/null || true)"
+    if [ "$parent_type" != "filesystem" ]; then
+        emit_action_result false "Parent must be a filesystem dataset." "Volumes cannot contain child datasets."
+        exit 1
+    fi
+
+    dataset_name="${parent_dataset}/${child_name}"
+    if zfs list -H -o name "$dataset_name" >/dev/null 2>&1; then
+        emit_action_result false "Dataset already exists." "$dataset_name"
+        exit 1
+    fi
+
+    if output="$(run_privileged zfs create "$dataset_name" 2>&1)"; then
+        write_last_result "success" "Created dataset ${dataset_name}."
+        emit_action_result true "Created dataset ${dataset_name}." "$output"
+    else
+        write_last_result "error" "Unable to create dataset."
+        emit_action_result false "Unable to create dataset." "$output"
+        exit 1
+    fi
+}
+
 do_destroy_snapshot() {
     snapshot_name="$1"
     valid_snapshot "$snapshot_name" || {
@@ -284,6 +339,9 @@ case "$action" in
         ;;
     create-snapshot)
         do_create_snapshot "${2:-}" "${3:-}" "${4:-}"
+        ;;
+    create-dataset)
+        do_create_dataset "${2:-}" "${3:-}"
         ;;
     destroy-snapshot)
         do_destroy_snapshot "${2:-}"
