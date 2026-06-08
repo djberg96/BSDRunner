@@ -69,14 +69,94 @@ valid_snapshot_label() {
 
 valid_dataset_child() {
     case "${1:-}" in
-        ""|*[!A-Za-z0-9_.:-]*)
+        ""|/*|*/|*//*|*[!A-Za-z0-9_./:-]*)
             return 1
             ;;
-        "."|"..")
+    esac
+
+    old_ifs="$IFS"
+    IFS='/'
+    set -- $1
+    IFS="$old_ifs"
+
+    for segment do
+        case "$segment" in
+            ""|"."|"..")
+                return 1
+                ;;
+        esac
+    done
+
+    return 0
+}
+
+valid_mountpoint() {
+    case "${1:-}" in
+        ""|inherit)
+            return 0
+            ;;
+        none|legacy)
+            return 0
+            ;;
+        /*)
+            case "$1" in
+                *" "*|*";"*|*"|"*|*"&"*|*">"*|*"<"*|*"\\"*|*'"'*)
+                    return 1
+                    ;;
+                *)
+                    return 0
+                    ;;
+            esac
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+valid_size_value() {
+    case "${1:-}" in
+        ""|inherit|none)
+            return 0
+            ;;
+        *[!0-9KkMmGgTtPpBb.]*|.*|*.*.*)
             return 1
             ;;
         *)
             return 0
+            ;;
+    esac
+}
+
+valid_compression_value() {
+    case "${1:-}" in
+        ""|inherit|on|off|lz4|zstd)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+valid_on_off_inherit() {
+    case "${1:-}" in
+        ""|inherit|on|off)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+valid_recordsize_value() {
+    case "${1:-}" in
+        ""|inherit|16K|32K|64K|128K|1M)
+            return 0
+            ;;
+        *)
+            return 1
             ;;
     esac
 }
@@ -261,6 +341,12 @@ do_create_snapshot() {
 do_create_dataset() {
     parent_dataset="$1"
     child_name="$2"
+    mountpoint="${3:-}"
+    quota="${4:-}"
+    reservation="${5:-}"
+    compression="${6:-}"
+    atime="${7:-}"
+    recordsize="${8:-}"
 
     valid_dataset "$parent_dataset" || {
         emit_action_result false "Invalid parent dataset." "Select an existing filesystem dataset from the list."
@@ -268,7 +354,37 @@ do_create_dataset() {
     }
 
     valid_dataset_child "$child_name" || {
-        emit_action_result false "Invalid dataset name." "Use only letters, numbers, dot, underscore, hyphen, or colon."
+        emit_action_result false "Invalid dataset name." "Use a relative dataset name or path, such as jails/dan."
+        exit 1
+    }
+
+    valid_mountpoint "$mountpoint" || {
+        emit_action_result false "Invalid mountpoint." "Use an absolute path, none, legacy, or leave it blank."
+        exit 1
+    }
+
+    valid_size_value "$quota" || {
+        emit_action_result false "Invalid quota." "Use values like 10G, 500M, none, or leave it blank."
+        exit 1
+    }
+
+    valid_size_value "$reservation" || {
+        emit_action_result false "Invalid reservation." "Use values like 10G, 500M, none, or leave it blank."
+        exit 1
+    }
+
+    valid_compression_value "$compression" || {
+        emit_action_result false "Invalid compression option." "Use inherit, on, off, lz4, or zstd."
+        exit 1
+    }
+
+    valid_on_off_inherit "$atime" || {
+        emit_action_result false "Invalid atime option." "Use inherit, on, or off."
+        exit 1
+    }
+
+    valid_recordsize_value "$recordsize" || {
+        emit_action_result false "Invalid recordsize option." "Use inherit, 16K, 32K, 64K, 128K, or 1M."
         exit 1
     }
 
@@ -289,7 +405,15 @@ do_create_dataset() {
         exit 1
     fi
 
-    if output="$(run_privileged zfs create "$dataset_name" 2>&1)"; then
+    set -- zfs create -p
+    [ -z "$mountpoint" ] || [ "$mountpoint" = "inherit" ] || set -- "$@" -o "mountpoint=$mountpoint"
+    [ -z "$quota" ] || [ "$quota" = "inherit" ] || set -- "$@" -o "quota=$quota"
+    [ -z "$reservation" ] || [ "$reservation" = "inherit" ] || set -- "$@" -o "reservation=$reservation"
+    [ -z "$compression" ] || [ "$compression" = "inherit" ] || set -- "$@" -o "compression=$compression"
+    [ -z "$atime" ] || [ "$atime" = "inherit" ] || set -- "$@" -o "atime=$atime"
+    [ -z "$recordsize" ] || [ "$recordsize" = "inherit" ] || set -- "$@" -o "recordsize=$recordsize"
+
+    if output="$(run_privileged "$@" "$dataset_name" 2>&1)"; then
         write_last_result "success" "Created dataset ${dataset_name}."
         emit_action_result true "Created dataset ${dataset_name}." "$output"
     else
@@ -341,7 +465,7 @@ case "$action" in
         do_create_snapshot "${2:-}" "${3:-}" "${4:-}"
         ;;
     create-dataset)
-        do_create_dataset "${2:-}" "${3:-}"
+        do_create_dataset "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" "${9:-}"
         ;;
     destroy-snapshot)
         do_destroy_snapshot "${2:-}"

@@ -13,7 +13,10 @@ ShellRoot {
 
     readonly property var palette: themeLoader.palette
     readonly property var snapshotPresets: ["manual", "before-update", "experiment"]
-    readonly property var datasetNamePresets: ["bastille", "jails", "data"]
+    readonly property var datasetNamePresets: ["jails", "data"]
+    readonly property var datasetCompressionOptions: ["inherit", "lz4", "zstd", "off"]
+    readonly property var datasetAtimeOptions: ["inherit", "off", "on"]
+    readonly property var datasetRecordsizeOptions: ["inherit", "16K", "32K", "64K", "128K", "1M"]
     property bool loading: false
     property bool runningAction: false
     property bool datasetDialogOpen: false
@@ -25,12 +28,23 @@ ShellRoot {
     property string activeActionArg2: ""
     property string activeActionLabel: ""
     property string activeActionArg3: ""
+    property string activeActionArg4: ""
+    property string activeActionArg5: ""
+    property string activeActionArg6: ""
+    property string activeActionArg7: ""
+    property string activeActionArg8: ""
     property string pendingActionId: ""
     property string pendingActionLabel: ""
     property string pendingActionDescription: ""
     property bool pendingSnapshotRecursive: false
     property string snapshotName: ""
     property string datasetChildName: ""
+    property string datasetMountpoint: ""
+    property string datasetQuota: ""
+    property string datasetReservation: ""
+    property string datasetCompression: "inherit"
+    property string datasetAtime: "inherit"
+    property string datasetRecordsize: "inherit"
     property string datasetToSelectAfterRefresh: ""
     property string selectedDatasetName: ""
     property string selectedSnapshotName: ""
@@ -162,6 +176,36 @@ ShellRoot {
         return selectedDatasetName + "/" + datasetChildName
     }
 
+    function optionIsSet(value) {
+        return value && value.length > 0 && value !== "inherit"
+    }
+
+    function datasetOptionsSummary() {
+        var options = []
+        if (optionIsSet(datasetMountpoint))
+            options.push("mountpoint=" + datasetMountpoint)
+        if (optionIsSet(datasetQuota))
+            options.push("quota=" + datasetQuota)
+        if (optionIsSet(datasetReservation))
+            options.push("reservation=" + datasetReservation)
+        if (optionIsSet(datasetCompression))
+            options.push("compression=" + datasetCompression)
+        if (optionIsSet(datasetAtime))
+            options.push("atime=" + datasetAtime)
+        if (optionIsSet(datasetRecordsize))
+            options.push("recordsize=" + datasetRecordsize)
+        return options.length > 0 ? "\n\nOptions: " + options.join(", ") : "\n\nOptions inherit from the parent."
+    }
+
+    function resetDatasetOptions() {
+        datasetMountpoint = ""
+        datasetQuota = ""
+        datasetReservation = ""
+        datasetCompression = "inherit"
+        datasetAtime = "inherit"
+        datasetRecordsize = "inherit"
+    }
+
     function selectedDatasetSnapshotCount() {
         return visibleSnapshots.length
     }
@@ -250,6 +294,7 @@ ShellRoot {
             return
         datasetDialogOpen = true
         datasetChildName = ""
+        resetDatasetOptions()
         clearPendingAction()
     }
 
@@ -260,7 +305,7 @@ ShellRoot {
         requestAction(
             "create-dataset",
             "Create dataset",
-            "Create " + datasetFullName() + "?"
+            "Create " + datasetFullName() + "?" + datasetOptionsSummary()
         )
     }
 
@@ -281,14 +326,29 @@ ShellRoot {
             activeActionArg1 = selectedDatasetName
             activeActionArg2 = snapshotName
             activeActionArg3 = pendingSnapshotRecursive ? "recursive" : ""
+            activeActionArg4 = ""
+            activeActionArg5 = ""
+            activeActionArg6 = ""
+            activeActionArg7 = ""
+            activeActionArg8 = ""
         } else if (pendingActionId === "create-dataset") {
             activeActionArg1 = selectedDatasetName
             activeActionArg2 = datasetChildName
-            activeActionArg3 = ""
+            activeActionArg3 = datasetMountpoint
+            activeActionArg4 = datasetQuota
+            activeActionArg5 = datasetReservation
+            activeActionArg6 = datasetCompression
+            activeActionArg7 = datasetAtime
+            activeActionArg8 = datasetRecordsize
         } else {
             activeActionArg1 = selectedSnapshotName
             activeActionArg2 = ""
             activeActionArg3 = ""
+            activeActionArg4 = ""
+            activeActionArg5 = ""
+            activeActionArg6 = ""
+            activeActionArg7 = ""
+            activeActionArg8 = ""
         }
         clearPendingAction()
         runActionProcess()
@@ -391,6 +451,7 @@ ShellRoot {
             if (activeActionId === "create-dataset") {
                 datasetToSelectAfterRefresh = activeActionArg1 + "/" + activeActionArg2
                 datasetChildName = ""
+                resetDatasetOptions()
                 centerPaneMode = "details"
                 rightPaneMode = "dataset"
             }
@@ -408,6 +469,11 @@ ShellRoot {
         activeActionArg1 = ""
         activeActionArg2 = ""
         activeActionArg3 = ""
+        activeActionArg4 = ""
+        activeActionArg5 = ""
+        activeActionArg6 = ""
+        activeActionArg7 = ""
+        activeActionArg8 = ""
         activeActionLabel = ""
         refreshSnapshot()
     }
@@ -446,7 +512,7 @@ ShellRoot {
         id: actionProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-zfs-backend.sh", root.activeActionId, root.activeActionArg1, root.activeActionArg2, root.activeActionArg3]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-zfs-backend.sh", root.activeActionId, root.activeActionArg1, root.activeActionArg2, root.activeActionArg3, root.activeActionArg4, root.activeActionArg5, root.activeActionArg6, root.activeActionArg7, root.activeActionArg8]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1636,8 +1702,8 @@ ShellRoot {
 
                 Rectangle {
                     anchors.centerIn: parent
-                    width: 420
-                    height: 364
+                    width: 760
+                    height: 598
                     radius: 8
                     color: root.palette.cardBackground
                     border.width: 1
@@ -1652,14 +1718,150 @@ ShellRoot {
                             width: parent.width
                             text: "Create Dataset"
                             color: root.palette.primaryText
-                            font.pixelSize: 22
+                            font.pixelSize: 24
                             font.bold: true
                             elide: Text.ElideRight
                         }
 
+                        Row {
+                            width: parent.width
+                            height: 88
+                            spacing: 12
+
+                            Rectangle {
+                                width: Math.floor((parent.width - 12) / 2)
+                                height: parent.height
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 6
+
+                                    Text {
+                                        text: "Parent"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.selectedDatasetName || "No dataset selected"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 17
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Nested paths create missing parent datasets."
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Column {
+                                width: Math.floor((parent.width - 12) / 2)
+                                height: parent.height
+                                spacing: 8
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 48
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: datasetNameInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        acceptedButtons: Qt.LeftButton
+                                        onClicked: datasetNameInput.forceActiveFocus()
+                                    }
+
+                                    TextInput {
+                                        id: datasetNameInput
+
+                                        anchors.fill: parent
+                                        anchors.margins: 11
+                                        text: root.datasetChildName
+                                        color: root.palette.primaryText
+                                        selectionColor: root.palette.accent
+                                        selectedTextColor: root.palette.frameBackground
+                                        font.pixelSize: 14
+                                        clip: true
+                                        onTextChanged: root.datasetChildName = text
+                                        onAccepted: root.requestCreateDataset()
+
+                                        Text {
+                                            anchors.fill: parent
+                                            visible: datasetNameInput.text.length === 0 && !datasetNameInput.activeFocus
+                                            text: "dataset name or path"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 14
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+
+                                Row {
+                                    width: parent.width
+                                    height: 30
+                                    spacing: 8
+
+                                    Repeater {
+                                        model: root.datasetNamePresets
+
+                                        Rectangle {
+                                            id: datasetPresetChip
+
+                                            required property string modelData
+
+                                            width: Math.floor((parent.width - 8) / 2)
+                                            height: 30
+                                            radius: 7
+                                            color: datasetPresetMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.datasetChildName === modelData ? root.palette.accent : root.palette.frameBorder
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                width: parent.width - 10
+                                                text: datasetPresetChip.modelData
+                                                color: root.datasetChildName === datasetPresetChip.modelData ? root.palette.accent : root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                font.bold: root.datasetChildName === datasetPresetChip.modelData
+                                                horizontalAlignment: Text.AlignHCenter
+                                                elide: Text.ElideRight
+                                            }
+
+                                            MouseArea {
+                                                id: datasetPresetMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    root.datasetChildName = datasetPresetChip.modelData
+                                                    datasetNameInput.forceActiveFocus()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Rectangle {
                             width: parent.width
-                            height: 54
+                            height: 292
                             radius: 8
                             color: root.palette.panelBackground
                             border.width: 1
@@ -1667,105 +1869,334 @@ ShellRoot {
 
                             Column {
                                 anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 3
+                                anchors.margins: 12
+                                spacing: 10
 
                                 Text {
-                                    text: "Parent"
-                                    color: root.palette.mutedText
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    width: parent.width
-                                    text: root.selectedDatasetName || "No dataset selected"
-                                    color: root.palette.primaryText
+                                    text: "Dataset Options"
+                                    color: root.palette.accent
                                     font.pixelSize: 15
                                     font.bold: true
-                                    elide: Text.ElideRight
                                 }
-                            }
-                        }
 
-                        Rectangle {
-                            width: parent.width
-                            height: 42
-                            radius: 8
-                            color: root.palette.panelBackground
-                            border.width: 1
-                            border.color: datasetNameInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+                                Row {
+                                    width: parent.width
+                                    height: 72
+                                    spacing: 10
 
-                            MouseArea {
-                                anchors.fill: parent
-                                acceptedButtons: Qt.LeftButton
-                                onClicked: datasetNameInput.forceActiveFocus()
-                            }
+                                    Column {
+                                        width: Math.floor((parent.width - 20) / 3)
+                                        height: parent.height
+                                        spacing: 6
 
-                            TextInput {
-                                id: datasetNameInput
+                                        Text {
+                                            text: "Mountpoint"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
 
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                text: root.datasetChildName
-                                color: root.palette.primaryText
-                                selectionColor: root.palette.accent
-                                selectedTextColor: root.palette.frameBackground
-                                font.pixelSize: 14
-                                clip: true
-                                onTextChanged: root.datasetChildName = text
-                                onAccepted: root.requestCreateDataset()
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 42
+                                            radius: 8
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: datasetMountpointInput.activeFocus ? root.palette.accent : root.palette.frameBorder
 
-                                Text {
-                                    anchors.fill: parent
-                                    visible: datasetNameInput.text.length === 0 && !datasetNameInput.activeFocus
-                                    text: "child dataset name"
-                                    color: root.palette.mutedText
-                                    font.pixelSize: 14
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                            }
-                        }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                acceptedButtons: Qt.LeftButton
+                                                onClicked: datasetMountpointInput.forceActiveFocus()
+                                            }
 
-                        Row {
-                            width: parent.width
-                            spacing: 8
+                                            TextInput {
+                                                id: datasetMountpointInput
 
-                            Repeater {
-                                model: root.datasetNamePresets
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                text: root.datasetMountpoint
+                                                color: root.palette.primaryText
+                                                selectionColor: root.palette.accent
+                                                selectedTextColor: root.palette.frameBackground
+                                                font.pixelSize: 13
+                                                clip: true
+                                                onTextChanged: root.datasetMountpoint = text
 
-                                Rectangle {
-                                    id: datasetPresetChip
-
-                                    required property string modelData
-
-                                    width: Math.floor((parent.width - 16) / 3)
-                                    height: 28
-                                    radius: 7
-                                    color: datasetPresetMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
-                                    border.width: 1
-                                    border.color: root.datasetChildName === modelData ? root.palette.accent : root.palette.frameBorder
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        width: parent.width - 10
-                                        text: datasetPresetChip.modelData
-                                        color: root.datasetChildName === datasetPresetChip.modelData ? root.palette.accent : root.palette.secondaryText
-                                        font.pixelSize: 11
-                                        font.bold: root.datasetChildName === datasetPresetChip.modelData
-                                        horizontalAlignment: Text.AlignHCenter
-                                        elide: Text.ElideRight
+                                                Text {
+                                                    anchors.fill: parent
+                                                    visible: datasetMountpointInput.text.length === 0 && !datasetMountpointInput.activeFocus
+                                                    text: "inherit, /path, none"
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 13
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                            }
+                                        }
                                     }
 
-                                    MouseArea {
-                                        id: datasetPresetMouse
+                                    Column {
+                                        width: Math.floor((parent.width - 20) / 3)
+                                        height: parent.height
+                                        spacing: 6
 
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            root.datasetChildName = datasetPresetChip.modelData
-                                            datasetNameInput.forceActiveFocus()
+                                        Text {
+                                            text: "Quota"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 42
+                                            radius: 8
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: datasetQuotaInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                acceptedButtons: Qt.LeftButton
+                                                onClicked: datasetQuotaInput.forceActiveFocus()
+                                            }
+
+                                            TextInput {
+                                                id: datasetQuotaInput
+
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                text: root.datasetQuota
+                                                color: root.palette.primaryText
+                                                selectionColor: root.palette.accent
+                                                selectedTextColor: root.palette.frameBackground
+                                                font.pixelSize: 13
+                                                clip: true
+                                                onTextChanged: root.datasetQuota = text
+
+                                                Text {
+                                                    anchors.fill: parent
+                                                    visible: datasetQuotaInput.text.length === 0 && !datasetQuotaInput.activeFocus
+                                                    text: "inherit, none, 10G"
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 13
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Column {
+                                        width: Math.floor((parent.width - 20) / 3)
+                                        height: parent.height
+                                        spacing: 6
+
+                                        Text {
+                                            text: "Reservation"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 42
+                                            radius: 8
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: datasetReservationInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                acceptedButtons: Qt.LeftButton
+                                                onClicked: datasetReservationInput.forceActiveFocus()
+                                            }
+
+                                            TextInput {
+                                                id: datasetReservationInput
+
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                text: root.datasetReservation
+                                                color: root.palette.primaryText
+                                                selectionColor: root.palette.accent
+                                                selectedTextColor: root.palette.frameBackground
+                                                font.pixelSize: 13
+                                                clip: true
+                                                onTextChanged: root.datasetReservation = text
+
+                                                Text {
+                                                    anchors.fill: parent
+                                                    visible: datasetReservationInput.text.length === 0 && !datasetReservationInput.activeFocus
+                                                    text: "inherit, none, 5G"
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 13
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Row {
+                                    width: parent.width
+                                    height: 168
+                                    spacing: 10
+
+                                    Column {
+                                        width: Math.floor((parent.width - 20) / 3)
+                                        height: parent.height
+                                        spacing: 8
+
+                                        Text {
+                                            text: "Compression"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        Column {
+                                            width: parent.width
+                                            spacing: 6
+
+                                            Repeater {
+                                                model: root.datasetCompressionOptions
+
+                                                Rectangle {
+                                                    id: compressionChip
+
+                                                    required property string modelData
+
+                                                    width: parent.width
+                                                    height: 28
+                                                    radius: 7
+                                                    color: compressionMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: root.datasetCompression === modelData ? root.palette.accent : root.palette.frameBorder
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: compressionChip.modelData
+                                                        color: root.datasetCompression === compressionChip.modelData ? root.palette.accent : root.palette.secondaryText
+                                                        font.pixelSize: 11
+                                                        font.bold: root.datasetCompression === compressionChip.modelData
+                                                    }
+
+                                                    MouseArea {
+                                                        id: compressionMouse
+
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: root.datasetCompression = compressionChip.modelData
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Column {
+                                        width: Math.floor((parent.width - 20) / 3)
+                                        height: parent.height
+                                        spacing: 8
+
+                                        Text {
+                                            text: "Atime"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        Column {
+                                            width: parent.width
+                                            spacing: 6
+
+                                            Repeater {
+                                                model: root.datasetAtimeOptions
+
+                                                Rectangle {
+                                                    id: atimeChip
+
+                                                    required property string modelData
+
+                                                    width: parent.width
+                                                    height: 28
+                                                    radius: 7
+                                                    color: atimeMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: root.datasetAtime === modelData ? root.palette.accent : root.palette.frameBorder
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: atimeChip.modelData
+                                                        color: root.datasetAtime === atimeChip.modelData ? root.palette.accent : root.palette.secondaryText
+                                                        font.pixelSize: 11
+                                                        font.bold: root.datasetAtime === atimeChip.modelData
+                                                    }
+
+                                                    MouseArea {
+                                                        id: atimeMouse
+
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: root.datasetAtime = atimeChip.modelData
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Column {
+                                        width: Math.floor((parent.width - 20) / 3)
+                                        height: parent.height
+                                        spacing: 8
+
+                                        Text {
+                                            text: "Recordsize"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        Grid {
+                                            width: parent.width
+                                            columns: 2
+                                            spacing: 6
+
+                                            Repeater {
+                                                model: root.datasetRecordsizeOptions
+
+                                                Rectangle {
+                                                    id: recordsizeChip
+
+                                                    required property string modelData
+
+                                                    width: Math.floor((parent.width - 6) / 2)
+                                                    height: 28
+                                                    radius: 7
+                                                    color: recordsizeMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: root.datasetRecordsize === modelData ? root.palette.accent : root.palette.frameBorder
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: recordsizeChip.modelData
+                                                        color: root.datasetRecordsize === recordsizeChip.modelData ? root.palette.accent : root.palette.secondaryText
+                                                        font.pixelSize: 11
+                                                        font.bold: root.datasetRecordsize === recordsizeChip.modelData
+                                                    }
+
+                                                    MouseArea {
+                                                        id: recordsizeMouse
+
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: root.datasetRecordsize = recordsizeChip.modelData
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1793,10 +2224,11 @@ ShellRoot {
                         }
 
                         Row {
+                            width: parent.width
                             spacing: 10
 
                             Rectangle {
-                                width: 185
+                                width: Math.floor((parent.width - 10) / 2)
                                 height: 42
                                 radius: 8
                                 color: datasetCreateMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.12)
@@ -1824,7 +2256,7 @@ ShellRoot {
                             }
 
                             Rectangle {
-                                width: 185
+                                width: Math.floor((parent.width - 10) / 2)
                                 height: 42
                                 radius: 8
                                 color: datasetCancelMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
