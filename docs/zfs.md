@@ -24,15 +24,21 @@ The first version shows:
 Actions are handled by `bsdrunner-zfs-backend.sh`, which wraps `zfs` and `zpool`. Dataset creation, snapshot creation, recursive snapshot creation, rollback, and deletion use `mdo` when it is available.
 
 Dataset creation is intentionally narrow: select an existing filesystem dataset
-as the parent, choose a child name, then confirm. BSDRunner runs:
+as the parent, choose a relative child name or path, optionally set a small
+allow-list of common ZFS properties, then confirm. Blank or `inherit` options
+are omitted so ZFS uses the parent/default behavior. BSDRunner runs:
 
 ```sh
-zfs create PARENT/CHILD
+zfs create -p [-o property=value ...] PARENT/CHILD[/GRANDCHILD...]
 ```
 
-The UI includes quick-fill names such as `bastille` and `jails` because those
-are useful for later jail setup, but the action is generic and can create any
-ordinary child dataset with a conservative name.
+The UI includes quick-fill names such as `jails` and `data`, but the action is
+generic and can create any ordinary child dataset with a conservative name.
+Nested names such as `jails/dan` are allowed; missing intermediate datasets are
+created automatically by `zfs create -p`.
+Supported creation-time properties are `mountpoint`, `quota`, `reservation`,
+`compression`, `atime`, and `recordsize`. BSDRunner validates these before
+calling `zfs create`; it does not pass arbitrary property strings through.
 
 Snapshot labels are optional. If left blank, BSDRunner creates a timestamped label such as `bsdrunner-20260601-143000`. Manual labels may contain letters, numbers, dots, underscores, and hyphens.
 
