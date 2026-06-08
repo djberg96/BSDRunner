@@ -33,6 +33,7 @@ ShellRoot {
     property bool logLoading: false
     property bool logFollowing: false
     property bool stoppingLogFollow: false
+    property bool filterLogNoise: false
     property string viewerMode: "logs"
     property string logMessage: "PF logs are loaded on demand."
     property string logText: "Enable blocked-attempt logging, apply the profile, then refresh logs after blocked traffic occurs."
@@ -178,6 +179,38 @@ ShellRoot {
         }
 
         return "";
+    }
+
+    function isNoiseLogLine(line) {
+        return line.indexOf("239.255.255.250.1900") >= 0
+            || line.indexOf("239.255.255.250.1902") >= 0
+            || line.indexOf("192.168.1.255.57621") >= 0
+            || line.indexOf("ff02::fb.5353") >= 0
+            || line.indexOf("224.0.0.1: igmp") >= 0;
+    }
+
+    function displayLogText() {
+        if (!filterLogNoise || !logText || logText.length === 0)
+            return logText;
+
+        var lines = logText.split("\n");
+        var kept = [];
+        var hidden = 0;
+        for (var i = 0; i < lines.length; i += 1) {
+            if (isNoiseLogLine(lines[i])) {
+                hidden += 1;
+            } else {
+                kept.push(lines[i]);
+            }
+        }
+
+        if (hidden > 0)
+            kept.unshift("Filtered " + hidden + " LAN discovery noise line(s): SSDP/UPnP, Spotify broadcast, mDNS, or IGMP.");
+
+        if (kept.length === 0)
+            return "Filtered " + hidden + " LAN discovery noise line(s). No other pflog entries are visible.";
+
+        return kept.join("\n");
     }
 
     function statusDetailText() {
@@ -1331,7 +1364,7 @@ ShellRoot {
                                         spacing: 10
 
                                         Text {
-                                            width: parent.width - 306
+                                            width: parent.width - (root.viewerMode === "logs" ? 396 : 306)
                                             text: root.viewerMode === "penalty" ? "Penalty Box" : "pflog Viewer"
                                             color: root.viewerMode === "penalty" || root.settingValue("log_blocked") ? root.palette.warning : root.palette.primaryText
                                             font.pixelSize: 14
@@ -1387,6 +1420,33 @@ ShellRoot {
                                                 enabled: !root.logLoading && !root.runningAction
                                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                                 onClicked: root.toggleLogFollow()
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 90
+                                            height: 28
+                                            visible: root.viewerMode === "logs"
+                                            radius: 8
+                                            color: root.filterLogNoise ? Qt.alpha(root.palette.warning, 0.18) : root.palette.cardHover
+                                            border.width: 1
+                                            border.color: root.filterLogNoise ? root.palette.warning : root.palette.frameBorder
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Filter Noise"
+                                                color: root.filterLogNoise ? root.palette.warning : root.palette.secondaryText
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: filterNoiseMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.filterLogNoise = !root.filterLogNoise
                                             }
                                         }
 
@@ -1480,7 +1540,7 @@ ShellRoot {
                                                 id: logTextContent
 
                                                 width: logFlickable.width - 12
-                                                text: root.logText
+                                                text: root.displayLogText()
                                                 color: root.palette.secondaryText
                                                 selectionColor: root.palette.accent
                                                 selectedTextColor: root.palette.frameBackground
@@ -1512,6 +1572,29 @@ ShellRoot {
                                                     opacity: 0.78
                                                     height: Math.max(28, parent.height * (logFlickable.height / Math.max(logFlickable.contentHeight, 1)))
                                                     y: (parent.height - height) * (logFlickable.contentY / Math.max(logFlickable.contentHeight - logFlickable.height, 1))
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                visible: filterNoiseMouse.containsMouse
+                                                anchors.top: parent.top
+                                                anchors.right: parent.right
+                                                anchors.margins: 8
+                                                width: 292
+                                                height: 70
+                                                radius: 8
+                                                color: root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: root.palette.warning
+                                                z: 10
+
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 10
+                                                    text: "Hides common LAN discovery chatter from this view: SSDP/UPnP, Spotify broadcast, mDNS, and IGMP. PF still blocks/logs the traffic."
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 11
+                                                    wrapMode: Text.WordWrap
                                                 }
                                             }
                                         }
