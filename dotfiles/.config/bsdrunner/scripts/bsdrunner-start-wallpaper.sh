@@ -14,18 +14,25 @@ wallpaper_path="$(tr -d '\n' < "$wallpaper_file")"
 [ -f "$wallpaper_path" ] || exit 0
 
 wallpaper_dir="$(dirname "$wallpaper_path")"
+daemon_log="/tmp/bsdrunner-swww-daemon.log"
 
 pkill swww-daemon >/dev/null 2>&1 || true
 
 if swww-daemon --help 2>/dev/null | grep -q -- '--no-cache'; then
-    swww-daemon --no-cache >/dev/null 2>&1 &
+    swww-daemon --no-cache > "$daemon_log" 2>&1 &
 else
-    swww-daemon >/dev/null 2>&1 &
+    swww-daemon > "$daemon_log" 2>&1 &
 fi
-sleep 1
+sleep 2
+
+if ! pgrep -x swww-daemon >/dev/null 2>&1; then
+    echo ":: swww-daemon failed to start" >&2
+    [ -s "$daemon_log" ] && cat "$daemon_log" >&2
+    exit 1
+fi
 
 theme_wallpapers() {
-    find "$wallpaper_dir" -maxdepth 1 -type f | sort
+    find "$wallpaper_dir" -maxdepth 1 -type f ! -name '.*' ! -name '._*' | sort
 }
 
 preferred_wallpaper_for_stem() {
@@ -118,10 +125,15 @@ wallpaper_for_workspace() {
     printf '%s\n' "$default_wallpaper"
 }
 
+set_wallpaper_image() {
+    target_wallpaper="$1"
+    swww img "$target_wallpaper"
+}
+
 apply_workspace_wallpaper() {
     workspace_id="$1"
     if ! [ "$workspace_id" -gt 0 ] 2>/dev/null; then
-        swww img "$wallpaper_path" >/dev/null 2>&1 || true
+        set_wallpaper_image "$wallpaper_path" || echo ":: Failed to apply wallpaper: $wallpaper_path" >&2
         return 0
     fi
 
@@ -130,7 +142,7 @@ apply_workspace_wallpaper() {
         target_wallpaper="$wallpaper_path"
     fi
 
-    swww img "$target_wallpaper" >/dev/null 2>&1 || true
+    set_wallpaper_image "$target_wallpaper" || echo ":: Failed to apply wallpaper: $target_wallpaper" >&2
 }
 
 last_workspace_id=""

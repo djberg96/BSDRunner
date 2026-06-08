@@ -32,7 +32,7 @@ current_theme() {
 }
 
 theme_wallpapers() {
-    find "$wallpaper_dir" -maxdepth 1 -type f | sort
+    find "$wallpaper_dir" -maxdepth 1 -type f ! -name '.*' ! -name '._*' | sort
 }
 
 preferred_wallpaper_for_stem() {

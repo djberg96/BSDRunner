@@ -19,7 +19,7 @@ wallpaper_path="$(tr -d '\n' < "$wallpaper_file")"
 wallpaper_dir="$(dirname "$wallpaper_path")"
 
 theme_wallpapers() {
-    find "$wallpaper_dir" -maxdepth 1 -type f | sort
+    find "$wallpaper_dir" -maxdepth 1 -type f ! -name '.*' ! -name '._*' | sort
 }
 
 current_theme() {

@@ -45,6 +45,7 @@ tooltip {
 }
 
 #custom-theme {
+    margin-left: 4px;
     color: #d8dee9;
     font-weight: 800;
     letter-spacing: 0.08em;
@@ -145,6 +146,7 @@ tooltip {
 }
 
 #custom-power {
+    margin-right: 4px;
     color: #eceff4;
     font-weight: 700;
 }
