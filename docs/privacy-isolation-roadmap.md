@@ -4,7 +4,7 @@
 
 Plan future BSDRunner control surfaces for everyday privacy and isolation work:
 
-- managing FreeBSD jails through a friendly Bastille-backed UI
+- managing FreeBSD jails through a friendly plain-jails-first UI
 - managing WireGuard client VPN profiles for laptop privacy
 - adding per-file GPG encryption actions to BSDRunner Files
 
@@ -67,9 +67,17 @@ Each new app should follow the existing BSDRunner app shape:
 
 Jails should be the first concrete feature from this roadmap.
 
-V1 should use Bastille as the management layer rather than editing raw
-`jail.conf`. If Bastille is not installed, the backend should return a clear
-missing-dependency status with install guidance instead of failing silently.
+V1 should use plain FreeBSD jails as the baseline rather than requiring
+Bastille. The backend should read native jail state with tools such as `jls`,
+`jail`, `service jail`, `/etc/jail.conf`, and `/etc/jail.conf.d`. This keeps
+BSDRunner useful on a standalone laptop or workstation without adopting a
+larger jail framework before the product shape is clear.
+
+Bastille should remain an optional backend for service-jail workflows, not the
+required V1 foundation. If Bastille is installed, a later backend mode can use
+it for release bootstrapping, templates, cloning, snapshots, quotas, and other
+container-management features. If Bastille is not installed, the plain backend
+should still work.
 
 The first version should be read-mostly with lifecycle actions only:
 
@@ -80,9 +88,57 @@ The first version should be read-mostly with lifecycle actions only:
 - open a console in a terminal
 - show best-effort recent logs or command output
 
-V1 should not create, destroy, clone, template, upgrade, or deeply edit jail
-networking. Those are later features once the status and lifecycle workflow
+V1 should not deeply edit jail networking, template systems, or desktop app
+permissions. Those are later features once the status and lifecycle workflow
 feels trustworthy.
+
+### Provisioning Model
+
+Plain jails share the host kernel but still need a provisioned userland root.
+BSDRunner should make this explicit in the UI. A future `Create Jail` workflow
+should visibly perform the provisioning steps rather than implying that
+`jail(8)` creates a filesystem automatically.
+
+For the first creation workflow, prefer a thick jail because it is easiest to
+understand:
+
+- create or select a ZFS dataset/path
+- fetch or reuse a FreeBSD `base.txz`
+- extract the base userland into the jail root
+- create the jail's `/dev` mountpoint
+- write a simple `/etc/jail.conf.d/NAME.conf`
+- optionally add a host `/etc/hosts` entry
+- start the jail only after explicit confirmation
+
+Thin or shared-base jails should come later. They are attractive for many app
+jails because they reduce duplication, but they add nullfs mounts and update
+coordination that should not be hidden in V1.
+
+### Jail Types
+
+BSDRunner should treat service jails and desktop app jails as related but
+different products.
+
+Service jails are for things like Postgres, Redis, nginx, mail, or development
+services:
+
+- usually long-running
+- often started at boot
+- have stable IP and hostname settings
+- store application data in a dedicated dataset
+- are managed like system services
+
+Desktop app jails are closer to a FreeBSD-native Flatpak-like idea:
+
+- launched on demand from the Apps surface
+- need carefully scoped access to display sockets, audio, GPU/device nodes,
+  fonts, downloads, clipboard, and selected host folders
+- should avoid broad home-directory access by default
+- need profile-style permissions rather than only service lifecycle controls
+
+V1 should start with service-style lifecycle management. A desktop app jail
+prototype, such as Firefox in a jail, should be a later dedicated experiment
+because the display/audio/filesystem integration is the hard part.
 
 ### Jail Storage
 
@@ -90,16 +146,36 @@ Jails should use a dedicated ZFS dataset when ZFS is available. The suggested
 default for a normal BSDRunner install is:
 
 ```text
-zroot/bastille
+zroot/jails
 ```
 
-Use `POOL/bastille` as the general pattern when the primary pool is not named
+Use `POOL/jails` as the general pattern when the primary pool is not named
 `zroot`. This should be a dataset created inside an existing pool, not a new
 pool created from an existing pool.
 
-The Jails app should eventually detect whether Bastille is using a dedicated
-ZFS-backed storage location. Creating that dataset belongs in a future ZFS GUI
-`Create Dataset` workflow, not in Jails V1.
+The Jails app should eventually detect whether a dedicated ZFS-backed storage
+location exists. Creating that dataset belongs in the ZFS GUI `Create Dataset`
+workflow, not in Jails V1. The ZFS GUI should support ordinary nested dataset
+paths such as `jails/postgres` or `jails/firefox` without making jails-specific
+assumptions.
+
+### Bastille Role
+
+Bastille should be evaluated as an optional service-jail automation backend.
+It may save work for:
+
+- release bootstrapping
+- thick/thin jail creation
+- templates
+- cloning
+- snapshots and backups
+- quotas and resource limits
+- command execution and console helpers
+
+BSDRunner should not assume Bastille provides the whole desktop app sandbox
+experience. If BSDRunner pursues Flatpak-like app jails, the UI will still need
+BSDRunner-specific permission profiles, launcher integration, and display/audio
+mount handling.
 
 ## WireGuard V1
 
@@ -143,8 +219,9 @@ choosing a privacy action, and continuing navigation.
 
 Possible follow-up features:
 
-- jail creation and destruction with strong confirmations
-- Bastille template and release management
+- plain jail creation and destruction with strong confirmations
+- optional Bastille template and release management
+- desktop app jail profiles and launcher integration
 - WireGuard profile health checks and DNS leak checks
 - optional PF-backed WireGuard kill switch
 - GPG recipient favorites
