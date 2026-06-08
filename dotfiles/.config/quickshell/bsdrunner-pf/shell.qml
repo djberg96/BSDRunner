@@ -1476,15 +1476,21 @@ ShellRoot {
                                                     contentY = Math.max(0, contentHeight - height);
                                             }
 
-                                            Text {
+                                            TextEdit {
                                                 id: logTextContent
 
                                                 width: logFlickable.width - 12
                                                 text: root.logText
                                                 color: root.palette.secondaryText
+                                                selectionColor: root.palette.accent
+                                                selectedTextColor: root.palette.frameBackground
                                                 font.family: "monospace"
-                                                font.pixelSize: 12
-                                                wrapMode: Text.WrapAnywhere
+                                                font.pixelSize: 13
+                                                readOnly: true
+                                                selectByKeyboard: true
+                                                selectByMouse: true
+                                                persistentSelection: true
+                                                wrapMode: TextEdit.WrapAnywhere
                                             }
 
                                             Rectangle {
