@@ -1025,6 +1025,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Files"
+        implicitWidth: 980
+        implicitHeight: 620
         minimumSize: Qt.size(980, 620)
         maximumSize: Qt.size(980, 620)
         color: "transparent"

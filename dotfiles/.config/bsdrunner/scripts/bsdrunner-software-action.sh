@@ -134,7 +134,7 @@ planned_removed_packages() {
 
 protected_package() {
     case "$1" in
-        dbus|dolphin|foot|hyprland|hyprlauncher|kitty|mate-polkit|polkit|quickshell|rofi|rofi-wayland|seatd|swww|waybar|wlogout|xdg-desktop-portal|xdg-desktop-portal-gtk|xdg-desktop-portal-hyprland|xdg-utils)
+        dbus|dolphin|foot|hyprland|hyprlauncher|kitty|librsvg2|librsvg2-rust|mate-polkit|polkit|quickshell|rofi|rofi-wayland|seatd|swww|waybar|wlogout|xdg-desktop-portal|xdg-desktop-portal-gtk|xdg-desktop-portal-hyprland|xdg-utils)
             return 0
             ;;
         *)
@@ -266,6 +266,11 @@ case "$action" in
     install|reinstall|upgrade|remove)
         if ! package_name_is_valid "$package_name"; then
             emit_json false "Invalid package name: $package_name" "" ""
+            exit 1
+        fi
+        if protected_package "$package_name"; then
+            details="$(printf '%s is protected because BSDRunner depends on it for the desktop session or core UI. The Software Manager will not install, reinstall, upgrade, or remove protected packages.\n\nUse the terminal if you intentionally want to change the desktop stack.' "$package_name")"
+            emit_json false "Blocked $action for protected BSDRunner package $package_name." "$details" ""
             exit 1
         fi
         ;;

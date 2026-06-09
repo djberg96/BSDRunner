@@ -66,6 +66,8 @@ ShellRoot {
         "hyprland",
         "hyprlauncher",
         "kitty",
+        "librsvg2",
+        "librsvg2-rust",
         "mate-polkit",
         "polkit",
         "quickshell",
@@ -665,6 +667,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Software"
+        implicitWidth: 1160
+        implicitHeight: 680
         minimumSize: Qt.size(1160, 680)
         maximumSize: Qt.size(1160, 680)
         color: "transparent"
