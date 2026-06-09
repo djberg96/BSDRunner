@@ -4,10 +4,11 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 theme="default"
+profile="auto"
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/install-dotfiles.sh [-t THEME|--theme THEME]
+Usage: ./scripts/install-dotfiles.sh [-t THEME|--theme THEME] [--profile auto|laptop|vm]
 
 Themes:
   default
@@ -15,6 +16,11 @@ Themes:
   jinteki
   nbn
   weyland
+
+Profiles:
+  auto    Detect laptop-only helpers where possible
+  laptop  Enable laptop-oriented helpers
+  vm      Skip laptop-only helpers such as lid handling
 EOF
 }
 
@@ -204,6 +210,15 @@ while [[ $# -gt 0 ]]; do
             theme="$2"
             shift
             ;;
+        --profile)
+            [[ $# -ge 2 ]] || {
+                echo ":: Missing profile name for $1" >&2
+                usage
+                exit 1
+            }
+            profile="$2"
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -222,6 +237,16 @@ if ! theme_exists "$theme"; then
     usage
     exit 1
 fi
+
+case "$profile" in
+    auto|laptop|vm)
+        ;;
+    *)
+        echo ":: Unknown profile: $profile" >&2
+        usage
+        exit 1
+        ;;
+esac
 
 cleanup_stale_theme_waybar_configs() {
     local theme_name=""
@@ -273,6 +298,7 @@ if [[ ! -f "$HOME/.config/bsdrunner/pf/profile.conf" ]]; then
 fi
 
 printf '%s\n' "$theme" > "$HOME/.config/bsdrunner/current-theme"
+printf 'target_profile=%s\n' "$profile" > "$HOME/.config/bsdrunner/profile.conf"
 
 cp "$repo_root/dotfiles/.config/kitty/kitty.conf" \
    "$HOME/.config/bsdrunner/base/kitty.conf"

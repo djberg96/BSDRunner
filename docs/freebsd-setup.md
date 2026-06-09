@@ -102,6 +102,16 @@ To apply a corp theme during install:
 ./scripts/install-dotfiles.sh --theme jinteki
 ```
 
+For a VM or other non-laptop target, use the VM profile:
+
+```sh
+./scripts/install-dotfiles.sh --theme default --profile vm
+```
+
+The VM profile keeps the regular Hyprland, Waybar, wallpaper, launcher, and
+theme files, but skips laptop-only helpers such as lid handling. This is the
+recommended first pass for UTM, QEMU, bhyve, and other virtual machines.
+
 Implemented corp themes:
 
 - `jinteki`
