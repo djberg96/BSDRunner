@@ -107,6 +107,107 @@ nameservers_json() {
     printf ']'
 }
 
+forwarders_json() {
+    files=""
+    for file in /var/unbound/forward.conf /var/unbound/conf.d/*.conf; do
+        [ -r "$file" ] || continue
+        files="${files}${files:+ }${file}"
+    done
+
+    [ -n "$files" ] || {
+        printf '[]'
+        return
+    }
+
+    awk '
+        function trim(value) {
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            return value
+        }
+
+        function json_escape(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            gsub(/\t/, "\\t", value)
+            gsub(/\r/, "", value)
+            return value
+        }
+
+        function basename(path, parts, count) {
+            count = split(path, parts, "/")
+            return parts[count]
+        }
+
+        function emit_forwarder(i) {
+            if (!in_forward || zone == "" || target_count == 0)
+                return
+
+            if (!first)
+                printf ","
+            first = 0
+
+            printf "{\"zone\":\"%s\",\"source\":\"%s\",\"targets\":[", json_escape(zone), json_escape(basename(source_file))
+            for (i = 1; i <= target_count; i += 1) {
+                if (i > 1)
+                    printf ","
+                printf "\"%s\"", json_escape(targets[i])
+            }
+            printf "]}"
+        }
+
+        BEGIN {
+            printf "["
+            first = 1
+            in_forward = 0
+        }
+
+        /^[[:space:]]*#/ || /^[[:space:]]*$/ {
+            next
+        }
+
+        /^[^[:space:]][A-Za-z_-]+:/ && $0 !~ /^[[:space:]]*forward-zone:/ {
+            emit_forwarder()
+            in_forward = 0
+            zone = ""
+            target_count = 0
+            next
+        }
+
+        /^[[:space:]]*forward-zone:/ {
+            emit_forwarder()
+            in_forward = 1
+            zone = ""
+            source_file = FILENAME
+            delete targets
+            target_count = 0
+            next
+        }
+
+        in_forward && /^[[:space:]]*name:/ {
+            value = $0
+            sub(/^[[:space:]]*name:[[:space:]]*/, "", value)
+            gsub(/^"/, "", value)
+            gsub(/"$/, "", value)
+            zone = trim(value)
+            next
+        }
+
+        in_forward && /^[[:space:]]*forward-(addr|host):/ {
+            value = $0
+            sub(/^[[:space:]]*forward-(addr|host):[[:space:]]*/, "", value)
+            target_count += 1
+            targets[target_count] = trim(value)
+            next
+        }
+
+        END {
+            emit_forwarder()
+            printf "]"
+        }
+    ' $files
+}
+
 last_result_value() {
     key="$1"
     [ -f "$state_file" ] || return 0
@@ -174,6 +275,8 @@ emit_snapshot() {
         "$(bool_json "$local_active")" \
         "$(printf '%s' "$search_domain" | json_escape)"
     nameservers_json
+    printf ',"forwarders":'
+    forwarders_json
     printf '},'
     printf '"tools":{"drill":%s,"local_unbound_setup":%s,"local_unbound_control":%s},' \
         "$(if command -v drill >/dev/null 2>&1; then printf true; else printf false; fi)" \

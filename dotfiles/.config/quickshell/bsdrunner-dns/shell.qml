@@ -31,6 +31,7 @@ ShellRoot {
     property bool localResolverActive: false
     property string searchDomain: ""
     property var nameservers: []
+    property var forwarders: []
     property bool hasDrill: false
     property bool hasSetup: false
     property bool hasControl: false
@@ -118,6 +119,17 @@ ShellRoot {
         if (!nameservers || nameservers.length === 0)
             return "No nameservers found"
         return nameservers.join("\n")
+    }
+
+    function forwarderZoneLabel(zone) {
+        if (zone === ".")
+            return "All other DNS"
+        return zone || "Unknown"
+    }
+
+    function forwarderTargetsText(forwarder) {
+        var targets = forwarder ? forwarder.targets || [] : []
+        return targets.length > 0 ? targets.join(", ") : "No targets"
     }
 
     function requestAction(actionId, label, description) {
@@ -230,6 +242,7 @@ ShellRoot {
         localResolverActive = payload.resolver ? !!payload.resolver.local_active : false
         searchDomain = payload.resolver ? payload.resolver.search || "" : ""
         nameservers = payload.resolver ? payload.resolver.nameservers || [] : []
+        forwarders = payload.resolver ? payload.resolver.forwarders || [] : []
         hasDrill = payload.tools ? !!payload.tools.drill : false
         hasSetup = payload.tools ? !!payload.tools.local_unbound_setup : false
         hasControl = payload.tools ? !!payload.tools.local_unbound_control : false
@@ -671,7 +684,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: parent.height - 96 - 16 - 24
+                                height: (parent.height - 96 - 16 - 24 - 10) / 2
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -684,7 +697,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Nameservers"
+                                        text: "System Nameservers"
                                         color: root.palette.mutedText
                                         font.pixelSize: 11
                                         font.bold: true
@@ -697,6 +710,91 @@ ShellRoot {
                                         font.pixelSize: 15
                                         font.family: "monospace"
                                         wrapMode: Text.WrapAnywhere
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: (parent.height - 96 - 16 - 24 - 10) / 2
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 8
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Forwarding Resolvers"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Column {
+                                        width: parent.width
+                                        spacing: 6
+
+                                        Text {
+                                            width: parent.width
+                                            visible: !root.forwarders || root.forwarders.length === 0
+                                            text: "No forward zones found"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.family: "monospace"
+                                            wrapMode: Text.WrapAnywhere
+                                        }
+
+                                        Repeater {
+                                            model: root.forwarders || []
+
+                                            delegate: Row {
+                                                id: forwarderRow
+
+                                                required property var modelData
+
+                                                width: parent.width
+                                                height: 18
+                                                spacing: 8
+
+                                                Text {
+                                                    width: 104
+                                                    height: parent.height
+                                                    text: root.forwarderZoneLabel(forwarderRow.modelData.zone)
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.family: "monospace"
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: 18
+                                                    height: parent.height
+                                                    text: "->"
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 12
+                                                    font.family: "monospace"
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+
+                                                Text {
+                                                    width: parent.width - 138
+                                                    height: parent.height
+                                                    text: root.forwarderTargetsText(forwarderRow.modelData)
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.family: "monospace"
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
