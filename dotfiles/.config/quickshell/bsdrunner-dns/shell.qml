@@ -29,6 +29,9 @@ ShellRoot {
     property bool serviceAvailable: true
     property bool bootEnabled: false
     property bool localResolverActive: false
+    property bool encryptedForwarding: false
+    property bool caBundleAvailable: false
+    property string caBundlePath: ""
     property string searchDomain: ""
     property var nameservers: []
     property var forwarders: []
@@ -147,6 +150,10 @@ ShellRoot {
             return !cacheEnabled
         case "disable":
             return cacheEnabled
+        case "enable_dot":
+            return !encryptedForwarding
+        case "disable_dot":
+            return encryptedForwarding
         default:
             return true
         }
@@ -240,6 +247,9 @@ ShellRoot {
         serviceAvailable = payload.service ? payload.service.available !== false : true
         bootEnabled = payload.boot ? !!payload.boot.enabled : false
         localResolverActive = payload.resolver ? !!payload.resolver.local_active : false
+        encryptedForwarding = payload.resolver ? !!payload.resolver.encrypted_forwarding : false
+        caBundleAvailable = payload.resolver ? !!payload.resolver.ca_bundle_available : false
+        caBundlePath = payload.resolver ? payload.resolver.ca_bundle || "" : ""
         searchDomain = payload.resolver ? payload.resolver.search || "" : ""
         nameservers = payload.resolver ? payload.resolver.nameservers || [] : []
         forwarders = payload.resolver ? payload.resolver.forwarders || [] : []
@@ -264,7 +274,7 @@ ShellRoot {
         }
 
         if (payload && payload.ok && exitCode === 0) {
-            statusTone = activeActionId === "disable" ? "warning" : "success"
+            statusTone = activeActionId === "disable" || activeActionId === "disable_dot" ? "warning" : "success"
             statusMessage = payload.message || "DNS action completed."
             actionDetails = payload.details || ""
         } else if (payload) {
@@ -557,7 +567,7 @@ ShellRoot {
                         model: [
                             {
                                 "id": "enable",
-                                "label": "Enable Cache",
+                                "label": "Enable",
                                 "description": "Enable local_unbound and route this laptop through the local cache."
                             },
                             {
@@ -567,12 +577,19 @@ ShellRoot {
                             },
                             {
                                 "id": "flush",
-                                "label": "Flush Cache",
+                                "label": "Flush",
                                 "description": "Clear cached DNS answers."
                             },
                             {
+                                "id": root.encryptedForwarding ? "disable_dot" : "enable_dot",
+                                "label": root.encryptedForwarding ? "Plain DNS" : "Encrypt DNS",
+                                "description": root.encryptedForwarding
+                                    ? "Switch public DNS forwarding back to ordinary unencrypted DNS. Local router domains stay unchanged."
+                                    : "Switch public DNS forwarding to DNS-over-TLS using Cloudflare and Google with certificate verification. Local router domains stay unchanged."
+                            },
+                            {
                                 "id": "disable",
-                                "label": "Disable Cache",
+                                "label": "Disable",
                                 "description": "Stop local_unbound and disable it at boot."
                             }
                         ]
@@ -585,7 +602,7 @@ ShellRoot {
                             readonly property bool actionEnabled: root.actionAvailable(modelData.id) && !root.runningAction
                             readonly property bool hovered: actionMouse.containsMouse && actionEnabled
 
-                            width: (parent.width - 30) / 4
+                            width: (parent.width - 40) / 5
                             height: parent.height
                             radius: 8
                             color: hovered ? root.palette.cardHover : root.palette.cardBackground
@@ -720,19 +737,44 @@ ShellRoot {
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.palette.frameBorder
+                                border.color: root.encryptedForwarding ? root.palette.success : root.palette.frameBorder
 
                                 Column {
                                     anchors.fill: parent
                                     anchors.margins: 12
                                     spacing: 8
 
-                                    Text {
+                                    Row {
                                         width: parent.width
-                                        text: "Forwarding Resolvers"
-                                        color: root.palette.mutedText
-                                        font.pixelSize: 11
-                                        font.bold: true
+                                        height: 16
+                                        spacing: 8
+
+                                        Text {
+                                            width: parent.width - 54
+                                            height: parent.height
+                                            text: "Forwarding Resolvers"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        Rectangle {
+                                            width: 46
+                                            height: 16
+                                            radius: 8
+                                            color: Qt.alpha(root.encryptedForwarding ? root.palette.success : root.palette.warning, 0.16)
+                                            border.width: 1
+                                            border.color: root.encryptedForwarding ? root.palette.success : root.palette.warning
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: root.encryptedForwarding ? "TLS" : "Plain"
+                                                color: root.encryptedForwarding ? root.palette.success : root.palette.warning
+                                                font.pixelSize: 9
+                                                font.bold: true
+                                            }
+                                        }
                                     }
 
                                     Column {
