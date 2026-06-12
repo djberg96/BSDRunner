@@ -200,19 +200,6 @@ ShellRoot {
         return null
     }
 
-    function kindIcon(kind) {
-        switch (kind) {
-        case "directory":
-            return "DIR"
-        case "symlink":
-            return "LNK"
-        case "other":
-            return "OBJ"
-        default:
-            return "FILE"
-        }
-    }
-
     function metaText(entry) {
         var parts = []
         if (entry.kind === "directory")
@@ -1553,7 +1540,7 @@ ShellRoot {
 
                             Text {
                                 anchors.centerIn: parent
-                                text: root.showHidden ? "Hidden On" : "Hidden Off"
+                                text: root.showHidden ? "Hide Hidden" : "Show Hidden"
                                 color: root.showHidden ? root.palette.accentStrong : root.palette.secondaryText
                                 font.pixelSize: 12
                                 font.bold: true
@@ -1596,10 +1583,9 @@ ShellRoot {
                             border.width: 1
                             border.color: root.palette.frameBorder
 
-                            readonly property real iconColumnWidth: 42
                             readonly property real columnSpacing: 10
                             readonly property real horizontalPadding: 18
-                            readonly property real availableColumnWidth: Math.max(340, width - horizontalPadding - iconColumnWidth - (columnSpacing * 4))
+                            readonly property real availableColumnWidth: Math.max(340, width - horizontalPadding - (columnSpacing * 3))
                             readonly property real actualModifiedColumnWidth: Math.max(104, Math.min(root.modifiedColumnWidth, Math.max(104, availableColumnWidth - 300)))
                             readonly property real actualTypeColumnWidth: Math.max(64, Math.min(root.typeColumnWidth, Math.max(64, availableColumnWidth - actualModifiedColumnWidth - 210)))
                             readonly property real actualSizeColumnWidth: Math.max(76, Math.min(root.sizeColumnWidth, Math.max(76, availableColumnWidth - actualModifiedColumnWidth - actualTypeColumnWidth - 120)))
@@ -1610,11 +1596,6 @@ ShellRoot {
                                 anchors.leftMargin: 8
                                 anchors.rightMargin: 10
                                 spacing: entryHeader.columnSpacing
-
-                                Item {
-                                    width: entryHeader.iconColumnWidth
-                                    height: parent.height
-                                }
 
                                 Text {
                                     width: entryHeader.actualNameColumnWidth
@@ -1691,7 +1672,7 @@ ShellRoot {
                             Rectangle {
                                 id: nameResizeGrip
 
-                                x: 8 + entryHeader.iconColumnWidth + entryHeader.columnSpacing + entryHeader.actualNameColumnWidth + (entryHeader.columnSpacing / 2) - (width / 2)
+                                x: 8 + entryHeader.actualNameColumnWidth + (entryHeader.columnSpacing / 2) - (width / 2)
                                 y: 2
                                 width: 16
                                 height: parent.height - 4
@@ -1735,7 +1716,7 @@ ShellRoot {
                             Rectangle {
                                 id: sizeResizeGrip
 
-                                x: 8 + entryHeader.iconColumnWidth + (entryHeader.columnSpacing * 2) + entryHeader.actualNameColumnWidth + entryHeader.actualSizeColumnWidth + (entryHeader.columnSpacing / 2) - (width / 2)
+                                x: 8 + entryHeader.actualNameColumnWidth + entryHeader.actualSizeColumnWidth + entryHeader.columnSpacing + (entryHeader.columnSpacing / 2) - (width / 2)
                                 y: 2
                                 width: 16
                                 height: parent.height - 4
@@ -1779,7 +1760,7 @@ ShellRoot {
                             Rectangle {
                                 id: typeResizeGrip
 
-                                x: 8 + entryHeader.iconColumnWidth + (entryHeader.columnSpacing * 3) + entryHeader.actualNameColumnWidth + entryHeader.actualSizeColumnWidth + entryHeader.actualTypeColumnWidth + (entryHeader.columnSpacing / 2) - (width / 2)
+                                x: 8 + entryHeader.actualNameColumnWidth + entryHeader.actualSizeColumnWidth + entryHeader.actualTypeColumnWidth + (entryHeader.columnSpacing * 2) + (entryHeader.columnSpacing / 2) - (width / 2)
                                 y: 2
                                 width: 16
                                 height: parent.height - 4
@@ -1922,24 +1903,6 @@ ShellRoot {
                                     anchors.rightMargin: 10
                                     spacing: 10
 
-                                    Rectangle {
-                                        width: entryHeader.iconColumnWidth
-                                        height: 24
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        radius: 6
-                                        color: Qt.alpha(themeLoader.actionAccent("files"), 0.16)
-                                        border.width: 1
-                                        border.color: themeLoader.actionAccent("files")
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: root.kindIcon(entryRow.modelData.kind)
-                                            color: themeLoader.actionAccent("files")
-                                            font.pixelSize: 9
-                                            font.bold: true
-                                        }
-                                    }
-
                                     Text {
                                         width: entryHeader.actualNameColumnWidth
                                         anchors.verticalCenter: parent.verticalCenter
@@ -2072,28 +2035,9 @@ ShellRoot {
                                 Row {
                                     width: parent.width
                                     height: 42
-                                    spacing: 10
-
-                                    Rectangle {
-                                        width: 44
-                                        height: 32
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        radius: 6
-                                        color: Qt.alpha(themeLoader.actionAccent("files"), 0.16)
-                                        border.width: 1
-                                        border.color: themeLoader.actionAccent("files")
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: root.selectedEntry() ? root.kindIcon(root.selectedEntry().kind) : "--"
-                                            color: themeLoader.actionAccent("files")
-                                            font.pixelSize: 10
-                                            font.bold: true
-                                        }
-                                    }
 
                                     Column {
-                                        width: parent.width - 54
+                                        width: parent.width
                                         anchors.verticalCenter: parent.verticalCenter
 
                                         Text {
