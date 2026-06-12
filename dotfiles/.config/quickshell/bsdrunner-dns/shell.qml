@@ -121,18 +121,15 @@ ShellRoot {
         return nameservers.join("\n")
     }
 
-    function forwarderText() {
-        if (!forwarders || forwarders.length === 0)
-            return "No forward zones found"
+    function forwarderZoneLabel(zone) {
+        if (zone === ".")
+            return "All other DNS"
+        return zone || "Unknown"
+    }
 
-        var lines = []
-        for (var i = 0; i < forwarders.length; i += 1) {
-            var forwarder = forwarders[i]
-            var zone = forwarder.zone || "?"
-            var targets = forwarder.targets || []
-            lines.push(zone + " -> " + (targets.length > 0 ? targets.join(", ") : "no targets"))
-        }
-        return lines.join("\n")
+    function forwarderTargetsText(forwarder) {
+        var targets = forwarder ? forwarder.targets || [] : []
+        return targets.length > 0 ? targets.join(", ") : "No targets"
     }
 
     function requestAction(actionId, label, description) {
@@ -738,13 +735,66 @@ ShellRoot {
                                         font.bold: true
                                     }
 
-                                    Text {
+                                    Column {
                                         width: parent.width
-                                        text: root.forwarderText()
-                                        color: root.palette.primaryText
-                                        font.pixelSize: 13
-                                        font.family: "monospace"
-                                        wrapMode: Text.WrapAnywhere
+                                        spacing: 6
+
+                                        Text {
+                                            width: parent.width
+                                            visible: !root.forwarders || root.forwarders.length === 0
+                                            text: "No forward zones found"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.family: "monospace"
+                                            wrapMode: Text.WrapAnywhere
+                                        }
+
+                                        Repeater {
+                                            model: root.forwarders || []
+
+                                            delegate: Row {
+                                                id: forwarderRow
+
+                                                required property var modelData
+
+                                                width: parent.width
+                                                height: 18
+                                                spacing: 8
+
+                                                Text {
+                                                    width: 104
+                                                    height: parent.height
+                                                    text: root.forwarderZoneLabel(forwarderRow.modelData.zone)
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.family: "monospace"
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: 18
+                                                    height: parent.height
+                                                    text: "->"
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 12
+                                                    font.family: "monospace"
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+
+                                                Text {
+                                                    width: parent.width - 138
+                                                    height: parent.height
+                                                    text: root.forwarderTargetsText(forwarderRow.modelData)
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.family: "monospace"
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
