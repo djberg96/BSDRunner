@@ -46,7 +46,8 @@ The DNS Cache GUI is a practical control surface:
 - service status
 - boot enabled/disabled
 - whether `/etc/resolv.conf` points at localhost
-- current nameservers
+- current system nameservers from `/etc/resolv.conf`
+- Unbound forwarding resolvers from `forward-zone` entries
 - enable, disable, restart, and flush actions
 - a simple lookup test
 

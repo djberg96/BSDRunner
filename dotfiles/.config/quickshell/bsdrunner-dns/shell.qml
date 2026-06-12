@@ -31,6 +31,7 @@ ShellRoot {
     property bool localResolverActive: false
     property string searchDomain: ""
     property var nameservers: []
+    property var forwarders: []
     property bool hasDrill: false
     property bool hasSetup: false
     property bool hasControl: false
@@ -118,6 +119,20 @@ ShellRoot {
         if (!nameservers || nameservers.length === 0)
             return "No nameservers found"
         return nameservers.join("\n")
+    }
+
+    function forwarderText() {
+        if (!forwarders || forwarders.length === 0)
+            return "No forward zones found"
+
+        var lines = []
+        for (var i = 0; i < forwarders.length; i += 1) {
+            var forwarder = forwarders[i]
+            var zone = forwarder.zone || "?"
+            var targets = forwarder.targets || []
+            lines.push(zone + " -> " + (targets.length > 0 ? targets.join(", ") : "no targets"))
+        }
+        return lines.join("\n")
     }
 
     function requestAction(actionId, label, description) {
@@ -230,6 +245,7 @@ ShellRoot {
         localResolverActive = payload.resolver ? !!payload.resolver.local_active : false
         searchDomain = payload.resolver ? payload.resolver.search || "" : ""
         nameservers = payload.resolver ? payload.resolver.nameservers || [] : []
+        forwarders = payload.resolver ? payload.resolver.forwarders || [] : []
         hasDrill = payload.tools ? !!payload.tools.drill : false
         hasSetup = payload.tools ? !!payload.tools.local_unbound_setup : false
         hasControl = payload.tools ? !!payload.tools.local_unbound_control : false
@@ -671,7 +687,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: parent.height - 96 - 16 - 24
+                                height: (parent.height - 96 - 16 - 24 - 10) / 2
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -684,7 +700,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Nameservers"
+                                        text: "System Nameservers"
                                         color: root.palette.mutedText
                                         font.pixelSize: 11
                                         font.bold: true
@@ -695,6 +711,38 @@ ShellRoot {
                                         text: root.nameserverText()
                                         color: root.palette.primaryText
                                         font.pixelSize: 15
+                                        font.family: "monospace"
+                                        wrapMode: Text.WrapAnywhere
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: (parent.height - 96 - 16 - 24 - 10) / 2
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 8
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Forwarding Resolvers"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.forwarderText()
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 13
                                         font.family: "monospace"
                                         wrapMode: Text.WrapAnywhere
                                     }
