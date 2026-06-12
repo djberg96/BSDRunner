@@ -130,9 +130,9 @@ ShellRoot {
         return zone || "Unknown"
     }
 
-    function forwarderTargetsText(forwarder) {
+    function forwarderTargets(forwarder) {
         var targets = forwarder ? forwarder.targets || [] : []
-        return targets.length > 0 ? targets.join(", ") : "No targets"
+        return targets.length > 0 ? targets : ["No targets"]
     }
 
     function requestAction(actionId, label, description) {
@@ -639,7 +639,7 @@ ShellRoot {
                     spacing: 14
 
                     Rectangle {
-                        width: 360
+                        width: (parent.width - 14) / 2
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -777,63 +777,92 @@ ShellRoot {
                                         }
                                     }
 
-                                    Column {
+                                    Flickable {
+                                        id: forwarderFlickable
+
                                         width: parent.width
-                                        spacing: 6
+                                        height: parent.height - 24
+                                        contentWidth: width
+                                        contentHeight: forwarderList.height
+                                        clip: true
+                                        boundsBehavior: Flickable.StopAtBounds
 
-                                        Text {
-                                            width: parent.width
-                                            visible: !root.forwarders || root.forwarders.length === 0
-                                            text: "No forward zones found"
-                                            color: root.palette.primaryText
-                                            font.pixelSize: 13
-                                            font.family: "monospace"
-                                            wrapMode: Text.WrapAnywhere
-                                        }
+                                        Column {
+                                            id: forwarderList
 
-                                        Repeater {
-                                            model: root.forwarders || []
+                                            width: forwarderFlickable.width
+                                            spacing: 6
 
-                                            delegate: Row {
-                                                id: forwarderRow
-
-                                                required property var modelData
-
+                                            Text {
                                                 width: parent.width
-                                                height: 18
-                                                spacing: 8
+                                                visible: !root.forwarders || root.forwarders.length === 0
+                                                text: "No forward zones found"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 13
+                                                font.family: "monospace"
+                                                wrapMode: Text.WrapAnywhere
+                                            }
 
-                                                Text {
-                                                    width: 104
-                                                    height: parent.height
-                                                    text: root.forwarderZoneLabel(forwarderRow.modelData.zone)
-                                                    color: root.palette.primaryText
-                                                    font.pixelSize: 12
-                                                    font.family: "monospace"
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    elide: Text.ElideRight
-                                                }
+                                            Repeater {
+                                                model: root.forwarders || []
 
-                                                Text {
-                                                    width: 18
-                                                    height: parent.height
-                                                    text: "->"
-                                                    color: root.palette.mutedText
-                                                    font.pixelSize: 12
-                                                    font.family: "monospace"
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                }
+                                                delegate: Column {
+                                                    id: forwarderBlock
 
-                                                Text {
-                                                    width: parent.width - 138
-                                                    height: parent.height
-                                                    text: root.forwarderTargetsText(forwarderRow.modelData)
-                                                    color: root.palette.primaryText
-                                                    font.pixelSize: 12
-                                                    font.family: "monospace"
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    elide: Text.ElideRight
+                                                    required property var modelData
+                                                    readonly property var targets: root.forwarderTargets(forwarderBlock.modelData)
+
+                                                    width: parent.width
+                                                    height: targets.length * 18 + Math.max(0, targets.length - 1) * 2
+                                                    spacing: 2
+
+                                                    Repeater {
+                                                        model: forwarderBlock.targets
+
+                                                        delegate: Row {
+                                                            id: targetRow
+
+                                                            required property int index
+                                                            required property var modelData
+
+                                                            width: forwarderBlock.width
+                                                            height: 18
+                                                            spacing: 8
+
+                                                            Text {
+                                                                width: 104
+                                                                height: parent.height
+                                                                text: targetRow.index === 0 ? root.forwarderZoneLabel(forwarderBlock.modelData.zone) : ""
+                                                                color: root.palette.primaryText
+                                                                font.pixelSize: 12
+                                                                font.family: "monospace"
+                                                                verticalAlignment: Text.AlignVCenter
+                                                                elide: Text.ElideRight
+                                                            }
+
+                                                            Text {
+                                                                width: 18
+                                                                height: parent.height
+                                                                text: "->"
+                                                                color: root.palette.mutedText
+                                                                font.pixelSize: 12
+                                                                font.family: "monospace"
+                                                                horizontalAlignment: Text.AlignHCenter
+                                                                verticalAlignment: Text.AlignVCenter
+                                                            }
+
+                                                            Text {
+                                                                width: parent.width - 138
+                                                                height: parent.height
+                                                                text: targetRow.modelData
+                                                                color: root.palette.primaryText
+                                                                font.pixelSize: 12
+                                                                font.family: "monospace"
+                                                                verticalAlignment: Text.AlignVCenter
+                                                                elide: Text.ElideRight
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -844,7 +873,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 374
+                        width: (parent.width - 14) / 2
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
