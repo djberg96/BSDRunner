@@ -6,6 +6,9 @@ PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH
 action="${1:-snapshot}"
 state_dir="${HOME}/.config/bsdrunner/dns"
 state_file="$state_dir/last-result.conf"
+public_forwarders_dir="/var/unbound/conf.d"
+public_forwarders_file="$public_forwarders_dir/public-forwarders.conf"
+ca_bundle_file="/usr/local/share/certs/ca-root-nss.crt"
 
 json_escape() {
     awk '
@@ -147,7 +150,7 @@ forwarders_json() {
                 printf ","
             first = 0
 
-            printf "{\"zone\":\"%s\",\"source\":\"%s\",\"targets\":[", json_escape(zone), json_escape(basename(source_file))
+            printf "{\"zone\":\"%s\",\"source\":\"%s\",\"tls\":%s,\"targets\":[", json_escape(zone), json_escape(basename(source_file)), tls_upstream ? "true" : "false"
             for (i = 1; i <= target_count; i += 1) {
                 if (i > 1)
                     printf ","
@@ -171,6 +174,7 @@ forwarders_json() {
             in_forward = 0
             zone = ""
             target_count = 0
+            tls_upstream = 0
             next
         }
 
@@ -181,6 +185,7 @@ forwarders_json() {
             source_file = FILENAME
             delete targets
             target_count = 0
+            tls_upstream = 0
             next
         }
 
@@ -201,9 +206,92 @@ forwarders_json() {
             next
         }
 
+        in_forward && /^[[:space:]]*forward-tls-upstream:/ {
+            value = $0
+            sub(/^[[:space:]]*forward-tls-upstream:[[:space:]]*/, "", value)
+            value = tolower(trim(value))
+            tls_upstream = value == "yes" || value == "true" || value == "1"
+            next
+        }
+
         END {
             emit_forwarder()
             printf "]"
+        }
+    ' $files
+}
+
+encrypted_forwarding_enabled() {
+    files=""
+    for file in /var/unbound/forward.conf /var/unbound/conf.d/*.conf; do
+        [ -r "$file" ] || continue
+        files="${files}${files:+ }${file}"
+    done
+
+    [ -n "$files" ] || {
+        printf 'no\n'
+        return
+    }
+
+    awk '
+        function trim(value) {
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            return value
+        }
+
+        function finish_zone() {
+            if (in_forward && zone == "." && tls_upstream)
+                found = 1
+        }
+
+        BEGIN {
+            in_forward = 0
+            found = 0
+            zone = ""
+            tls_upstream = 0
+        }
+
+        /^[[:space:]]*#/ || /^[[:space:]]*$/ {
+            next
+        }
+
+        /^[^[:space:]][A-Za-z_-]+:/ && $0 !~ /^[[:space:]]*forward-zone:/ {
+            finish_zone()
+            in_forward = 0
+            zone = ""
+            tls_upstream = 0
+            next
+        }
+
+        /^[[:space:]]*forward-zone:/ {
+            finish_zone()
+            in_forward = 1
+            zone = ""
+            tls_upstream = 0
+            next
+        }
+
+        in_forward && /^[[:space:]]*name:/ {
+            value = $0
+            sub(/^[[:space:]]*name:[[:space:]]*/, "", value)
+            gsub(/^"/, "", value)
+            gsub(/"$/, "", value)
+            zone = trim(value)
+            next
+        }
+
+        in_forward && /^[[:space:]]*forward-tls-upstream:/ {
+            value = $0
+            sub(/^[[:space:]]*forward-tls-upstream:[[:space:]]*/, "", value)
+            value = tolower(trim(value))
+            tls_upstream = value == "yes" || value == "true" || value == "1"
+            next
+        }
+
+        END {
+            finish_zone()
+            print found ? "yes" : "no"
         }
     ' $files
 }
@@ -248,10 +336,95 @@ run_privileged() {
     fi
 }
 
+check_unbound_config() {
+    if command -v local-unbound-checkconf >/dev/null 2>&1; then
+        run_privileged local-unbound-checkconf
+    elif command -v unbound-checkconf >/dev/null 2>&1; then
+        run_privileged unbound-checkconf /var/unbound/unbound.conf
+    else
+        printf 'No Unbound config checker found; skipping static check.\n'
+    fi
+}
+
+restart_unbound_after_config_change() {
+    if [ "$(service_state)" != "running" ]; then
+        printf 'local_unbound is not running; configuration will apply next start.\n'
+        return 0
+    fi
+
+    run_privileged service local_unbound restart
+}
+
+write_public_forwarders_config() {
+    mode="$1"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-public-forwarders.XXXXXX")"
+    backup_file="$public_forwarders_file.bsdrunner-backup"
+    had_existing=no
+
+    if [ "$mode" = "tls" ] && [ ! -r "$ca_bundle_file" ]; then
+        printf 'CA certificate bundle not found at %s. Install ca_root_nss first.\n' "$ca_bundle_file"
+        rm -f "$tmp"
+        return 1
+    fi
+
+    if [ -e "$public_forwarders_file" ]; then
+        had_existing=yes
+    fi
+
+    if [ "$mode" = "tls" ]; then
+        {
+            printf '# Managed by BSDRunner DNS Cache.\n'
+            printf '# Public root forwarding uses DNS-over-TLS with certificate verification.\n'
+            printf 'server:\n'
+            printf '    tls-cert-bundle: "%s"\n\n' "$ca_bundle_file"
+            printf 'forward-zone:\n'
+            printf '    name: "."\n'
+            printf '    forward-tls-upstream: yes\n'
+            printf '    forward-addr: 1.1.1.1@853#cloudflare-dns.com\n'
+            printf '    forward-addr: 1.0.0.1@853#cloudflare-dns.com\n'
+            printf '    forward-addr: 8.8.8.8@853#dns.google\n'
+            printf '    forward-addr: 8.8.4.4@853#dns.google\n'
+        } >"$tmp"
+    else
+        {
+            printf '# Managed by BSDRunner DNS Cache.\n'
+            printf '# Public root forwarding uses ordinary DNS.\n'
+            printf 'forward-zone:\n'
+            printf '    name: "."\n'
+            printf '    forward-addr: 1.1.1.1\n'
+            printf '    forward-addr: 8.8.8.8\n'
+        } >"$tmp"
+    fi
+
+    run_privileged mkdir -p "$public_forwarders_dir"
+    if [ "$had_existing" = "yes" ]; then
+        run_privileged cp -p "$public_forwarders_file" "$backup_file"
+        printf 'Backed up %s to %s.\n' "$public_forwarders_file" "$backup_file"
+    fi
+
+    run_privileged install -m 0644 "$tmp" "$public_forwarders_file"
+    rm -f "$tmp"
+    printf 'Wrote %s.\n' "$public_forwarders_file"
+
+    if ! check_unbound_config; then
+        if [ "$had_existing" = "yes" ]; then
+            run_privileged cp -p "$backup_file" "$public_forwarders_file"
+            printf 'Config check failed; restored previous public forwarder file.\n'
+        else
+            run_privileged rm -f "$public_forwarders_file"
+            printf 'Config check failed; removed new public forwarder file.\n'
+        fi
+        return 1
+    fi
+
+    restart_unbound_after_config_change
+}
+
 emit_snapshot() {
     state="$(service_state)"
     boot_value="$(sysrc_value local_unbound_enable)"
     local_active="$(local_resolver_active)"
+    encrypted_forwarding="$(encrypted_forwarding_enabled)"
     search_domain="$(resolv_search)"
     last_tone="$(last_result_value tone)"
     last_message="$(last_result_value message)"
@@ -271,8 +444,11 @@ emit_snapshot() {
     printf '"boot":{"local_unbound_enable":"%s","enabled":%s},' \
         "$(printf '%s' "$boot_value" | json_escape)" \
         "$(bool_json "$boot_value")"
-    printf '"resolver":{"local_active":%s,"search":"%s","nameservers":' \
+    printf '"resolver":{"local_active":%s,"encrypted_forwarding":%s,"ca_bundle":"%s","ca_bundle_available":%s,"search":"%s","nameservers":' \
         "$(bool_json "$local_active")" \
+        "$(bool_json "$encrypted_forwarding")" \
+        "$(printf '%s' "$ca_bundle_file" | json_escape)" \
+        "$(if [ -r "$ca_bundle_file" ]; then printf true; else printf false; fi)" \
         "$(printf '%s' "$search_domain" | json_escape)"
     nameservers_json
     printf ',"forwarders":'
@@ -353,6 +529,28 @@ do_flush() {
     fi
 }
 
+do_enable_dot() {
+    if output="$(write_public_forwarders_config tls 2>&1)"; then
+        write_last_result "success" "Encrypted DNS forwarding enabled."
+        emit_action_result true "Encrypted DNS forwarding enabled." "$output"
+    else
+        write_last_result "error" "Unable to enable encrypted DNS forwarding."
+        emit_action_result false "Unable to enable encrypted DNS forwarding." "$output"
+        exit 1
+    fi
+}
+
+do_disable_dot() {
+    if output="$(write_public_forwarders_config plain 2>&1)"; then
+        write_last_result "warning" "Encrypted DNS forwarding disabled."
+        emit_action_result true "Encrypted DNS forwarding disabled." "$output"
+    else
+        write_last_result "error" "Unable to disable encrypted DNS forwarding."
+        emit_action_result false "Unable to disable encrypted DNS forwarding." "$output"
+        exit 1
+    fi
+}
+
 do_test() {
     host="${1:-freebsd.org}"
     case "$host" in
@@ -403,6 +601,23 @@ do_test() {
                 }
             ')"
             [ -n "$summary" ] || summary="$output"
+            rcode="$(printf '%s\n' "$output" | awk '
+                /^;; ->>HEADER<</ {
+                    for (i = 1; i <= NF; i++) {
+                        if ($i ~ /^rcode:/) {
+                            value = $(i + 1)
+                            gsub(/,/, "", value)
+                            print value
+                            exit
+                        }
+                    }
+                }
+            ')"
+            if [ -n "$rcode" ] && [ "$rcode" != "NOERROR" ]; then
+                write_last_result "error" "DNS lookup failed."
+                emit_action_result false "DNS lookup failed." "$summary"
+                exit 1
+            fi
             write_last_result "success" "DNS lookup succeeded."
             emit_action_result true "DNS lookup succeeded." "$summary"
         else
@@ -440,6 +655,12 @@ case "$action" in
         ;;
     flush)
         do_flush
+        ;;
+    enable_dot)
+        do_enable_dot
+        ;;
+    disable_dot)
+        do_disable_dot
         ;;
     test)
         do_test "${2:-freebsd.org}"
