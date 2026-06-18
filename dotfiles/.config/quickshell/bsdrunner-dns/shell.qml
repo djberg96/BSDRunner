@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
+// qmllint disable signal-handler-parameters
+
 ShellRoot {
     id: root
 
@@ -316,7 +318,7 @@ ShellRoot {
                 snapshotProcess.controller.maybeFinalizeSnapshot()
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             snapshotProcess.controller.snapshotExitCode = exitCode
             snapshotProcess.controller.snapshotExited = true
             snapshotProcess.controller.maybeFinalizeSnapshot()
@@ -344,7 +346,7 @@ ShellRoot {
                 actionProcess.controller.maybeFinalizeAction()
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             actionProcess.controller.actionExitCode = exitCode
             actionProcess.controller.actionExited = true
             actionProcess.controller.maybeFinalizeAction()
@@ -477,6 +479,8 @@ ShellRoot {
                                 ]
 
                                 delegate: Rectangle {
+                                    id: statusMetricCard
+
                                     required property var modelData
 
                                     width: 84
@@ -484,7 +488,7 @@ ShellRoot {
                                     radius: 8
                                     color: root.palette.panelBackground
                                     border.width: 1
-                                    border.color: root.toneColor(modelData.tone)
+                                    border.color: root.toneColor(statusMetricCard.modelData.tone)
 
                                     Column {
                                         anchors.fill: parent
@@ -493,7 +497,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.label
+                                            text: statusMetricCard.modelData.label
                                             color: root.palette.mutedText
                                             font.pixelSize: 10
                                             font.bold: true
@@ -501,8 +505,8 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.value
-                                            color: root.toneColor(modelData.tone)
+                                            text: statusMetricCard.modelData.value
+                                            color: root.toneColor(statusMetricCard.modelData.tone)
                                             font.pixelSize: 14
                                             minimumPixelSize: 10
                                             fontSizeMode: Text.HorizontalFit

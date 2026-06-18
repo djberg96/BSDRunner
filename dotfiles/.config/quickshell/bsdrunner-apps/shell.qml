@@ -161,6 +161,8 @@ ShellRoot {
         }
     }
 
+    // Qt's linter does not understand Quickshell PanelWindow metadata here.
+    // qmllint disable uncreatable-type unqualified unresolved-type missing-property
     PanelWindow {
         id: window
 
@@ -179,6 +181,7 @@ ShellRoot {
             top: 52
             left: 76
         }
+        // qmllint enable uncreatable-type unqualified unresolved-type missing-property
 
         Item {
             anchors.fill: parent

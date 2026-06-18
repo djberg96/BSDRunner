@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
+// qmllint disable signal-handler-parameters
+
 ShellRoot {
     id: root
 
@@ -127,6 +129,14 @@ ShellRoot {
         return 0
     }
 
+    function canUpdateAll() {
+        if (currentView !== "updates" || runningAction || loadingPackages || pendingActionId.length > 0 || visiblePackages.length === 0)
+            return false
+
+        var parsedUpdates = Number(updatesCountLabel)
+        return isNaN(parsedUpdates) || parsedUpdates > 0
+    }
+
     function pageLabel() {
         return "Page " + (pageIndex + 1)
     }
@@ -173,16 +183,22 @@ ShellRoot {
     }
 
     function requestAction(actionId, actionLabel, pkgName) {
-        if (runningAction || !pkgName)
+        if (runningAction)
+            return
+
+        if (actionId !== "upgrade-all" && !pkgName)
             return
 
         clearActionFeedback()
         pendingActionId = actionId
         pendingActionLabel = actionLabel
-        pendingActionPackageName = pkgName
+        pendingActionPackageName = pkgName || ""
     }
 
     function confirmationText() {
+        if (pendingActionId === "upgrade-all")
+            return "Upgrade all packages with available updates from the configured FreeBSD package repositories?"
+
         if (!pendingActionPackageName || pendingActionPackageName.length === 0)
             return ""
 
@@ -218,7 +234,9 @@ ShellRoot {
         actionStderrFinished = false
 
         actionFeedbackTone = "warning"
-        actionFeedbackTitle = "Running " + activeActionLabel + " for " + activeActionPackageName
+        actionFeedbackTitle = activeActionPackageName.length > 0
+            ? "Running " + activeActionLabel + " for " + activeActionPackageName
+            : "Running " + activeActionLabel
         actionFeedbackDetails = "Working..."
         actionProcess.running = true
     }
@@ -294,6 +312,32 @@ ShellRoot {
         activeActionId = ""
         activeActionLabel = ""
         activeActionPackageName = ""
+    }
+
+    function packageActionModel(pkg) {
+        var installOrReinstall = {
+            "id": isInstalledPackage(pkg) ? "reinstall" : "install",
+            "label": isInstalledPackage(pkg) ? "Reinstall" : "Install",
+            "tone": "accent",
+            "available": true
+        }
+        var upgrade = {
+            "id": "upgrade",
+            "label": "Upgrade",
+            "tone": "warning",
+            "available": hasAvailableUpgrade(pkg)
+        }
+        var remove = {
+            "id": "remove",
+            "label": "Remove",
+            "tone": "danger",
+            "available": isInstalledPackage(pkg) && !isProtectedPackage(pkg)
+        }
+
+        if (currentView === "updates")
+            return [upgrade, installOrReinstall, remove]
+
+        return [installOrReinstall, upgrade, remove]
     }
 
     function isTruthyFlag(value) {
@@ -607,7 +651,7 @@ ShellRoot {
             }
         }
 
-        onExited: function(exitCode, exitStatus) {
+        onExited: function(exitCode) {
             snapshotProcess.controller.snapshotExitCode = exitCode
             snapshotProcess.controller.snapshotExited = true
             snapshotProcess.controller.maybeFinalizeSnapshot()
@@ -645,7 +689,7 @@ ShellRoot {
             }
         }
 
-        onExited: function(exitCode, exitStatus) {
+        onExited: function(exitCode) {
             actionProcess.controller.actionExitCode = exitCode
             actionProcess.controller.actionExited = true
             actionProcess.controller.maybeFinalizeAction()
@@ -1023,14 +1067,51 @@ ShellRoot {
                                 id: centerHeader
 
                                 width: parent.width
-                                spacing: 0
+                                spacing: 8
 
-                                Text {
+                                Row {
                                     width: parent.width
-                                    text: root.viewTitle()
-                                    color: root.palette.primaryText
-                                    font.pixelSize: 34
-                                    font.bold: true
+                                    height: 40
+                                    spacing: 12
+
+                                    Text {
+                                        width: parent.width - (updateAllButton.visible ? updateAllButton.width + parent.spacing : 0)
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.viewTitle()
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 34
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        id: updateAllButton
+
+                                        visible: root.currentView === "updates"
+                                        width: 132
+                                        height: 34
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        radius: 12
+                                        color: root.canUpdateAll() ? Qt.alpha(root.palette.warning, 0.82) : root.palette.panelBackground
+                                        border.width: 2
+                                        border.color: root.canUpdateAll() ? root.palette.warning : Qt.alpha(root.palette.frameBorder, 0.55)
+                                        opacity: root.canUpdateAll() ? 1.0 : 0.48
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.runningAction && root.activeActionId === "upgrade-all" ? "Updating..." : "Update All"
+                                            color: root.canUpdateAll() ? root.palette.primaryText : root.palette.mutedText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: root.canUpdateAll()
+                                            hoverEnabled: enabled
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.requestAction("upgrade-all", "Update All", "")
+                                        }
+                                    }
                                 }
                             }
 
@@ -1545,7 +1626,9 @@ ShellRoot {
 
                                                 Text {
                                                     width: parent.width
-                                                    text: root.pendingActionLabel + " " + root.pendingActionPackageName + "?"
+                                                    text: root.pendingActionPackageName.length > 0
+                                                        ? root.pendingActionLabel + " " + root.pendingActionPackageName + "?"
+                                                        : root.pendingActionLabel + "?"
                                                     color: root.palette.primaryText
                                                     font.pixelSize: 13
                                                     font.bold: true
@@ -1614,26 +1697,7 @@ ShellRoot {
                                         }
 
                                         Repeater {
-                                            model: root.selectedPackage ? [
-                                                {
-                                                    "id": root.isInstalledPackage(root.selectedPackage) ? "reinstall" : "install",
-                                                    "label": root.isInstalledPackage(root.selectedPackage) ? "Reinstall" : "Install",
-                                                    "tone": "accent",
-                                                    "available": true
-                                                },
-                                                {
-                                                    "id": "upgrade",
-                                                    "label": "Upgrade",
-                                                    "tone": "warning",
-                                                    "available": root.hasAvailableUpgrade(root.selectedPackage)
-                                                },
-                                                {
-                                                    "id": "remove",
-                                                    "label": "Remove",
-                                                    "tone": "danger",
-                                                    "available": root.isInstalledPackage(root.selectedPackage) && !root.isProtectedPackage(root.selectedPackage)
-                                                }
-                                            ] : []
+                                            model: root.selectedPackage ? root.packageActionModel(root.selectedPackage) : []
 
                                             delegate: Rectangle {
                                                 id: actionButton

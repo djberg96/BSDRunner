@@ -9,7 +9,7 @@ case "$action" in
     snapshot)
         exec sh "$script_dir/bsdrunner-software-query.sh" "$@"
         ;;
-    install|reinstall|upgrade|remove)
+    install|reinstall|upgrade|upgrade-all|remove)
         exec sh "$script_dir/bsdrunner-software-action.sh" "$@"
         ;;
     *)

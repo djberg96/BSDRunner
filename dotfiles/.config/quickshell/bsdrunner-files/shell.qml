@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
+// qmllint disable signal-handler-parameters
+
 ShellRoot {
     id: root
 
@@ -932,7 +934,7 @@ ShellRoot {
             }
         }
 
-        onExited: function(exitCode, exitStatus) {
+        onExited: function(exitCode) {
             snapshotProcess.controller.snapshotExitCode = exitCode
             snapshotProcess.controller.snapshotExited = true
             snapshotProcess.controller.maybeFinalizeSnapshot()
@@ -967,7 +969,7 @@ ShellRoot {
             }
         }
 
-        onExited: function(exitCode, exitStatus) {
+        onExited: function(exitCode) {
             openProcess.controller.openExitCode = exitCode
             openProcess.controller.openExited = true
             openProcess.controller.maybeFinalizeOpen()
@@ -1003,7 +1005,7 @@ ShellRoot {
             }
         }
 
-        onExited: function(exitCode, exitStatus) {
+        onExited: function(exitCode) {
             actionProcess.controller.actionExitCode = exitCode
             actionProcess.controller.actionExited = true
             actionProcess.controller.maybeFinalizeAction()

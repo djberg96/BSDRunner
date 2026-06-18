@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
+// qmllint disable signal-handler-parameters
+
 ShellRoot {
     id: root
 
@@ -501,7 +503,7 @@ ShellRoot {
                 snapshotProcess.controller.maybeFinalizeSnapshot()
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             snapshotProcess.controller.snapshotExitCode = exitCode
             snapshotProcess.controller.snapshotExited = true
             snapshotProcess.controller.maybeFinalizeSnapshot()
@@ -529,7 +531,7 @@ ShellRoot {
                 actionProcess.controller.maybeFinalizeAction()
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             actionProcess.controller.actionExitCode = exitCode
             actionProcess.controller.actionExited = true
             actionProcess.controller.maybeFinalizeAction()
@@ -650,6 +652,8 @@ ShellRoot {
                                 model: root.pools.length > 0 ? root.pools.slice(0, 2) : [{"name": "No pool", "size": "--", "free": "--", "health": "--"}]
 
                                 delegate: Rectangle {
+                                    id: poolSummaryItem
+
                                     required property var modelData
 
                                     width: Math.floor((poolSummaryCard.width - 28 - 176 - 8 - (poolSummaryCard.visiblePoolCount * 10)) / poolSummaryCard.visiblePoolCount)
@@ -657,7 +661,7 @@ ShellRoot {
                                     radius: 8
                                     color: root.palette.panelBackground
                                     border.width: 1
-                                    border.color: (modelData.health || "").toLowerCase() === "online" ? root.palette.success : root.palette.warning
+                                    border.color: (poolSummaryItem.modelData.health || "").toLowerCase() === "online" ? root.palette.success : root.palette.warning
 
                                     Column {
                                         anchors.fill: parent
@@ -666,7 +670,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.name
+                                            text: poolSummaryItem.modelData.name
                                             color: root.palette.primaryText
                                             font.pixelSize: 13
                                             font.bold: true
@@ -675,15 +679,15 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.health
-                                            color: (modelData.health || "").toLowerCase() === "online" ? root.palette.success : root.palette.warning
+                                            text: poolSummaryItem.modelData.health
+                                            color: (poolSummaryItem.modelData.health || "").toLowerCase() === "online" ? root.palette.success : root.palette.warning
                                             font.pixelSize: 12
                                             font.bold: true
                                         }
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.free + " free"
+                                            text: poolSummaryItem.modelData.free + " free"
                                             color: root.palette.mutedText
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
@@ -838,7 +842,7 @@ ShellRoot {
                                     id: datasetRow
 
                                     required property var modelData
-                                    readonly property bool selected: root.selectedDatasetName === modelData.name
+                                    readonly property bool selected: root.selectedDatasetName === datasetRow.modelData.name
 
                                     width: datasetList.width
                                     height: 52
@@ -867,7 +871,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.name
+                                            text: datasetRow.modelData.name
                                             color: root.palette.primaryText
                                             font.pixelSize: 15
                                             font.bold: true
@@ -876,7 +880,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.used + " used | " + modelData.mountpoint
+                                            text: datasetRow.modelData.used + " used | " + datasetRow.modelData.mountpoint
                                             color: root.palette.mutedText
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
@@ -932,7 +936,7 @@ ShellRoot {
                                     id: snapshotRow
 
                                     required property var modelData
-                                    readonly property bool selected: root.selectedSnapshotName === modelData.name
+                                    readonly property bool selected: root.selectedSnapshotName === snapshotRow.modelData.name
 
                                     width: snapshotList.width
                                     height: 70
@@ -948,7 +952,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.snapshot
+                                            text: snapshotRow.modelData.snapshot
                                             color: root.palette.primaryText
                                             font.pixelSize: 13
                                             font.bold: true
@@ -957,7 +961,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.created
+                                            text: snapshotRow.modelData.created
                                             color: root.palette.secondaryText
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
@@ -965,7 +969,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.used + " used | " + modelData.refer + " referenced"
+                                            text: snapshotRow.modelData.used + " used | " + snapshotRow.modelData.refer + " referenced"
                                             color: root.palette.mutedText
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
@@ -1070,6 +1074,8 @@ ShellRoot {
                                         ]
 
                                         delegate: Item {
+                                            id: datasetDetailRow
+
                                             required property var modelData
 
                                             width: parent.width
@@ -1079,7 +1085,7 @@ ShellRoot {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 width: 92
-                                                text: modelData.label
+                                                text: datasetDetailRow.modelData.label
                                                 color: root.palette.mutedText
                                                 font.pixelSize: 13
                                                 elide: Text.ElideRight
@@ -1090,7 +1096,7 @@ ShellRoot {
                                                 anchors.leftMargin: 102
                                                 anchors.right: parent.right
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: modelData.value
+                                                text: datasetDetailRow.modelData.value
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 14
                                                 font.bold: true
@@ -1135,6 +1141,8 @@ ShellRoot {
                                         ]
 
                                         delegate: Item {
+                                            id: encryptionDetailRow
+
                                             required property var modelData
 
                                             width: parent.width
@@ -1144,7 +1152,7 @@ ShellRoot {
                                                 anchors.left: parent.left
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 width: 116
-                                                text: modelData.label
+                                                text: encryptionDetailRow.modelData.label
                                                 color: root.palette.mutedText
                                                 font.pixelSize: 13
                                                 elide: Text.ElideRight
@@ -1155,7 +1163,7 @@ ShellRoot {
                                                 anchors.leftMargin: 126
                                                 anchors.right: parent.right
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: modelData.value
+                                                text: encryptionDetailRow.modelData.value
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 14
                                                 font.bold: true
@@ -1316,6 +1324,8 @@ ShellRoot {
                                             ]
 
                                             delegate: Item {
+                                                id: snapshotDetailRow
+
                                                 required property var modelData
 
                                                 width: parent.width
@@ -1325,7 +1335,7 @@ ShellRoot {
                                                     anchors.left: parent.left
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     width: 78
-                                                    text: modelData.label
+                                                    text: snapshotDetailRow.modelData.label
                                                     color: root.palette.mutedText
                                                     font.pixelSize: 11
                                                     elide: Text.ElideRight
@@ -1336,7 +1346,7 @@ ShellRoot {
                                                     anchors.leftMargin: 86
                                                     anchors.right: parent.right
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    text: modelData.value
+                                                    text: snapshotDetailRow.modelData.value
                                                     color: root.palette.primaryText
                                                     font.pixelSize: 12
                                                     font.bold: true

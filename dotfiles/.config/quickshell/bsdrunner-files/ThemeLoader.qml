@@ -1,4 +1,3 @@
-import Quickshell
 import Quickshell.Io
 import QtCore
 import QtQml

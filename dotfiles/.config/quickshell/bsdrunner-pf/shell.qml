@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
+// qmllint disable signal-handler-parameters
+
 ShellRoot {
     id: root
 
@@ -639,7 +641,7 @@ ShellRoot {
                 snapshotProcess.controller.maybeFinalizeSnapshot();
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             snapshotProcess.controller.snapshotExitCode = exitCode;
             snapshotProcess.controller.snapshotExited = true;
             snapshotProcess.controller.maybeFinalizeSnapshot();
@@ -667,7 +669,7 @@ ShellRoot {
                 actionProcess.controller.maybeFinalizeAction();
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             actionProcess.controller.actionExitCode = exitCode;
             actionProcess.controller.actionExited = true;
             actionProcess.controller.maybeFinalizeAction();
@@ -695,7 +697,7 @@ ShellRoot {
                 logProcess.controller.maybeFinalizeLogs();
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             logProcess.controller.logExitCode = exitCode;
             logProcess.controller.logExited = true;
             logProcess.controller.maybeFinalizeLogs();
@@ -723,7 +725,7 @@ ShellRoot {
                 penaltyProcess.controller.maybeFinalizePenalty();
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             penaltyProcess.controller.penaltyExitCode = exitCode;
             penaltyProcess.controller.penaltyExited = true;
             penaltyProcess.controller.maybeFinalizePenalty();
@@ -745,7 +747,7 @@ ShellRoot {
                 followLogProcess.controller.appendLogLine(data);
             }
         }
-        onExited: function (exitCode, exitStatus) {
+        onExited: function(exitCode) {
             followLogProcess.controller.logFollowing = false;
             if (followLogProcess.controller.stoppingLogFollow || exitCode === 0) {
                 followLogProcess.controller.logMessage = "Live pflog follow stopped.";
@@ -891,6 +893,8 @@ ShellRoot {
                                 ]
 
                                 delegate: Rectangle {
+                                    id: statusMetricCard
+
                                     required property var modelData
 
                                     width: 116
@@ -898,7 +902,7 @@ ShellRoot {
                                     radius: 8
                                     color: root.palette.panelBackground
                                     border.width: 1
-                                    border.color: root.toneColor(modelData.tone)
+                                    border.color: root.toneColor(statusMetricCard.modelData.tone)
 
                                     Column {
                                         anchors.fill: parent
@@ -907,7 +911,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.label
+                                            text: statusMetricCard.modelData.label
                                             color: root.palette.mutedText
                                             font.pixelSize: 10
                                             font.bold: true
@@ -915,17 +919,17 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: modelData.value
-                                            color: root.toneColor(modelData.tone)
+                                            text: statusMetricCard.modelData.value
+                                            color: root.toneColor(statusMetricCard.modelData.tone)
                                             font.pixelSize: 14
                                             font.bold: true
                                             elide: Text.ElideRight
                                         }
 
                                         Text {
-                                            visible: modelData.detail.length > 0
+                                            visible: statusMetricCard.modelData.detail.length > 0
                                             width: parent.width
-                                            text: modelData.detail
+                                            text: statusMetricCard.modelData.detail
                                             color: root.palette.mutedText
                                             font.pixelSize: 9
                                             elide: Text.ElideRight
@@ -1044,6 +1048,8 @@ ShellRoot {
                         ]
 
                         delegate: Rectangle {
+                            id: actionCard
+
                             required property var modelData
 
                             width: 150
@@ -1052,11 +1058,11 @@ ShellRoot {
                             color: actionMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
                             opacity: root.runningAction ? 0.45 : 1.0
                             border.width: 2
-                            border.color: root.toneColor(modelData.tone)
+                            border.color: root.toneColor(actionCard.modelData.tone)
 
                             Text {
                                 anchors.centerIn: parent
-                                text: modelData.label
+                                text: actionCard.modelData.label
                                 color: root.palette.primaryText
                                 font.pixelSize: 13
                                 font.bold: true
@@ -1070,10 +1076,10 @@ ShellRoot {
                                 enabled: !root.runningAction
                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                 onClicked: {
-                                    if (modelData.id === "penalty")
+                                    if (actionCard.modelData.id === "penalty")
                                         root.openPenaltyBox();
                                     else
-                                        root.requestAction(modelData.id, modelData.label, modelData.text);
+                                        root.requestAction(actionCard.modelData.id, actionCard.modelData.label, actionCard.modelData.text);
                                 }
                             }
                         }
@@ -1311,7 +1317,7 @@ ShellRoot {
                                             Text {
                                                 width: 68
                                                 height: parent.height
-                                                text: modelData.label
+                                                text: summaryMetricCard.modelData.label
                                                 color: root.palette.mutedText
                                                 font.pixelSize: 10
                                                 font.bold: true
@@ -1322,8 +1328,8 @@ ShellRoot {
                                             Text {
                                                 width: parent.width - 76
                                                 height: parent.height
-                                                text: modelData.value
-                                                color: root.toneColor(modelData.tone)
+                                                text: summaryMetricCard.modelData.value
+                                                color: root.toneColor(summaryMetricCard.modelData.tone)
                                                 font.pixelSize: 14
                                                 font.bold: true
                                                 horizontalAlignment: Text.AlignRight

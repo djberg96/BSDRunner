@@ -43,8 +43,12 @@ emit_json() {
 log_file_for_action() {
     state_dir="${HOME}/.local/state/bsdrunner/pkg-actions"
     timestamp="$(date '+%Y%m%d-%H%M%S')"
+    package_component="$package_name"
+    if [ -z "$package_component" ]; then
+        package_component="all"
+    fi
     mkdir -p "$state_dir"
-    printf '%s/%s-%s-%s.log\n' "$state_dir" "$timestamp" "$action" "$package_name"
+    printf '%s/%s-%s-%s.log\n' "$state_dir" "$timestamp" "$action" "$package_component"
 }
 
 write_log_file() {
@@ -86,6 +90,14 @@ package_name_is_valid() {
     esac
 }
 
+action_subject() {
+    if [ -n "$package_name" ]; then
+        printf '%s\n' "$package_name"
+    else
+        printf 'all packages\n'
+    fi
+}
+
 installed_version() {
     pkg query '%v' "$package_name" 2>/dev/null || true
 }
@@ -100,6 +112,9 @@ verify_expected_state() {
     case "$action" in
         install|reinstall|upgrade)
             package_is_installed
+            ;;
+        upgrade-all)
+            return 0
             ;;
         remove)
             ! package_is_installed
@@ -160,6 +175,9 @@ run_preview() {
         install|upgrade)
             pkg install -n -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
+        upgrade-all)
+            pkg upgrade -n -y >"$stdout_file" 2>"$stderr_file"
+            ;;
         reinstall)
             pkg install -n -f -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
@@ -179,17 +197,17 @@ validate_preview() {
 
     if ! run_preview "$preview_stdout_file" "$preview_stderr_file"; then
         write_log_file "$log_file" /dev/null /dev/null "$preview_stdout_file" "$preview_stderr_file"
-        emit_json false "pkg could not plan $action for $package_name." "See log: $log_file" "$log_file"
+        emit_json false "pkg could not plan $action for $(action_subject)." "See log: $log_file" "$log_file"
         return 1
     fi
 
     planned_removals="$(planned_removed_packages "$preview_stdout_file")"
     case "$action" in
-        install|reinstall|upgrade)
+        install|reinstall|upgrade|upgrade-all)
             if [ -n "$planned_removals" ]; then
                 write_log_file "$log_file" /dev/null /dev/null "$preview_stdout_file" "$preview_stderr_file"
                 details="$(printf 'BSDRunner blocked this action because pkg planned to remove installed packages:\n%s\n\nUse the terminal if you intentionally want to resolve this conflict manually.' "$planned_removals")"
-                emit_json false "Blocked $action for $package_name because pkg planned removals." "$details" "$log_file"
+                emit_json false "Blocked $action for $(action_subject) because pkg planned removals." "$details" "$log_file"
                 return 1
             fi
             ;;
@@ -269,6 +287,8 @@ case "$action" in
             exit 1
         fi
         ;;
+    upgrade-all)
+        ;;
     *)
         emit_json false "Unknown package action: $action" "" ""
         exit 1
@@ -293,6 +313,12 @@ case "$action" in
         failure_message="Unable to upgrade $package_name."
         run_action \
             mdo -- pkg install -y -- "$package_name"
+        ;;
+    upgrade-all)
+        success_message="Upgrade request completed for all packages."
+        failure_message="Unable to update all packages."
+        run_action \
+            mdo -- pkg upgrade -y
         ;;
     remove)
         success_message="Removed $package_name."
