@@ -18,6 +18,16 @@ daemon_log="/tmp/bsdrunner-swww-daemon.log"
 
 pkill swww-daemon >/dev/null 2>&1 || true
 
+wait_count=0
+while pgrep -x swww-daemon >/dev/null 2>&1; do
+    wait_count=$((wait_count + 1))
+    if [ "$wait_count" -ge 30 ]; then
+        echo ":: swww-daemon did not stop cleanly" >&2
+        exit 1
+    fi
+    sleep 0.2
+done
+
 if swww-daemon --help 2>/dev/null | grep -q -- '--no-cache'; then
     swww-daemon --no-cache > "$daemon_log" 2>&1 &
 else
@@ -32,7 +42,7 @@ if ! pgrep -x swww-daemon >/dev/null 2>&1; then
 fi
 
 theme_wallpapers() {
-    find "$wallpaper_dir" -maxdepth 1 -type f ! -name '.*' ! -name '._*' | sort
+    find "$wallpaper_dir" -maxdepth 1 -type f ! -name '.*' ! -name '._*' ! -name '*.pre-bsdrunner' | sort
 }
 
 preferred_wallpaper_for_stem() {
@@ -43,11 +53,6 @@ preferred_wallpaper_for_stem() {
         return 0
     fi
 
-    if [ -f "${stem}.gif" ]; then
-        printf '%s\n' "${stem}.gif"
-        return 0
-    fi
-
     for ext in jpg jpeg png webp; do
         candidate="${stem}.${ext}"
         if [ -f "$candidate" ]; then
@@ -55,6 +60,11 @@ preferred_wallpaper_for_stem() {
             return 0
         fi
     done
+
+    if [ -f "${stem}.gif" ]; then
+        printf '%s\n' "${stem}.gif"
+        return 0
+    fi
 
     return 1
 }

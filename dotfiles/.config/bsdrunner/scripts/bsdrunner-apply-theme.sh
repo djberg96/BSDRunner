@@ -280,11 +280,32 @@ else
     rm -f "$runner_home/current-wallpaper"
 fi
 
-(sh "$runner_home/scripts/bsdrunner-start-waybar.sh" >/tmp/bsdrunner-waybar.log 2>&1 &) >/dev/null 2>&1
+if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl dispatch exec "sh $runner_home/scripts/bsdrunner-start-waybar.sh" >/dev/null 2>&1 || \
+        (nohup sh "$runner_home/scripts/bsdrunner-start-waybar.sh" >/tmp/bsdrunner-waybar.log 2>&1 &) >/dev/null 2>&1
+else
+    (nohup sh "$runner_home/scripts/bsdrunner-start-waybar.sh" >/tmp/bsdrunner-waybar.log 2>&1 &) >/dev/null 2>&1
+fi
 
 pkill -f bsdrunner-start-wallpaper.sh 2>/dev/null || true
 pkill swww-daemon 2>/dev/null || true
-(sh "$runner_home/scripts/bsdrunner-start-wallpaper.sh" >/tmp/bsdrunner-wallpaper.log 2>&1 &) >/dev/null 2>&1
+
+wait_count=0
+while pgrep -x swww-daemon >/dev/null 2>&1; do
+    wait_count=$((wait_count + 1))
+    if [ "$wait_count" -ge 30 ]; then
+        echo ":: swww-daemon did not stop cleanly" >&2
+        break
+    fi
+    sleep 0.2
+done
+
+if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl dispatch exec "sh $runner_home/scripts/bsdrunner-start-wallpaper.sh >/tmp/bsdrunner-wallpaper.log 2>&1" >/dev/null 2>&1 || \
+        (nohup sh "$runner_home/scripts/bsdrunner-start-wallpaper.sh" >/tmp/bsdrunner-wallpaper.log 2>&1 &) >/dev/null 2>&1
+else
+    (nohup sh "$runner_home/scripts/bsdrunner-start-wallpaper.sh" >/tmp/bsdrunner-wallpaper.log 2>&1 &) >/dev/null 2>&1
+fi
 
 hyprctl reload >/tmp/bsdrunner-hypr-reload.log 2>&1 || true
 
