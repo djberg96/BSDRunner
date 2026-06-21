@@ -79,6 +79,9 @@ ShellRoot {
     readonly property var visibleEntries: filteredEntries()
     readonly property var breadcrumbs: breadcrumbEntries()
     readonly property var recentShortcuts: recentEntries()
+    readonly property var placeShortcuts: shortcutEntriesWithoutTrash()
+    readonly property var trashShortcut: shortcutEntry("Trash")
+    readonly property bool inTrash: isTrashPath(currentPath)
     readonly property var contextMenuActions: buildContextMenuActions()
     readonly property int contextMenuWidth: 188
     readonly property int contextMenuHeight: 10 + (contextMenuKind === "item" ? 38 : 0) + (contextMenuActions.length * 34)
@@ -98,6 +101,79 @@ ShellRoot {
         if (currentPath === "/")
             return "/" + text
         return currentPath + "/" + text
+    }
+
+    function trashFilesPath() {
+        return homeDir + "/.local/share/Trash/files"
+    }
+
+    function isTrashPath(path) {
+        var text = String(path || "")
+        var trashPath = trashFilesPath()
+        return text === trashPath || text.indexOf(trashPath + "/") === 0
+    }
+
+    function shortcutEntry(label) {
+        for (var i = 0; i < shortcuts.length; i += 1) {
+            if (shortcuts[i].label === label)
+                return shortcuts[i]
+        }
+        if (label === "Trash")
+            return {"label": "Trash", "path": trashFilesPath()}
+        return {"label": label, "path": homeDir}
+    }
+
+    function shortcutEntriesWithoutTrash() {
+        var result = []
+        var trashPath = trashFilesPath()
+        for (var i = 0; i < shortcuts.length; i += 1) {
+            if (shortcuts[i].label === "Trash" || shortcuts[i].path === trashPath)
+                continue
+            result.push(shortcuts[i])
+        }
+        return result
+    }
+
+    function destructiveActionId() {
+        return inTrash ? "delete" : "trash"
+    }
+
+    function destructiveLabel() {
+        return inTrash ? "Permanently Delete" : "Move to Trash"
+    }
+
+    function destructiveDialogTitle() {
+        return inTrash ? "Permanently Delete" : "Move to Trash"
+    }
+
+    function destructiveDialogMessage(name) {
+        return inTrash
+            ? "Permanently delete " + name + "?"
+            : "Move " + name + " to trash?"
+    }
+
+    function actionDialogIsConfirmation() {
+        return actionDialogMode === "trash" || actionDialogMode === "delete"
+    }
+
+    function actionDialogIsDanger() {
+        return actionDialogMode === "trash" || actionDialogMode === "delete"
+    }
+
+    function actionDialogHelpText() {
+        if (actionDialogMode === "delete")
+            return "This permanently deletes the item and cannot be undone."
+        if (actionDialogMode === "trash")
+            return "This moves the item to trash, not permanent deletion."
+        return "Names cannot be empty or contain '/'."
+    }
+
+    function actionDialogConfirmText() {
+        if (actionDialogMode === "delete")
+            return "Delete"
+        if (actionDialogMode === "trash")
+            return "Move"
+        return "Apply"
     }
 
     function filteredEntries() {
@@ -510,7 +586,7 @@ ShellRoot {
     function actionButtonEnabled(action) {
         if (runningAction || loading)
             return false
-        if (action === "rename" || action === "trash")
+        if (action === "rename" || action === "trash" || action === "delete")
             return selectedEntry() !== null
         return true
     }
@@ -539,8 +615,12 @@ ShellRoot {
             actionDialogValue = actionDialogTargetName
             break
         case "trash":
-            actionDialogTitle = "Move to Trash"
-            actionDialogMessage = "Move " + actionDialogTargetName + " to trash?"
+            actionDialogTitle = destructiveDialogTitle()
+            actionDialogMessage = destructiveDialogMessage(actionDialogTargetName)
+            break
+        case "delete":
+            actionDialogTitle = destructiveDialogTitle()
+            actionDialogMessage = destructiveDialogMessage(actionDialogTargetName)
             break
         default:
             return
@@ -572,6 +652,9 @@ ShellRoot {
             break
         case "trash":
             runBackendAction("trash", actionDialogTargetPath, "")
+            break
+        case "delete":
+            runBackendAction("delete", actionDialogTargetPath, "")
             break
         }
 
@@ -622,7 +705,7 @@ ShellRoot {
             actions.push({"label": "Open Terminal Here", "action": "terminal-target", "tone": "normal"})
         }
 
-        actions.push({"label": "Move to Trash", "action": "trash", "tone": "danger"})
+        actions.push({"label": destructiveLabel(), "action": destructiveActionId(), "tone": "danger"})
         return actions
     }
 
@@ -685,6 +768,12 @@ ShellRoot {
             if (targetEntry) {
                 selectedPath = entryRef(targetEntry)
                 openActionDialog("trash")
+            }
+            break
+        case "delete":
+            if (targetEntry) {
+                selectedPath = entryRef(targetEntry)
+                openActionDialog("delete")
             }
             break
         case "copy-path":
@@ -915,7 +1004,7 @@ ShellRoot {
         interval: 20
         repeat: false
         onTriggered: {
-            if (root.actionDialogOpen && root.actionDialogMode !== "trash") {
+            if (root.actionDialogOpen && !root.actionDialogIsConfirmation()) {
                 actionInput.forceActiveFocus()
                 actionInput.selectAll()
             } else if (root.actionDialogOpen) {
@@ -1085,7 +1174,7 @@ ShellRoot {
 
                         Flickable {
                             width: parent.width
-                            height: parent.height - 42
+                            height: parent.height - 84
                             clip: true
                             contentHeight: railContent.height
                             boundsBehavior: Flickable.StopAtBounds
@@ -1110,7 +1199,7 @@ ShellRoot {
                                     spacing: 5
 
                                     Repeater {
-                                        model: root.shortcuts
+                                        model: root.placeShortcuts
 
                                         delegate: Rectangle {
                                             id: shortcutRow
@@ -1206,6 +1295,43 @@ ShellRoot {
                                         }
                                     }
                                 }
+                            }
+                        }
+
+                        Rectangle {
+                            id: trashShortcutRow
+
+                            width: parent.width
+                            height: 30
+                            radius: 6
+                            color: trashShortcutMouse.containsMouse || root.currentPath === root.trashShortcut.path
+                                ? root.palette.cardHover
+                                : "transparent"
+                            border.width: root.currentPath === root.trashShortcut.path ? 1 : 0
+                            border.color: root.palette.accent
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                text: root.trashShortcut.label
+                                color: root.currentPath === root.trashShortcut.path
+                                    ? root.palette.accentStrong
+                                    : root.palette.secondaryText
+                                font.pixelSize: 12
+                                font.bold: root.currentPath === root.trashShortcut.path
+                                elide: Text.ElideRight
+                            }
+
+                            MouseArea {
+                                id: trashShortcutMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.navigate(root.trashShortcut.path)
                             }
                         }
                     }
@@ -2155,7 +2281,7 @@ ShellRoot {
                                             {"label": "Rename", "action": "rename"},
                                             {"label": "Copy Path", "action": "copy-path"},
                                             {"label": "Terminal", "action": "terminal-target"},
-                                            {"label": "Trash", "action": "trash"}
+                                            {"label": root.inTrash ? "Delete" : "Trash", "action": root.destructiveActionId()}
                                         ]
 
                                         delegate: Rectangle {
@@ -2176,13 +2302,13 @@ ShellRoot {
                                                 : root.palette.cardBackground
                                             border.width: 1
                                             border.color: drawerActionMouse.containsMouse && enabledAction
-                                                ? (modelData.action === "trash" ? root.palette.danger : root.palette.accent)
+                                                ? (modelData.action === "trash" || modelData.action === "delete" ? root.palette.danger : root.palette.accent)
                                                 : root.palette.frameBorder
 
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: drawerAction.modelData.label
-                                                color: drawerAction.modelData.action === "trash" && drawerAction.enabledAction
+                                                color: (drawerAction.modelData.action === "trash" || drawerAction.modelData.action === "delete") && drawerAction.enabledAction
                                                     ? root.palette.danger
                                                     : root.palette.secondaryText
                                                 font.pixelSize: 11
@@ -2390,12 +2516,12 @@ ShellRoot {
 
                 Rectangle {
                     width: 420
-                    height: root.actionDialogMode === "trash" ? 190 : 220
+                    height: root.actionDialogIsConfirmation() ? 190 : 220
                     anchors.centerIn: parent
                     radius: 8
                     color: root.palette.cardBackground
                     border.width: 1
-                    border.color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accent
+                    border.color: root.actionDialogIsDanger() ? root.palette.danger : root.palette.accent
 
                     MouseArea {
                         anchors.fill: parent
@@ -2409,7 +2535,7 @@ ShellRoot {
                         Text {
                             width: parent.width
                             text: root.actionDialogTitle
-                            color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accentStrong
+                            color: root.actionDialogIsDanger() ? root.palette.danger : root.palette.accentStrong
                             font.pixelSize: 18
                             font.bold: true
                             elide: Text.ElideRight
@@ -2428,7 +2554,7 @@ ShellRoot {
                         Rectangle {
                             width: parent.width
                             height: 36
-                            visible: root.actionDialogMode !== "trash"
+                            visible: !root.actionDialogIsConfirmation()
                             radius: 6
                             color: root.palette.panelBackground
                             border.width: 1
@@ -2460,10 +2586,8 @@ ShellRoot {
 
                         Text {
                             width: parent.width
-                            height: root.actionDialogMode === "trash" ? 36 : 18
-                            text: root.actionDialogMode === "trash"
-                                ? "This moves the item to trash, not permanent deletion."
-                                : "Names cannot be empty or contain '/'."
+                            height: root.actionDialogIsConfirmation() ? 36 : 18
+                            text: root.actionDialogHelpText()
                             color: root.palette.mutedText
                             font.pixelSize: 11
                             wrapMode: Text.WordWrap
@@ -2516,12 +2640,12 @@ ShellRoot {
                                 radius: 6
                                 color: confirmMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accent
+                                border.color: root.actionDialogIsDanger() ? root.palette.danger : root.palette.accent
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: root.actionDialogMode === "trash" ? "Move" : "Apply"
-                                    color: root.actionDialogMode === "trash" ? root.palette.danger : root.palette.accentStrong
+                                    text: root.actionDialogConfirmText()
+                                    color: root.actionDialogIsDanger() ? root.palette.danger : root.palette.accentStrong
                                     font.pixelSize: 12
                                     font.bold: true
                                 }

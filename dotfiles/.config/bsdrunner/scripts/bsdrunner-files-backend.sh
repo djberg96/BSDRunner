@@ -309,6 +309,8 @@ place_label() {
     place_path="${1:-}"
     if [ "$place_path" = "$HOME" ]; then
         printf 'Home'
+    elif [ "$place_path" = "$HOME/.local/share/Trash/files" ]; then
+        printf 'Trash'
     elif [ "$place_path" = "/" ]; then
         printf '/'
     else
@@ -334,7 +336,8 @@ default_place_seen() {
         "$HOME/Desktop" \
         "$HOME/Downloads" \
         "$HOME/Documents" \
-        "$HOME/Pictures"
+        "$HOME/Pictures" \
+        "$HOME/.local/share/Trash/files"
     do
         [ -d "$default_place" ] || continue
         default_real="$(canonical_path "$default_place" 2>/dev/null || printf '%s\n' "$default_place")"
@@ -393,6 +396,8 @@ snapshot() {
     add_shortcut "Downloads" "$HOME/Downloads"
     add_shortcut "Documents" "$HOME/Documents"
     add_shortcut "Pictures" "$HOME/Pictures"
+    mkdir -p "$HOME/.local/share/Trash/files" "$HOME/.local/share/Trash/info"
+    add_shortcut "Trash" "$HOME/.local/share/Trash/files"
     add_custom_shortcuts
     add_media_shortcuts
 
@@ -551,6 +556,41 @@ trash_path() {
     json_action true "Moved $base to trash." "$destination"
 }
 
+delete_path() {
+    target="$(expand_path_ref "${1:-}")"
+    if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
+        json_error "Path does not exist: ${1:-}"
+        exit 1
+    fi
+    [ "$target" != "/" ] || {
+        json_error "Cannot delete root."
+        exit 1
+    }
+
+    trash_files="$HOME/.local/share/Trash/files"
+    trash_info="$HOME/.local/share/Trash/info"
+    mkdir -p "$trash_files" "$trash_info"
+    trash_real="$(canonical_path "$trash_files" 2>/dev/null || printf '%s\n' "$trash_files")"
+    target_parent="$(dirname "$target")"
+    target_parent_real="$(canonical_path "$target_parent" 2>/dev/null || printf '%s\n' "$target_parent")"
+
+    case "$target_parent_real" in
+        "$trash_real"|"$trash_real"/*)
+            ;;
+        *)
+            json_error "Permanent delete is only available inside Trash."
+            exit 1
+            ;;
+    esac
+
+    base="${target##*/}"
+    rm -rf -- "$target"
+    if [ "$target_parent_real" = "$trash_real" ]; then
+        rm -f -- "$trash_info/$base.trashinfo"
+    fi
+    json_action true "Permanently deleted $base." "$target"
+}
+
 open_terminal() {
     target="$(resolve_directory "${1:-$HOME}")" || {
         json_error "Terminal path is not a directory: ${1:-$HOME}"
@@ -639,6 +679,9 @@ case "$action" in
         ;;
     trash)
         trash_path "${2:-}"
+        ;;
+    delete)
+        delete_path "${2:-}"
         ;;
     terminal)
         open_terminal "${2:-$HOME}"
