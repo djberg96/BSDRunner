@@ -15,7 +15,9 @@ ShellRoot {
     readonly property string homeDir: themeLoader.homeDir
     readonly property string backendScript: homeDir + "/.config/bsdrunner/scripts/bsdrunner-files-backend.sh"
     property string currentPath: homeDir
+    property string currentPathRef: homeDir
     property string parentPath: homeDir
+    property string parentPathRef: homeDir
     property string pathInputText: homeDir
     property string filterText: ""
     property string statusMessage: "Loading files..."
@@ -84,7 +86,9 @@ ShellRoot {
     function cleanPath(value) {
         var text = String(value || "").trim()
         if (text.length === 0)
-            return currentPath
+            return currentPathRef || currentPath
+        if (text.indexOf("@hex:") === 0)
+            return text
         if (text === "~")
             return homeDir
         if (text.indexOf("~/") === 0)
@@ -193,11 +197,23 @@ ShellRoot {
 
     function entryByPath(path) {
         for (var i = 0; i < visibleEntries.length; i += 1) {
-            if (visibleEntries[i].path === path)
+            if (entryRef(visibleEntries[i]) === path)
                 return visibleEntries[i]
         }
 
         return null
+    }
+
+    function entryRef(entry) {
+        return entry ? (entry.path_token || entry.path || "") : ""
+    }
+
+    function entryDisplayName(entry) {
+        return entry ? (entry.display_name || entry.name || "") : ""
+    }
+
+    function entryDisplayPath(entry) {
+        return entry ? (entry.display_path || entry.path || "") : ""
     }
 
     function metaText(entry) {
@@ -337,8 +353,9 @@ ShellRoot {
             return
         }
 
+        currentPathRef = nextPath
         currentPath = nextPath
-        pathInputText = nextPath
+        pathInputText = nextPath.indexOf("@hex:") === 0 ? currentPath : nextPath
         selectedPath = ""
         detailsOpen = false
         loading = true
@@ -360,7 +377,7 @@ ShellRoot {
     }
 
     function refreshCurrent() {
-        requestSnapshot(currentPath, false)
+        requestSnapshot(currentPathRef || currentPath, false)
     }
 
     function goHome() {
@@ -368,7 +385,7 @@ ShellRoot {
     }
 
     function goUp() {
-        navigate(parentPath || "/")
+        navigate(parentPathRef || parentPath || "/")
     }
 
     function goBack() {
@@ -388,17 +405,17 @@ ShellRoot {
     function activate(entry) {
         if (!entry)
             return
-        selectedPath = entry.path
+        selectedPath = entryRef(entry)
         if (entry.kind === "directory") {
-            navigate(entry.path)
+            navigate(entryRef(entry))
             return
         }
-        openFile(entry.path)
+        openFile(entryRef(entry))
     }
 
     function activateSelected() {
         if (selectedPath.length === 0 && visibleEntries.length > 0)
-            selectedPath = visibleEntries[0].path
+            selectedPath = entryRef(visibleEntries[0])
         activate(entryByPath(selectedPath))
     }
 
@@ -507,8 +524,8 @@ ShellRoot {
         var entry = selectedEntry()
         actionDialogMode = mode
         actionDialogValue = ""
-        actionDialogTargetPath = entry ? entry.path : ""
-        actionDialogTargetName = entry ? entry.name : ""
+        actionDialogTargetPath = entry ? entryRef(entry) : ""
+        actionDialogTargetName = entry ? entryDisplayName(entry) : ""
 
         switch (mode) {
         case "mkdir":
@@ -548,7 +565,7 @@ ShellRoot {
 
         switch (actionDialogMode) {
         case "mkdir":
-            runBackendAction("mkdir", currentPath, actionDialogValue)
+            runBackendAction("mkdir", currentPathRef || currentPath, actionDialogValue)
             break
         case "rename":
             runBackendAction("rename", actionDialogTargetPath, actionDialogValue)
@@ -567,7 +584,7 @@ ShellRoot {
         var entry = selectedEntry()
         var path = currentPath
         if (entry && entry.kind === "directory")
-            path = entry.path
+            path = entryRef(entry)
         runBackendAction("terminal", path, "")
     }
 
@@ -577,7 +594,7 @@ ShellRoot {
         var entry = selectedEntry()
         if (!entry)
             return
-        runBackendAction("copy-path", entry.path, "")
+        runBackendAction("copy-path", entryRef(entry), "")
     }
 
     function buildContextMenuActions() {
@@ -624,12 +641,12 @@ ShellRoot {
         contextMenuKind = kind
 
         if (entry) {
-            selectedPath = entry.path
-            contextMenuTargetPath = entry.path
-            contextMenuTargetName = entry.name
+            selectedPath = entryRef(entry)
+            contextMenuTargetPath = entryRef(entry)
+            contextMenuTargetName = entryDisplayName(entry)
             contextMenuTargetKind = entry.kind
         } else {
-            contextMenuTargetPath = currentPath
+            contextMenuTargetPath = currentPathRef || currentPath
             contextMenuTargetName = baseName(currentPath)
             contextMenuTargetKind = "directory"
         }
@@ -660,25 +677,25 @@ ShellRoot {
             break
         case "rename":
             if (targetEntry) {
-                selectedPath = targetEntry.path
+                selectedPath = entryRef(targetEntry)
                 openActionDialog("rename")
             }
             break
         case "trash":
             if (targetEntry) {
-                selectedPath = targetEntry.path
+                selectedPath = entryRef(targetEntry)
                 openActionDialog("trash")
             }
             break
         case "copy-path":
             if (targetEntry) {
-                selectedPath = targetEntry.path
+                selectedPath = entryRef(targetEntry)
                 copySelectedPath()
             }
             break
         case "show-details":
             if (targetEntry) {
-                selectedPath = targetEntry.path
+                selectedPath = entryRef(targetEntry)
                 detailsOpen = true
                 focusList()
             }
@@ -726,14 +743,14 @@ ShellRoot {
 
         var index = 0
         for (var i = 0; i < visibleEntries.length; i += 1) {
-            if (visibleEntries[i].path === selectedPath) {
+            if (entryRef(visibleEntries[i]) === selectedPath) {
                 index = i
                 break
             }
         }
 
         index = Math.max(0, Math.min(visibleEntries.length - 1, index + delta))
-        selectedPath = visibleEntries[index].path
+        selectedPath = entryRef(visibleEntries[index])
         entryList.positionViewAtIndex(index, ListView.Contain)
     }
 
@@ -777,7 +794,9 @@ ShellRoot {
             shortcuts = []
         } else {
             currentPath = payload.path || currentPath
+            currentPathRef = payload.path_token || currentPath
             parentPath = payload.parent || currentPath
+            parentPathRef = payload.parent_token || parentPath
             pathInputText = currentPath
             entries = payload.entries || []
             shortcuts = payload.shortcuts || []
@@ -883,6 +902,7 @@ ShellRoot {
 
     Component.onCompleted: {
         currentPath = homeDir
+        currentPathRef = homeDir
         pathInputText = homeDir
         history = [homeDir]
         historyIndex = 0
@@ -913,7 +933,7 @@ ShellRoot {
             "sh",
             root.backendScript,
             "snapshot",
-            root.currentPath
+            root.currentPathRef
         ]
 
         stdout: StdioCollector {
@@ -1886,7 +1906,7 @@ ShellRoot {
 
                                 required property var modelData
                                 required property int index
-                                readonly property bool selected: root.selectedPath === modelData.path
+                                readonly property bool selected: root.selectedPath === root.entryRef(modelData)
 
                                 width: entryList.width
                                 height: 34
@@ -1906,7 +1926,7 @@ ShellRoot {
                                     Text {
                                         width: entryHeader.actualNameColumnWidth
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: entryRow.modelData.name
+                                        text: root.entryDisplayName(entryRow.modelData)
                                         color: entryRow.selected ? root.palette.accentStrong : root.palette.primaryText
                                         font.pixelSize: 13
                                         font.bold: entryRow.modelData.kind === "directory"
@@ -1952,7 +1972,7 @@ ShellRoot {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: function(mouse) {
-                                        root.selectedPath = entryRow.modelData.path
+                                        root.selectedPath = root.entryRef(entryRow.modelData)
                                         entryList.currentIndex = entryRow.index
                                         entryList.forceActiveFocus()
                                         if (mouse.button === Qt.RightButton) {
@@ -2042,7 +2062,7 @@ ShellRoot {
 
                                         Text {
                                             width: parent.width
-                                            text: root.selectedEntry() ? root.selectedEntry().name : ""
+                                            text: root.selectedEntry() ? root.entryDisplayName(root.selectedEntry()) : ""
                                             color: root.palette.accentStrong
                                             font.pixelSize: 14
                                             font.bold: true
@@ -2106,7 +2126,7 @@ ShellRoot {
                                     Text {
                                         width: parent.width
                                         height: 38
-                                        text: root.selectedEntry() ? root.selectedEntry().path : ""
+                                        text: root.selectedEntry() ? root.entryDisplayPath(root.selectedEntry()) : ""
                                         color: root.palette.secondaryText
                                         font.pixelSize: 12
                                         wrapMode: Text.WrapAnywhere
@@ -2179,8 +2199,8 @@ ShellRoot {
                                                 onClicked: {
                                                     if (!drawerAction.enabledAction)
                                                         return
-                                                    root.contextMenuTargetPath = root.selectedEntry().path
-                                                    root.contextMenuTargetName = root.selectedEntry().name
+                                                    root.contextMenuTargetPath = root.entryRef(root.selectedEntry())
+                                                    root.contextMenuTargetName = root.entryDisplayName(root.selectedEntry())
                                                     root.contextMenuTargetKind = root.selectedEntry().kind
                                                     root.runContextMenuAction(drawerAction.modelData.action)
                                                 }
@@ -2212,7 +2232,7 @@ ShellRoot {
 
                                 if (index >= 0 && index < root.visibleEntries.length) {
                                     var entry = root.visibleEntries[index]
-                                    root.selectedPath = entry.path
+                                    root.selectedPath = root.entryRef(entry)
                                     entryList.currentIndex = index
                                     root.openContextMenu("item", point.x, point.y, entry)
                                 } else {

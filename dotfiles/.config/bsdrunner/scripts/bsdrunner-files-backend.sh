@@ -33,9 +33,78 @@ json_string() {
     '
 }
 
+path_hex() {
+    LC_ALL=C printf '%s' "${1:-}" | od -An -tx1 | tr -d ' \n'
+}
+
+path_token() {
+    printf '@hex:%s' "$(path_hex "${1:-}")"
+}
+
+hex_to_path() {
+    hex="${1:-}"
+    case "$hex" in
+        ""|*[!0123456789abcdefABCDEF]*)
+            return 1
+            ;;
+    esac
+    [ $(( ${#hex} % 2 )) -eq 0 ] || return 1
+    LC_ALL=C awk -v hex="$hex" '
+        function hexval(ch) {
+            return index("0123456789abcdef", tolower(ch)) - 1
+        }
+        function byteval(pair) {
+            return hexval(substr(pair, 1, 1)) * 16 + hexval(substr(pair, 2, 1))
+        }
+        BEGIN {
+            for (i = 1; i <= length(hex); i += 2)
+                printf "%c", byteval(substr(hex, i, 2))
+        }
+    '
+}
+
+expand_path_ref() {
+    raw="${1:-$HOME}"
+    case "$raw" in
+        @hex:*)
+            hex_to_path "${raw#@hex:}"
+            ;;
+        *)
+            expand_path "$raw"
+            ;;
+    esac
+}
+
+safe_bytes_label() {
+    LC_ALL=C printf '%s' "${1:-}" | od -An -tx1 | tr -d ' \n' | awk '
+        function hexval(ch) {
+            return index("0123456789abcdef", tolower(ch)) - 1
+        }
+        function byteval(pair) {
+            return hexval(substr(pair, 1, 1)) * 16 + hexval(substr(pair, 2, 1))
+        }
+        BEGIN {
+            out = ""
+        }
+        {
+            for (i = 1; i <= length($0); i += 2) {
+                pair = substr($0, i, 2)
+                value = byteval(pair)
+                if (value >= 32 && value <= 126 && value != 92)
+                    out = out sprintf("%c", value)
+                else
+                    out = out "\\x" tolower(pair)
+            }
+        }
+        END {
+            printf "%s", out
+        }
+    '
+}
+
 json_error() {
     message="${1:-Unable to load directory.}"
-    printf '{"ok":false,"message":%s,"path":"","parent":"","entries":[]}\n' "$(json_string "$message")"
+    printf '{"ok":false,"message":%s,"path":"","parent":"","entries":[]}\n' "$(json_string "$(safe_bytes_label "$message")")"
 }
 
 json_action() {
@@ -44,8 +113,8 @@ json_action() {
     path="${3:-}"
     printf '{"ok":%s,"message":%s,"path":%s,"parent":"","entries":[]}\n' \
         "$ok" \
-        "$(json_string "$message")" \
-        "$(json_string "$path")"
+        "$(json_string "$(safe_bytes_label "$message")")" \
+        "$(json_string "$(safe_bytes_label "$path")")"
 }
 
 expand_path() {
@@ -64,7 +133,7 @@ expand_path() {
 }
 
 resolve_directory() {
-    raw="$(expand_path "${1:-$HOME}")"
+    raw="$(expand_path_ref "${1:-$HOME}")"
     [ -n "$raw" ] || raw="$HOME"
     [ -d "$raw" ] || return 1
     (unset CDPATH; cd -P -- "$raw" 2>/dev/null && pwd -P)
@@ -144,6 +213,9 @@ entry_kind() {
 entry_json_line() {
     entry="$1"
     name="${entry##*/}"
+    display_name="$(safe_bytes_label "$name")"
+    display_path="$(safe_bytes_label "$entry")"
+    token="$(path_token "$entry")"
     kind="$(entry_kind "$entry")"
     hidden=false
     case "$name" in
@@ -168,9 +240,12 @@ entry_json_line() {
     sort_kind=1
     [ "$kind" = "directory" ] && sort_kind=0
 
-    printf '%s\t%s\t' "$sort_kind" "$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
-    printf '{"name":%s,' "$(json_string "$name")"
-    printf '"path":%s,' "$(json_string "$entry")"
+    printf '%s\t%s\t' "$sort_kind" "$(printf '%s' "$display_name" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    printf '{"name":%s,' "$(json_string "$display_name")"
+    printf '"display_name":%s,' "$(json_string "$display_name")"
+    printf '"path":%s,' "$(json_string "$display_path")"
+    printf '"display_path":%s,' "$(json_string "$display_path")"
+    printf '"path_token":%s,' "$(json_string "$token")"
     printf '"kind":%s,' "$(json_string "$kind")"
     printf '"hidden":%s,' "$hidden"
     printf '"size_bytes":%s,' "$bytes"
@@ -322,9 +397,11 @@ snapshot() {
     add_media_shortcuts
 
     printf '{"ok":true,'
-    printf '"message":%s,' "$(json_string "Loaded $path")"
-    printf '"path":%s,' "$(json_string "$path")"
-    printf '"parent":%s,' "$(json_string "$parent")"
+    printf '"message":%s,' "$(json_string "Loaded $(safe_bytes_label "$path")")"
+    printf '"path":%s,' "$(json_string "$(safe_bytes_label "$path")")"
+    printf '"path_token":%s,' "$(json_string "$(path_token "$path")")"
+    printf '"parent":%s,' "$(json_string "$(safe_bytes_label "$parent")")"
+    printf '"parent_token":%s,' "$(json_string "$(path_token "$parent")")"
 
     printf '"shortcuts":['
     first=true
@@ -354,16 +431,17 @@ snapshot() {
 }
 
 open_path() {
-    target="$(expand_path "${1:-}")"
+    target="$(expand_path_ref "${1:-}")"
     if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
         json_error "Path does not exist: ${1:-}"
         exit 1
     fi
 
     if [ -d "$target" ]; then
-        printf '{"ok":true,"message":%s,"path":%s,"parent":"","entries":[]}\n' \
+        printf '{"ok":true,"message":%s,"path":%s,"path_token":%s,"parent":"","entries":[]}\n' \
             "$(json_string "Directory navigation is handled by BSDRunner Files.")" \
-            "$(json_string "$target")"
+            "$(json_string "$(safe_bytes_label "$target")")" \
+            "$(json_string "$(path_token "$target")")"
         return 0
     fi
 
@@ -378,9 +456,10 @@ open_path() {
         exit 1
     fi
 
-    printf '{"ok":true,"message":%s,"path":%s,"parent":"","entries":[]}\n' \
-        "$(json_string "Opened ${target##*/}.")" \
-        "$(json_string "$target")"
+    printf '{"ok":true,"message":%s,"path":%s,"path_token":%s,"parent":"","entries":[]}\n' \
+        "$(json_string "Opened $(safe_bytes_label "${target##*/}").")" \
+        "$(json_string "$(safe_bytes_label "$target")")" \
+        "$(json_string "$(path_token "$target")")"
 }
 
 create_folder() {
@@ -408,7 +487,7 @@ create_folder() {
 }
 
 rename_path() {
-    target="$(expand_path "${1:-}")"
+    target="$(expand_path_ref "${1:-}")"
     if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
         json_error "Path does not exist: ${1:-}"
         exit 1
@@ -438,7 +517,7 @@ rename_path() {
 }
 
 trash_path() {
-    target="$(expand_path "${1:-}")"
+    target="$(expand_path_ref "${1:-}")"
     if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
         json_error "Path does not exist: ${1:-}"
         exit 1
@@ -493,7 +572,7 @@ open_terminal() {
 }
 
 copy_path() {
-    target="$(expand_path "${1:-}")"
+    target="$(expand_path_ref "${1:-}")"
     if [ -z "$target" ] || { ! [ -e "$target" ] && ! [ -L "$target" ]; }; then
         json_error "Path does not exist: ${1:-}"
         exit 1
