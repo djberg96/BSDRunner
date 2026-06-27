@@ -33,11 +33,14 @@ ShellRoot {
     property bool caBundleAvailable: false
     property string caBundlePath: ""
     property string searchDomain: ""
+    property string networkSearchDomain: ""
     property var nameservers: []
+    property var networkNameservers: []
     property var forwarders: []
     property bool hasDrill: false
     property bool hasSetup: false
     property bool hasControl: false
+    property bool hasResolvconf: false
     property string lastResultTone: "info"
     property string lastResultMessage: "No DNS action has run yet."
     property string lastResultTimestamp: ""
@@ -72,6 +75,8 @@ ShellRoot {
             return "Unavailable"
         if (serviceRunning && localResolverActive)
             return "Cache Active"
+        if (!localResolverActive && networkNameservers && networkNameservers.length > 0)
+            return "Network DNS"
         if (serviceRunning)
             return "Running"
         return "Cache Off"
@@ -80,6 +85,8 @@ ShellRoot {
     function headlineTone() {
         if (serviceRunning && localResolverActive)
             return "success"
+        if (!localResolverActive && networkNameservers && networkNameservers.length > 0)
+            return "warning"
         if (serviceRunning || bootEnabled)
             return "warning"
         return "info"
@@ -124,6 +131,12 @@ ShellRoot {
         return nameservers.join("\n")
     }
 
+    function networkNameserverText() {
+        if (!networkNameservers || networkNameservers.length === 0)
+            return "No network DNS found"
+        return networkNameservers.join("\n")
+    }
+
     function forwarderZoneLabel(zone) {
         if (zone === ".")
             return "All other DNS"
@@ -154,6 +167,10 @@ ShellRoot {
             return !encryptedForwarding
         case "disable_dot":
             return encryptedForwarding
+        case "network_dns":
+            return networkNameservers && networkNameservers.length > 0
+        case "local_dns":
+            return !localResolverActive || !serviceRunning
         default:
             return true
         }
@@ -251,11 +268,14 @@ ShellRoot {
         caBundleAvailable = payload.resolver ? !!payload.resolver.ca_bundle_available : false
         caBundlePath = payload.resolver ? payload.resolver.ca_bundle || "" : ""
         searchDomain = payload.resolver ? payload.resolver.search || "" : ""
+        networkSearchDomain = payload.resolver ? payload.resolver.network_search || "" : ""
         nameservers = payload.resolver ? payload.resolver.nameservers || [] : []
+        networkNameservers = payload.resolver ? payload.resolver.network_nameservers || [] : []
         forwarders = payload.resolver ? payload.resolver.forwarders || [] : []
         hasDrill = payload.tools ? !!payload.tools.drill : false
         hasSetup = payload.tools ? !!payload.tools.local_unbound_setup : false
         hasControl = payload.tools ? !!payload.tools.local_unbound_control : false
+        hasResolvconf = payload.tools ? !!payload.tools.resolvconf : false
         lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info"
         lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message
         lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : ""
@@ -571,6 +591,16 @@ ShellRoot {
                                 "description": "Enable local_unbound and route this laptop through the local cache."
                             },
                             {
+                                "id": "network_dns",
+                                "label": "Network DNS",
+                                "description": "Temporarily point /etc/resolv.conf at DHCP network DNS servers for captive portals and travel Wi-Fi."
+                            },
+                            {
+                                "id": "local_dns",
+                                "label": "Local Cache",
+                                "description": "Restore /etc/resolv.conf and local_unbound setup so DNS goes through the local cache again."
+                            },
+                            {
                                 "id": "restart",
                                 "label": "Restart",
                                 "description": "Restart local_unbound."
@@ -598,11 +628,11 @@ ShellRoot {
                             id: actionButton
 
                             required property var modelData
-                            readonly property bool dangerous: modelData.id === "disable"
+                            readonly property bool dangerous: modelData.id === "disable" || modelData.id === "network_dns"
                             readonly property bool actionEnabled: root.actionAvailable(modelData.id) && !root.runningAction
                             readonly property bool hovered: actionMouse.containsMouse && actionEnabled
 
-                            width: (parent.width - 40) / 5
+                            width: (parent.width - 60) / 7
                             height: parent.height
                             radius: 8
                             color: hovered ? root.palette.cardHover : root.palette.cardBackground
@@ -616,7 +646,9 @@ ShellRoot {
                                 color: actionButton.actionEnabled
                                     ? (actionButton.dangerous ? root.palette.warning : root.palette.primaryText)
                                     : root.palette.mutedText
-                                font.pixelSize: 13
+                                font.pixelSize: 12
+                                minimumPixelSize: 10
+                                fontSizeMode: Text.HorizontalFit
                                 font.bold: true
                             }
 
@@ -701,7 +733,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: (parent.height - 96 - 16 - 24 - 10) / 2
+                                height: (parent.height - 96 - 16 - 24 - 20) / 3
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -733,7 +765,60 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: (parent.height - 96 - 16 - 24 - 10) / 2
+                                height: (parent.height - 96 - 16 - 24 - 20) / 3
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 8
+
+                                    Row {
+                                        width: parent.width
+                                        height: 16
+                                        spacing: 8
+
+                                        Text {
+                                            width: parent.width - 74
+                                            height: parent.height
+                                            text: "Network DNS"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        Text {
+                                            width: 66
+                                            height: parent.height
+                                            text: root.hasResolvconf ? "resolvconf" : "fallback"
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 10
+                                            horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignVCenter
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.networkNameserverText()
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 13
+                                        font.family: "monospace"
+                                        wrapMode: Text.WrapAnywhere
+                                        maximumLineCount: 3
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: (parent.height - 96 - 16 - 24 - 20) / 3
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -999,7 +1084,7 @@ ShellRoot {
                     radius: 8
                     color: root.palette.cardBackground
                     border.width: 1
-                    border.color: root.pendingActionId === "disable" ? root.palette.warning : root.palette.accent
+                    border.color: root.pendingActionId === "disable" || root.pendingActionId === "network_dns" ? root.palette.warning : root.palette.accent
 
                     Column {
                         anchors.fill: parent
@@ -1034,7 +1119,7 @@ ShellRoot {
                                 radius: 8
                                 color: confirmMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.pendingActionId === "disable" ? root.palette.warning : root.palette.accent
+                                border.color: root.pendingActionId === "disable" || root.pendingActionId === "network_dns" ? root.palette.warning : root.palette.accent
 
                                 Text {
                                     anchors.centerIn: parent

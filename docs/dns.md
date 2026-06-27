@@ -61,6 +61,24 @@ The GUI's `Flush` action still uses `local-unbound-control reload` when availabl
 
 If DNS-over-TLS is blocked by the current network, use the GUI's `Plain DNS` button to switch public forwarding back to ordinary DNS.
 
+## Captive Portals and Travel Wi-Fi
+
+Some airport, hotel, and cafe networks need their own DHCP-provided DNS server before the login portal works. If `/etc/resolv.conf` points only at `127.0.0.1`, or if DNS-over-TLS is blocked, the portal may never resolve.
+
+Use the DNS Cache GUI instead of hand-editing `/etc/resolv.conf`:
+
+- `Network DNS` temporarily writes `/etc/resolv.conf` with non-local nameservers learned from `resolvconf` state. BSDRunner backs up the current file under `~/.config/bsdrunner/dns/resolv.conf.before-network-dns`.
+- `Local Cache` runs the normal `local-unbound-setup` path again and restarts `local_unbound`, putting the laptop back through the local cache.
+- `Plain DNS` keeps the local cache active but switches BSDRunner's public forwarding from DNS-over-TLS to ordinary DNS. Try this first when the network allows DNS but blocks port 853.
+
+The intended travel order is:
+
+```text
+Plain DNS -> Network DNS -> captive portal login -> Local Cache
+```
+
+`Network DNS` is deliberately temporary. It does not edit Unbound forwarding policy; it only swaps the system resolver file so captive portals can be reached.
+
 ## GUI Scope
 
 The DNS Cache GUI is a practical control surface:
@@ -71,6 +89,7 @@ The DNS Cache GUI is a practical control surface:
 - current system nameservers from `/etc/resolv.conf`
 - Unbound forwarding resolvers from `forward-zone` entries
 - whether public forwarding is ordinary DNS or DNS-over-TLS
+- temporary network DNS mode for captive portals and travel Wi-Fi
 - enable, disable, restart, flush, and encrypted forwarding actions
 - a simple lookup test
 
