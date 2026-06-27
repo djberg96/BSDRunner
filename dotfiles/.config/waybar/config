@@ -108,7 +108,8 @@
       "return-type": "json",
       "interval": 5,
       "format": "{}",
-      "tooltip": true
+      "tooltip": true,
+      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-network.sh menu"
     },
 
     "custom/battery": {

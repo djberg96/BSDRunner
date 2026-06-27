@@ -11,11 +11,11 @@ command -v dbus-launch >/dev/null 2>&1 || exit 0
 command -v waybar >/dev/null 2>&1 || exit 0
 
 launch_waybar_direct() {
-    waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
+    nohup waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
 }
 
 launch_waybar_dbus() {
-    dbus-launch waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
+    nohup dbus-launch waybar -c "$waybar_config" -s "$waybar_style" >/tmp/bsdrunner-waybar.log 2>&1 &
 }
 
 pkill -x waybar 2>/dev/null || true
