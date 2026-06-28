@@ -9,7 +9,7 @@
     "margin-right": 10,
     "modules-left": ["custom/theme", "custom/apps", "hyprland/workspaces", "custom/wallpaper-animation", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "custom/memory", "disk", "pulseaudio", "custom/network", "custom/battery", "clock", "tray", "custom/power"],
+    "modules-right": ["cpu", "custom/memory", "disk", "pulseaudio", "custom/network", "custom/battery", "custom/clock", "tray", "custom/power"],
 
     "hyprland/workspaces": {
       "disable-scroll": true,
@@ -121,20 +121,13 @@
       "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-battery-window.sh"
     },
 
-    "clock": {
+    "custom/clock": {
+      "exec": "sh ~/.config/waybar/scripts/bsdrunner-clock.sh",
+      "return-type": "json",
       "interval": 1,
-      "format": "{:%a %Y-%m-%d %H:%M}",
-      "format-alt": "{:%A %B %d  %I:%M %p}",
-      "tooltip-format": "<span>{calendar}</span>",
-      "calendar": {
-        "mode": "month",
-        "mode-mon-col": 3,
-        "weeks-pos": "right",
-        "on-scroll": 1,
-        "format": {
-          "today": "<span background='#d7e3ea' foreground='#0f1418'><b> {} </b></span>"
-        }
-      }
+      "format": "{}",
+      "tooltip": true,
+      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-clock.sh menu"
     },
 
     "tray": {

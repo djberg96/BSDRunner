@@ -19,6 +19,7 @@
 #custom-battery,
 #custom-apps,
 #clock,
+#custom-clock,
 #tray,
 #custom-power {
     background: rgba(26, 34, 25, 0.96);
@@ -55,7 +56,8 @@
     color: #9eb88b;
 }
 
-#clock {
+#clock,
+#custom-clock {
     color: #b4a14d;
 }
 

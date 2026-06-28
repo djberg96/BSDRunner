@@ -15,6 +15,7 @@
 #custom-network,
 #custom-battery,
 #clock,
+#custom-clock,
 #tray,
 #custom-power {
     background: rgba(27, 35, 41, 0.94);
@@ -47,7 +48,8 @@
     color: #b9e9db;
 }
 
-#clock {
+#clock,
+#custom-clock {
     color: #dff6ff;
 }
 
@@ -107,6 +109,7 @@ tooltip {
 #custom-network,
 #custom-battery,
 #clock,
+#custom-clock,
 #tray,
 #custom-power {
     background: rgba(31, 41, 48, 0.97);
