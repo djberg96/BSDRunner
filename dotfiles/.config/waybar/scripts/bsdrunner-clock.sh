@@ -7,6 +7,7 @@ STATE_DIR="${HOME}/.config/bsdrunner"
 FORMAT_FILE="$STATE_DIR/clock-format"
 ZONEINFO_DIR="/usr/share/zoneinfo"
 NOTIFICATION_TIMEOUT_MS=2000
+TIMEZONE_HELPER="${HOME}/.config/bsdrunner/scripts/bsdrunner-timezone-auto.sh"
 
 escape_json() {
     printf '%s' "$1" | awk '
@@ -158,18 +159,7 @@ set_timezone() {
         return 1
     fi
 
-    if command -v mdo >/dev/null 2>&1; then
-        mdo -- /bin/ln -sf "$ZONEINFO_DIR/$timezone_name" /etc/localtime
-    elif command -v pkexec >/dev/null 2>&1; then
-        pkexec /bin/ln -sf "$ZONEINFO_DIR/$timezone_name" /etc/localtime
-    elif command -v sudo >/dev/null 2>&1; then
-        sudo /bin/ln -sf "$ZONEINFO_DIR/$timezone_name" /etc/localtime
-    else
-        show_message "BSDRunner Clock" "No privilege helper found for setting /etc/localtime"
-        return 1
-    fi
-
-    show_message "BSDRunner Clock" "Timezone set to $timezone_name"
+    exec sh "$TIMEZONE_HELPER" set "$timezone_name"
 }
 
 choose_more_timezone() {
@@ -193,6 +183,7 @@ show_menu() {
     launcher="${ROFI_CMD:-rofi -dmenu}"
     timezone_name="$(current_timezone)"
     format_name="$(clock_format)"
+    timezone_auto_status="$(sh "$TIMEZONE_HELPER" status 2>/dev/null || true)"
 
     if [ "$format_name" = "standard" ]; then
         format_label="Toggle clock format - long 12-hour"
@@ -215,7 +206,12 @@ show_menu() {
             "Arizona - Phoenix" \
             "UTC" \
             "More timezones..." \
-        | $launcher -i -p "Clock" -mesg "Current timezone: $timezone_name" 2>/dev/null
+            "Check timezone from network" \
+            "Enable automatic timezone prompts" \
+            "Enable automatic timezone changes" \
+            "Disable automatic timezone checks" \
+        | $launcher -i -p "Clock" -mesg "Current timezone: $timezone_name
+$timezone_auto_status" 2>/dev/null
     )"
 
     case "${choice:-}" in
@@ -229,6 +225,18 @@ show_menu() {
             selected_timezone="$(choose_more_timezone || true)"
             [ -n "${selected_timezone:-}" ] || exit 0
             set_timezone "$selected_timezone"
+            ;;
+        "Check timezone from network")
+            exec sh "$TIMEZONE_HELPER" check yes
+            ;;
+        "Enable automatic timezone prompts")
+            exec sh "$TIMEZONE_HELPER" enable
+            ;;
+        "Enable automatic timezone changes")
+            exec sh "$TIMEZONE_HELPER" auto
+            ;;
+        "Disable automatic timezone checks")
+            exec sh "$TIMEZONE_HELPER" disable
             ;;
         *)
             set_timezone "$(timezone_label_to_name "$choice")"
