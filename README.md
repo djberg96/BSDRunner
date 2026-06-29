@@ -198,6 +198,16 @@ For the curious, Haas-Bioroid also supports an animated wallpaper setup with a p
 
 ![Haas-Bioroid animated wallpaper](docs/screenshots/haas_bioroid_wallpaper2_take2.gif)
 
+# About Pull Requests
+I'll be blunt. This is really, mainly, a personal project that I keep online for
+convenience. I've made this desktop for me, not for you. While I won't outright
+reject a PR without looking at it first, please keep in mind that I am largely
+uninterested in external input.
+
+That said, if you think you've found a bug, by all means report it. If you have a
+UI enhancement that you think would be nice, please include your reasoning and
+some screenshots.
+
 # Creator
 Daniel J. Berger
 
