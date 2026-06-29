@@ -210,6 +210,79 @@ entry_kind() {
     fi
 }
 
+is_image_path() {
+    case "${1##*.}" in
+        png|PNG|jpg|JPG|jpeg|JPEG|gif|GIF|webp|WEBP|bmp|BMP|tif|TIF|tiff|TIFF|svg|SVG)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+launch_and_check() {
+    opener_label="$1"
+    shift
+    target="$1"
+    shift
+
+    stderr_tmp="${TMPDIR:-/tmp}/bsdrunner-files-open.$$"
+    rm -f "$stderr_tmp"
+
+    if [ "$#" -gt 0 ]; then
+        "$@" "$target" >/dev/null 2>"$stderr_tmp" &
+    else
+        "$opener_label" "$target" >/dev/null 2>"$stderr_tmp" &
+    fi
+
+    opener_pid=$!
+    sleep 1
+
+    if kill -0 "$opener_pid" >/dev/null 2>&1; then
+        rm -f "$stderr_tmp"
+        return 0
+    fi
+
+    opener_status=0
+    wait "$opener_pid" || opener_status=$?
+    if [ "$opener_status" -eq 0 ]; then
+        rm -f "$stderr_tmp"
+        return 0
+    fi
+
+    opener_error="$(safe_bytes_label "$(cat "$stderr_tmp" 2>/dev/null || printf '')")"
+    rm -f "$stderr_tmp"
+    [ -n "$opener_error" ] || opener_error="$opener_label exited with status $opener_status."
+    return 1
+}
+
+launch_image_fallback() {
+    target="$1"
+
+    for opener in \
+        gimp \
+        krita \
+        gwenview \
+        ristretto \
+        eog \
+        loupe \
+        imv \
+        nsxiv \
+        sxiv \
+        feh \
+        firefox
+    do
+        command -v "$opener" >/dev/null 2>&1 || continue
+        launch_and_check "$opener" "$target" "$opener" && {
+            json_action true "Opened ${target##*/} with $opener." "$target"
+            return 0
+        }
+    done
+
+    return 1
+}
+
 entry_json_line() {
     entry="$1"
     name="${entry##*/}"
@@ -450,21 +523,41 @@ open_path() {
         return 0
     fi
 
+    if is_image_path "$target" && launch_image_fallback "$target"; then
+        return 0
+    fi
+
+    opener_error=""
     if command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$target" >/dev/null 2>&1 &
+        if launch_and_check "xdg-open" "$target" xdg-open; then
+            json_action true "Opened ${target##*/}." "$target"
+            return 0
+        fi
     elif command -v open >/dev/null 2>&1; then
-        open "$target" >/dev/null 2>&1 &
+        if launch_and_check "open" "$target" open; then
+            json_action true "Opened ${target##*/}." "$target"
+            return 0
+        fi
     elif command -v gio >/dev/null 2>&1; then
-        gio open "$target" >/dev/null 2>&1 &
+        if launch_and_check "gio open" "$target" gio open; then
+            json_action true "Opened ${target##*/}." "$target"
+            return 0
+        fi
     else
-        json_error "No desktop opener found. Install xdg-utils for xdg-open."
+        opener_error="No desktop opener found. Install xdg-utils for xdg-open."
+    fi
+
+    if is_image_path "$target"; then
+        json_error "No application is associated with ${target##*/}. Install an image app such as gimp, gwenview, imv, or feh."
         exit 1
     fi
 
-    printf '{"ok":true,"message":%s,"path":%s,"path_token":%s,"parent":"","entries":[]}\n' \
-        "$(json_string "Opened $(safe_bytes_label "${target##*/}").")" \
-        "$(json_string "$(safe_bytes_label "$target")")" \
-        "$(json_string "$(path_token "$target")")"
+    if [ -n "$opener_error" ]; then
+        json_error "$opener_error"
+    else
+        json_error "No application is associated with ${target##*/}."
+    fi
+    exit 1
 }
 
 create_folder() {
