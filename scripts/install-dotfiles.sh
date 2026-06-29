@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 theme="default"
+theme_was_requested=false
 
 usage() {
     cat <<'EOF'
@@ -202,6 +203,7 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             }
             theme="$2"
+            theme_was_requested=true
             shift
             ;;
         -h|--help)
@@ -216,6 +218,13 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+if [[ "$theme_was_requested" == false && -f "$HOME/.config/bsdrunner/current-theme" ]]; then
+    current_theme="$(tr -d '[:space:]' < "$HOME/.config/bsdrunner/current-theme")"
+    if [[ -n "$current_theme" ]] && theme_exists "$current_theme"; then
+        theme="$current_theme"
+    fi
+fi
 
 if ! theme_exists "$theme"; then
     echo ":: Unknown theme: $theme" >&2

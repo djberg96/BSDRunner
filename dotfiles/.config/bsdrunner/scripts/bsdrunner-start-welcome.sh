@@ -5,6 +5,8 @@ PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH
 
 [ -f "$HOME/.config/bsdrunner/show-welcome-at-startup" ] || exit 0
 
+sleep 1
+
 if command -v qs >/dev/null 2>&1; then
     exec qs -c bsdrunner-welcome
 fi
