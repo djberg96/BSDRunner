@@ -125,16 +125,23 @@ ShellRoot {
         return ""
     }
 
+    function groupedNameserverText(items, emptyText) {
+        if (!items || items.length === 0)
+            return emptyText
+
+        var lines = []
+        for (var i = 0; i < items.length; i += 3) {
+            lines.push(items.slice(i, i + 3).join(", "))
+        }
+        return lines.join("\n")
+    }
+
     function nameserverText() {
-        if (!nameservers || nameservers.length === 0)
-            return "No nameservers found"
-        return nameservers.join("\n")
+        return groupedNameserverText(nameservers, "No nameservers found")
     }
 
     function networkNameserverText() {
-        if (!networkNameservers || networkNameservers.length === 0)
-            return "No network DNS found"
-        return networkNameservers.join("\n")
+        return groupedNameserverText(networkNameservers, "No network DNS found")
     }
 
     function forwarderZoneLabel(zone) {
@@ -752,13 +759,26 @@ ShellRoot {
                                         font.bold: true
                                     }
 
-                                    Text {
+                                    Flickable {
+                                        id: nameserverFlickable
+
                                         width: parent.width
-                                        text: root.nameserverText()
-                                        color: root.palette.primaryText
-                                        font.pixelSize: 15
-                                        font.family: "monospace"
-                                        wrapMode: Text.WrapAnywhere
+                                        height: parent.height - 19
+                                        contentWidth: width
+                                        contentHeight: nameserverText.height
+                                        clip: true
+                                        boundsBehavior: Flickable.StopAtBounds
+
+                                        Text {
+                                            id: nameserverText
+
+                                            width: nameserverFlickable.width
+                                            text: root.nameserverText()
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 15
+                                            font.family: "monospace"
+                                            wrapMode: Text.WrapAnywhere
+                                        }
                                     }
                                 }
                             }
@@ -803,15 +823,26 @@ ShellRoot {
                                         }
                                     }
 
-                                    Text {
+                                    Flickable {
+                                        id: networkNameserverFlickable
+
                                         width: parent.width
-                                        text: root.networkNameserverText()
-                                        color: root.palette.primaryText
-                                        font.pixelSize: 13
-                                        font.family: "monospace"
-                                        wrapMode: Text.WrapAnywhere
-                                        maximumLineCount: 3
-                                        elide: Text.ElideRight
+                                        height: parent.height - 24
+                                        contentWidth: width
+                                        contentHeight: networkNameserverText.height
+                                        clip: true
+                                        boundsBehavior: Flickable.StopAtBounds
+
+                                        Text {
+                                            id: networkNameserverText
+
+                                            width: networkNameserverFlickable.width
+                                            text: root.networkNameserverText()
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.family: "monospace"
+                                            wrapMode: Text.WrapAnywhere
+                                        }
                                     }
                                 }
                             }
