@@ -107,50 +107,46 @@ recover_wireless_networking() {
     fi
 
     output=""
+    recovery_failed=no
 
-    if step_output="$(run_privileged ifconfig "$scan_iface" down 2>&1)"; then
-        output="${output}Interface $scan_iface brought down.
-$step_output"
-    else
-        output="${output}Failed to bring $scan_iface down.
-$step_output"
-        show_message "BSDRunner Network" "$output"
-        return 1
-    fi
+    append_recovery_output() {
+        label="$1"
+        details="$2"
 
-    if step_output="$(run_privileged ifconfig "$scan_iface" up 2>&1)"; then
-        output="${output}
-Interface $scan_iface brought up.
-$step_output"
-    else
-        output="${output}
-Failed to bring $scan_iface up.
-$step_output"
-        show_message "BSDRunner Network" "$output"
-        return 1
-    fi
+        if [ -n "$output" ]; then
+            output="${output}
+"
+        fi
 
-    if step_output="$(run_privileged service netif restart 2>&1)"; then
-        output="${output}
-netif restarted.
-$step_output"
-    else
-        output="${output}
-Failed to restart netif.
-$step_output"
-        show_message "BSDRunner Network" "$output"
-        return 1
-    fi
+        output="${output}${label}"
+        if [ -n "$details" ]; then
+            output="${output}
+$details"
+        fi
+    }
 
-    if step_output="$(run_privileged service routing restart 2>&1)"; then
-        output="${output}
-routing restarted.
-$step_output"
-    else
-        output="${output}
-Failed to restart routing.
-$step_output"
-        show_message "BSDRunner Network" "$output"
+    run_recovery_step() {
+        label="$1"
+        shift
+
+        if step_output="$(run_privileged "$@" 2>&1)"; then
+            append_recovery_output "$label" "$step_output"
+        else
+            recovery_failed=yes
+            append_recovery_output "Failed: $label" "$step_output"
+        fi
+    }
+
+    run_recovery_step "Brought $scan_iface down" ifconfig "$scan_iface" down
+    run_recovery_step "Restarted wpa_supplicant for $scan_iface" service wpa_supplicant restart "$scan_iface"
+    run_recovery_step "Brought $scan_iface up" ifconfig "$scan_iface" up
+    run_recovery_step "Restarted dhclient for $scan_iface" service dhclient restart "$scan_iface"
+    run_recovery_step "Restarted netif for $scan_iface" service netif restart "$scan_iface"
+    run_recovery_step "Restarted routing" service routing restart
+
+    if [ "$recovery_failed" = "yes" ]; then
+        show_message "BSDRunner Network" "Wireless recovery finished with warnings on $scan_iface
+$output"
         return 1
     fi
 
