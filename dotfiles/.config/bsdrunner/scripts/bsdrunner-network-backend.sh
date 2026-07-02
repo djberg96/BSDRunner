@@ -4,8 +4,17 @@ set -eu
 PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
 action="${1:-snapshot}"
-iface_arg="${2:-}"
+case "$action" in
+    snapshot|recover)
+        iface_arg="${2:-}"
+        ;;
+    *)
+        iface_arg=""
+        ;;
+esac
 action_arg="${2:-}"
+action_secret="${3:-}"
+action_bssid="${4:-}"
 state_dir="${HOME}/.config/bsdrunner/network"
 state_file="$state_dir/last-result.conf"
 
@@ -67,6 +76,18 @@ emit_action_result() {
 valid_lookup_name() {
     case "${1:-}" in
         ''|*[!A-Za-z0-9._:-]*|.*|*..*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+valid_join_value() {
+    case "${1:-}" in
+        *'
+'*|*'"'*|*'\'*)
             return 1
             ;;
         *)
@@ -701,6 +722,151 @@ $details"
     emit_action_result true "Network recovery completed." "$output"
 }
 
+join_network() {
+    target_ssid="${1:-}"
+    passphrase="${2:-}"
+    target_bssid="${3:-}"
+    iface="$(wireless_iface || active_iface)"
+
+    if [ -z "$iface" ]; then
+        write_last_result error "No wireless interface found."
+        emit_action_result false "No wireless interface found." ""
+        exit 1
+    fi
+
+    if [ -z "$target_ssid" ] || [ "$target_ssid" = "(hidden)" ] || ! valid_join_value "$target_ssid" || ! valid_join_value "$passphrase" || ! valid_join_value "$target_bssid"; then
+        write_last_result error "Invalid Wi-Fi network selection."
+        emit_action_result false "Invalid Wi-Fi network selection." "$target_ssid"
+        exit 1
+    fi
+
+    old_network="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' '$4 ~ /\[CURRENT\]/ { print $1; exit }')"
+    existing_network="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' -v ssid="$target_ssid" '$2 == ssid { print $1; exit }')"
+    network_id=""
+    new_network=""
+    changed_existing_bssid=no
+    previous_bssid=""
+    output="Target: $target_ssid"
+    [ -n "$target_bssid" ] && output="${output}
+BSSID: $target_bssid"
+
+    append_output() {
+        label="$1"
+        details="${2:-}"
+        output="${output}
+$label"
+        [ -n "$details" ] && output="${output}
+$details"
+    }
+
+    rollback_join() {
+        if [ -n "$new_network" ]; then
+            run_privileged wpa_cli -i "$iface" remove_network "$new_network" >/dev/null 2>&1 || true
+        fi
+        if [ "$changed_existing_bssid" = "yes" ] && [ -n "$network_id" ]; then
+            run_privileged wpa_cli -i "$iface" set_network "$network_id" bssid "${previous_bssid:-any}" >/dev/null 2>&1 || true
+        fi
+        run_privileged wpa_cli -i "$iface" enable_network all >/dev/null 2>&1 || true
+        if [ -n "$old_network" ]; then
+            run_privileged wpa_cli -i "$iface" select_network "$old_network" >/dev/null 2>&1 || true
+            run_privileged wpa_cli -i "$iface" reassociate >/dev/null 2>&1 || true
+        fi
+    }
+
+    if [ -n "$passphrase" ] || [ -z "$existing_network" ]; then
+        if [ -n "$passphrase" ] && { [ "${#passphrase}" -lt 8 ] || [ "${#passphrase}" -gt 63 ]; }; then
+            write_last_result error "Wi-Fi password must be 8-63 characters."
+            emit_action_result false "Wi-Fi password must be 8-63 characters." "$output"
+            exit 1
+        fi
+
+        new_network="$(run_privileged wpa_cli -i "$iface" add_network 2>/dev/null | awk '/^[0-9]+$/ { print; exit }')"
+        if [ -z "$new_network" ]; then
+            write_last_result error "Could not create a Wi-Fi profile."
+            emit_action_result false "Could not create a Wi-Fi profile." "$output"
+            exit 1
+        fi
+
+        network_id="$new_network"
+        if ! set_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" ssid "\"$target_ssid\"" 2>&1)"; then
+            rollback_join
+            write_last_result error "Could not set Wi-Fi SSID."
+            emit_action_result false "Could not set Wi-Fi SSID." "$output
+$set_output"
+            exit 1
+        fi
+        append_output "Created temporary profile $network_id." "$set_output"
+
+        if [ -n "$passphrase" ]; then
+            if ! set_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" psk "\"$passphrase\"" 2>&1)"; then
+                rollback_join
+                write_last_result error "Could not set Wi-Fi password."
+                emit_action_result false "Could not set Wi-Fi password." "$output
+$set_output"
+                exit 1
+            fi
+        else
+            if ! set_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" key_mgmt NONE 2>&1)"; then
+                rollback_join
+                write_last_result error "Could not set Wi-Fi security."
+                emit_action_result false "Could not set Wi-Fi security." "$output
+$set_output"
+                exit 1
+            fi
+        fi
+        append_output "Set credentials." "$set_output"
+    else
+        network_id="$existing_network"
+        append_output "Using saved profile $network_id."
+    fi
+
+    if [ -n "$target_bssid" ]; then
+        if [ -z "$new_network" ]; then
+            previous_bssid="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' -v id="$network_id" '$1 == id { print $3; exit }')"
+            changed_existing_bssid=yes
+        fi
+        bssid_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" bssid "$target_bssid" 2>&1 || true)"
+        append_output "Pinned BSSID." "$bssid_output"
+    fi
+
+    if ! select_output="$(run_privileged wpa_cli -i "$iface" select_network "$network_id" 2>&1)"; then
+        rollback_join
+        write_last_result error "Could not select Wi-Fi network."
+        emit_action_result false "Could not select Wi-Fi network." "$output
+$select_output"
+        exit 1
+    fi
+    append_output "Selected network." "$select_output"
+    run_privileged wpa_cli -i "$iface" reassociate >/dev/null 2>&1 || true
+
+    joined=no
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        current="$(iface_config "$iface")"
+        current_ssid="$(printf '%s\n' "$current" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
+        current_status="$(printf '%s\n' "$current" | awk '/status:/{print $2; exit}')"
+        if [ "$current_ssid" = "$target_ssid" ] && [ "$current_status" = "associated" ]; then
+            joined=yes
+            break
+        fi
+        sleep 1
+    done
+
+    if [ "$joined" != "yes" ]; then
+        rollback_join
+        write_last_result warning "Wi-Fi join failed; restored previous network."
+        emit_action_result false "Wi-Fi join failed; restored previous network." "$output"
+        exit 1
+    fi
+
+    dhcp_output="$(run_privileged service dhclient restart "$iface" 2>&1 || true)"
+    append_output "Restarted DHCP." "$dhcp_output"
+    save_output="$(run_privileged wpa_cli -i "$iface" save_config 2>&1 || true)"
+    append_output "Saved Wi-Fi configuration." "$save_output"
+
+    write_last_result success "Joined $target_ssid."
+    emit_action_result true "Joined $target_ssid." "$output"
+}
+
 case "$action" in
     snapshot)
         emit_snapshot
@@ -710,6 +876,9 @@ case "$action" in
         ;;
     recover)
         recover_network
+        ;;
+    join)
+        join_network "$action_arg" "$action_secret" "$action_bssid"
         ;;
     *)
         emit_action_result false "Unknown network action." "$action"

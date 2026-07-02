@@ -19,8 +19,14 @@ ShellRoot {
     property string actionDetails: ""
     property string activeActionId: ""
     property string activeActionArg: ""
+    property string activeActionSecret: ""
+    property string activeActionBssid: ""
     property string activeActionLabel: ""
     property string lookupName: "freebsd.org"
+    property bool joinDialogVisible: false
+    property string joinSsid: ""
+    property string joinBssid: ""
+    property string joinPassword: ""
     property var interfaceInfo: ({})
     property var routeInfo: ({})
     property var tools: ({})
@@ -203,6 +209,23 @@ ShellRoot {
         return row && row.bssid && ifaceValue("bssid") === row.bssid
     }
 
+    function openJoinDialog(row) {
+        if (!row || !row.ssid || row.ssid === "(hidden)" || runningAction)
+            return
+        joinSsid = row.ssid
+        joinBssid = row.bssid || ""
+        joinPassword = ""
+        joinDialogVisible = true
+        hideFeatureTooltip()
+    }
+
+    function closeJoinDialog() {
+        joinDialogVisible = false
+        joinSsid = ""
+        joinBssid = ""
+        joinPassword = ""
+    }
+
     function refreshSnapshot() {
         if (loading)
             return
@@ -251,11 +274,13 @@ ShellRoot {
         }
     }
 
-    function runAction(actionId, label, actionArg) {
+    function runAction(actionId, label, actionArg, actionSecret, actionBssid) {
         if (runningAction)
             return
         activeActionId = actionId
         activeActionArg = actionArg || ""
+        activeActionSecret = actionSecret || ""
+        activeActionBssid = actionBssid || ""
         activeActionLabel = label
         runningAction = true
         statusTone = "info"
@@ -276,6 +301,16 @@ ShellRoot {
             return
         lookupName = name
         runAction("drill", "Running DNS lookup", name)
+    }
+
+    function runJoin() {
+        if (joinSsid.length === 0 || runningAction)
+            return
+        var ssid = joinSsid
+        var bssid = joinBssid
+        var password = joinPassword
+        closeJoinDialog()
+        runAction("join", "Joining " + ssid, ssid, password, bssid)
     }
 
     function maybeFinalizeAction() {
@@ -309,6 +344,8 @@ ShellRoot {
         var completedActionId = activeActionId
         activeActionId = ""
         activeActionArg = ""
+        activeActionSecret = ""
+        activeActionBssid = ""
         activeActionLabel = ""
         if (completedActionId !== "drill")
             refreshSnapshot()
@@ -348,7 +385,7 @@ ShellRoot {
         id: actionProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-network-backend.sh", root.activeActionId, root.activeActionArg]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-network-backend.sh", root.activeActionId, root.activeActionArg, root.activeActionSecret, root.activeActionBssid]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -799,10 +836,12 @@ ShellRoot {
 
                                                 anchors.fill: parent
                                                 hoverEnabled: scanRow.hasCaps
-                                                acceptedButtons: Qt.NoButton
+                                                acceptedButtons: Qt.LeftButton
+                                                cursorShape: scanRow.modelData.ssid === "(hidden)" ? Qt.ArrowCursor : Qt.PointingHandCursor
                                                 onEntered: root.showFeatureTooltip(scanRow)
                                                 onPositionChanged: root.showFeatureTooltip(scanRow)
                                                 onExited: root.hideFeatureTooltip()
+                                                onClicked: root.openJoinDialog(scanRow.modelData)
                                             }
                                         }
                                     }
@@ -1429,6 +1468,155 @@ ShellRoot {
                     color: root.palette.primaryText
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                z: 1200
+                visible: root.joinDialogVisible
+                color: Qt.alpha(root.palette.frameBackground, 0.64)
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.closeJoinDialog()
+                }
+
+                Rectangle {
+                    width: 360
+                    height: 238
+                    anchors.centerIn: parent
+                    radius: 8
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.palette.accent
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {}
+                    }
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        Text {
+                            width: parent.width
+                            text: "Join Wi-Fi"
+                            color: root.palette.accent
+                            font.pixelSize: 17
+                            font.bold: true
+                        }
+
+                        Column {
+                            width: parent.width
+                            spacing: 4
+
+                            Text {
+                                width: parent.width
+                                text: root.joinSsid
+                                color: root.palette.primaryText
+                                font.pixelSize: 14
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.joinBssid
+                                color: root.palette.mutedText
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 38
+                            radius: 6
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: joinPasswordInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                            TextInput {
+                                id: joinPasswordInput
+
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                verticalAlignment: TextInput.AlignVCenter
+                                text: root.joinPassword
+                                echoMode: TextInput.Password
+                                color: root.palette.primaryText
+                                selectedTextColor: root.palette.frameBackground
+                                selectionColor: root.palette.accent
+                                font.pixelSize: 13
+                                clip: true
+                                focus: root.joinDialogVisible
+                                onTextChanged: root.joinPassword = text
+                                onAccepted: root.runJoin()
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            height: 38
+                            spacing: 10
+
+                            Rectangle {
+                                width: (parent.width - 10) / 2
+                                height: parent.height
+                                radius: 6
+                                color: joinCancelMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Cancel"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: joinCancelMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.closeJoinDialog()
+                                }
+                            }
+
+                            Rectangle {
+                                width: (parent.width - 10) / 2
+                                height: parent.height
+                                radius: 6
+                                color: joinConfirmMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.14)
+                                border.width: 1
+                                border.color: root.palette.accent
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Join"
+                                    color: root.palette.accent
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: joinConfirmMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.runJoin()
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
