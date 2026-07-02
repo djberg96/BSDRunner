@@ -5,6 +5,7 @@ PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH
 
 action="${1:-snapshot}"
 iface_arg="${2:-}"
+action_arg="${2:-}"
 state_dir="${HOME}/.config/bsdrunner/network"
 state_file="$state_dir/last-result.conf"
 
@@ -61,6 +62,17 @@ emit_action_result() {
         "$ok" \
         "$(json_string "$message")" \
         "$(json_string "$details")"
+}
+
+valid_lookup_name() {
+    case "${1:-}" in
+        ''|*[!A-Za-z0-9._:-]*|.*|*..*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
 }
 
 default_iface() {
@@ -238,6 +250,163 @@ emit_log_json() {
     '
 }
 
+emit_resolver_json() {
+    if [ ! -r /etc/resolv.conf ]; then
+        printf '[]'
+        return
+    fi
+
+    awk '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        $1 == "nameserver" && $2 != "" {
+            if (!first)
+                first = 1
+            else
+                printf ","
+            printf "\"%s\"", esc($2)
+        }
+    ' /etc/resolv.conf |
+    awk 'BEGIN { printf "[" } { printf "%s", $0 } END { printf "]" }'
+}
+
+dns_check_object() {
+    host="$1"
+
+    if ! command -v drill >/dev/null 2>&1; then
+        printf '{"host":%s,"ok":false,"rcode":%s,"cname":%s,"address":%s,"server":%s,"classification":%s}' \
+            "$(json_string "$host")" \
+            "$(json_string "unavailable")" \
+            "$(json_string "")" \
+            "$(json_string "")" \
+            "$(json_string "")" \
+            "$(json_string "drill unavailable")"
+        return
+    fi
+
+    output="$(drill "$host" 2>&1 || true)"
+    rcode="$(printf '%s\n' "$output" | awk -F 'rcode: ' '/rcode:/{ split($2, parts, ","); print parts[1]; exit }')"
+    cname="$(printf '%s\n' "$output" | awk '{ for (i = 1; i <= NF; i++) if ($i == "CNAME" && (i + 1) <= NF) { print $(i + 1); exit } }')"
+    address="$(printf '%s\n' "$output" | awk '{ for (i = 1; i <= NF; i++) if ($i == "A" && (i + 1) <= NF) { print $(i + 1); exit } }')"
+    server="$(printf '%s\n' "$output" | awk '/^;; SERVER:/{ print $3; exit }')"
+    combined="$(printf '%s %s %s\n' "$host" "$cname" "$address")"
+    classification="normal"
+
+    case "$combined" in
+        *restrictmoderate.youtube.com*)
+            classification="youtube moderate"
+            ;;
+        *restrict.youtube.com*)
+            classification="youtube strict"
+            ;;
+    esac
+
+    if [ "$rcode" = "NOERROR" ] && { [ -n "$cname" ] || [ -n "$address" ]; }; then
+        ok=true
+    else
+        ok=false
+    fi
+
+    printf '{"host":%s,"ok":%s,"rcode":%s,"cname":%s,"address":%s,"server":%s,"classification":%s}' \
+        "$(json_string "$host")" \
+        "$ok" \
+        "$(json_string "$rcode")" \
+        "$(json_string "$cname")" \
+        "$(json_string "$address")" \
+        "$(json_string "$server")" \
+        "$(json_string "$classification")"
+}
+
+drill_lookup() {
+    host="${1:-}"
+
+    if ! valid_lookup_name "$host"; then
+        write_last_result error "Invalid DNS lookup name."
+        emit_action_result false "Invalid DNS lookup name." "$host"
+        exit 1
+    fi
+
+    if ! command -v drill >/dev/null 2>&1; then
+        write_last_result error "drill is not installed."
+        emit_action_result false "drill is not installed." ""
+        exit 1
+    fi
+
+    output="$(drill "$host" 2>&1 || true)"
+    rcode="$(printf '%s\n' "$output" | awk -F 'rcode: ' '/rcode:/{ split($2, parts, ","); print parts[1]; exit }')"
+    cname="$(printf '%s\n' "$output" | awk '{ for (i = 1; i <= NF; i++) if ($i == "CNAME" && (i + 1) <= NF) { print $(i + 1); exit } }')"
+    address="$(printf '%s\n' "$output" | awk '{ for (i = 1; i <= NF; i++) if ($i == "A" && (i + 1) <= NF) { print $(i + 1); exit } }')"
+    server="$(printf '%s\n' "$output" | awk '/^;; SERVER:/{ print $3; exit }')"
+
+    details="Host: $host
+Rcode: ${rcode:-unknown}
+Server: ${server:-unknown}"
+    [ -n "$cname" ] && details="${details}
+CNAME: $cname"
+    [ -n "$address" ] && details="${details}
+Address: $address"
+    details="${details}
+
+$output"
+
+    if [ "$rcode" = "NOERROR" ] && { [ -n "$cname" ] || [ -n "$address" ]; }; then
+        write_last_result success "DNS lookup completed."
+        emit_action_result true "DNS lookup completed." "$details"
+    else
+        write_last_result warning "DNS lookup returned no address."
+        emit_action_result false "DNS lookup returned no address." "$details"
+        exit 1
+    fi
+}
+
+emit_dns_policy_json() {
+    checks_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns.XXXXXX")"
+    trap 'rm -f "$checks_tmp"' EXIT HUP INT TERM
+
+    for host in www.youtube.com m.youtube.com youtubei.googleapis.com google.com; do
+        dns_check_object "$host" >>"$checks_tmp"
+        printf '\n' >>"$checks_tmp"
+    done
+
+    if grep -q '"classification":"youtube strict"' "$checks_tmp"; then
+        status="Diagnostics warning"
+        tone="warning"
+        summary="This network appears to enforce YouTube Restricted Mode through DNS."
+    elif grep -q '"classification":"youtube moderate"' "$checks_tmp"; then
+        status="Diagnostics warning"
+        tone="warning"
+        summary="This network appears to enforce YouTube moderate Restricted Mode through DNS."
+    elif grep -q '"ok":false' "$checks_tmp"; then
+        status="Diagnostics warning"
+        tone="warning"
+        summary="One or more DNS checks failed."
+    else
+        status="Diagnostics healthy"
+        tone="success"
+        summary="The checked hostnames resolved normally."
+    fi
+
+    printf '{"available":%s,"status":%s,"tone":%s,"summary":%s,"resolvers":' \
+        "$(json_bool command -v drill)" \
+        "$(json_string "$status")" \
+        "$(json_string "$tone")" \
+        "$(json_string "$summary")"
+    emit_resolver_json
+    printf ',"checks":['
+    awk '
+        NF > 0 {
+            if (seen)
+                printf ","
+            seen = 1
+            printf "%s", $0
+        }
+    ' "$checks_tmp"
+    printf ']}'
+}
+
 emit_snapshot() {
     iface="$(active_iface)"
     ifconfig_output=""
@@ -289,6 +458,8 @@ emit_snapshot() {
     emit_scan_json "$iface"
     printf ',"logs":'
     emit_log_json
+    printf ',"dns_policy":'
+    emit_dns_policy_json
     printf '}\n'
 }
 
@@ -347,6 +518,9 @@ $details"
 case "$action" in
     snapshot)
         emit_snapshot
+        ;;
+    drill)
+        drill_lookup "$action_arg"
         ;;
     recover)
         recover_network

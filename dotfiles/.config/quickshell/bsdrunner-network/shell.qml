@@ -18,13 +18,17 @@ ShellRoot {
     property string statusMessage: "Loading network status..."
     property string actionDetails: ""
     property string activeActionId: ""
+    property string activeActionArg: ""
     property string activeActionLabel: ""
+    property string lookupName: "freebsd.org"
     property var interfaceInfo: ({})
     property var routeInfo: ({})
     property var tools: ({})
     property var scanRows: []
     property var logLines: []
+    property var dnsPolicy: ({})
     property var lastResult: ({})
+    property string rightPanelTab: "events"
     property string snapshotStdoutText: ""
     property string snapshotStderrText: ""
     property int snapshotExitCode: 0
@@ -57,6 +61,35 @@ ShellRoot {
 
     function routeValue(key) {
         return routeInfo && routeInfo[key] ? routeInfo[key] : ""
+    }
+
+    function dnsValue(key) {
+        return dnsPolicy && dnsPolicy[key] ? dnsPolicy[key] : ""
+    }
+
+    function dnsResolversText() {
+        var resolvers = dnsPolicy && dnsPolicy.resolvers ? dnsPolicy.resolvers : []
+        if (resolvers.length === 0)
+            return "No resolvers found"
+        return resolvers.join(", ")
+    }
+
+    function dnsCheckTarget(check) {
+        if (!check)
+            return "-"
+        if (check.cname && check.cname.length > 0)
+            return check.cname
+        if (check.address && check.address.length > 0)
+            return check.address
+        return "-"
+    }
+
+    function dnsCheckTone(check) {
+        if (!check || !check.ok)
+            return "warning"
+        if (check.classification && check.classification.indexOf("youtube") === 0)
+            return "warning"
+        return "success"
     }
 
     function headline() {
@@ -152,6 +185,7 @@ ShellRoot {
             tools = payload.tools || {}
             scanRows = payload.scan || []
             logLines = payload.logs || []
+            dnsPolicy = payload.dns_policy || {}
             lastResult = payload.last_result || {}
             if (!runningAction) {
                 statusTone = lastResult.tone || headlineTone()
@@ -165,10 +199,11 @@ ShellRoot {
         }
     }
 
-    function runAction(actionId, label) {
+    function runAction(actionId, label, actionArg) {
         if (runningAction)
             return
         activeActionId = actionId
+        activeActionArg = actionArg || ""
         activeActionLabel = label
         runningAction = true
         statusTone = "info"
@@ -181,6 +216,14 @@ ShellRoot {
         actionStdoutFinished = false
         actionStderrFinished = false
         actionProcess.running = true
+    }
+
+    function runLookup() {
+        var name = lookupName.replace(/^\s+|\s+$/g, "")
+        if (name.length === 0 || runningAction)
+            return
+        lookupName = name
+        runAction("drill", "Running DNS lookup", name)
     }
 
     function maybeFinalizeAction() {
@@ -211,9 +254,12 @@ ShellRoot {
             actionDetails = actionStderrText || text || ""
         }
 
+        var completedActionId = activeActionId
         activeActionId = ""
+        activeActionArg = ""
         activeActionLabel = ""
-        refreshSnapshot()
+        if (completedActionId !== "drill")
+            refreshSnapshot()
     }
 
     Component.onCompleted: refreshSnapshot()
@@ -250,7 +296,7 @@ ShellRoot {
         id: actionProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-network-backend.sh", root.activeActionId]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-network-backend.sh", root.activeActionId, root.activeActionArg]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -722,20 +768,69 @@ ShellRoot {
                             anchors.margins: 14
                             spacing: 10
 
-                            Text {
+                            Row {
                                 width: parent.width
-                                height: 22
-                                text: "Recent Events"
-                                color: root.palette.accent
-                                font.pixelSize: 16
-                                font.bold: true
+                                height: 30
+                                spacing: 8
+
+                                Repeater {
+                                    model: [
+                                        {"id": "events", "label": "Events"},
+                                        {"id": "dns", "label": "Tools"}
+                                    ]
+
+                                    delegate: Rectangle {
+                                        id: rightTabButton
+
+                                        required property var modelData
+                                        readonly property bool selected: root.rightPanelTab === modelData.id
+                                        readonly property bool hovered: tabMouse.containsMouse
+
+                                        width: 86
+                                        height: parent.height
+                                        radius: 6
+                                        color: selected ? Qt.alpha(root.palette.accent, 0.18) : (hovered ? root.palette.cardHover : root.palette.panelBackground)
+                                        border.width: 1
+                                        border.color: selected ? root.palette.accent : root.palette.frameBorder
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: rightTabButton.modelData.label
+                                            color: rightTabButton.selected ? root.palette.accent : root.palette.secondaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: tabMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.rightPanelTab = rightTabButton.modelData.id
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width - 188
+                                    height: parent.height
+                                    verticalAlignment: Text.AlignVCenter
+                                    horizontalAlignment: Text.AlignRight
+                                    text: root.rightPanelTab === "dns" ? root.dnsValue("status") : root.logLines.length + " lines"
+                                    color: root.rightPanelTab === "dns" ? root.toneColor(root.dnsValue("tone")) : root.palette.mutedText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
                             }
 
                             Flickable {
                                 id: logFlickable
 
                                 width: parent.width
-                                height: parent.height - 32
+                                height: parent.height - 40
+                                visible: root.rightPanelTab === "events"
                                 contentHeight: logColumn.height
                                 clip: true
 
@@ -769,6 +864,264 @@ ShellRoot {
                                                 color: parent.border.color === root.palette.warning ? root.palette.warning : root.palette.secondaryText
                                                 font.pixelSize: 10
                                                 wrapMode: Text.WordWrap
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Flickable {
+                                id: dnsFlickable
+
+                                width: parent.width
+                                height: parent.height - 40
+                                visible: root.rightPanelTab === "dns"
+                                contentHeight: dnsColumn.height
+                                clip: true
+
+                                Column {
+                                    id: dnsColumn
+
+                                    width: dnsFlickable.width
+                                    spacing: 10
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 104
+                                        radius: 8
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.toneColor(root.dnsValue("tone"))
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 12
+                                            spacing: 6
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.dnsValue("status") || "Diagnostics unavailable"
+                                                color: root.toneColor(root.dnsValue("tone"))
+                                                font.pixelSize: 16
+                                                minimumPixelSize: 12
+                                                fontSizeMode: Text.HorizontalFit
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.dnsValue("summary") || "Run Refresh to load diagnostic checks."
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 3
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Resolvers: " + root.dnsResolversText()
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 10
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 82
+                                        radius: 8
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 8
+
+                                            Text {
+                                                width: parent.width
+                                                text: "DNS lookup"
+                                                color: root.palette.accent
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            Row {
+                                                width: parent.width
+                                                height: 34
+                                                spacing: 8
+
+                                                Rectangle {
+                                                    width: parent.width - 82
+                                                    height: parent.height
+                                                    radius: 6
+                                                    color: root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: lookupInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                                    TextInput {
+                                                        id: lookupInput
+
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: 10
+                                                        anchors.rightMargin: 10
+                                                        verticalAlignment: TextInput.AlignVCenter
+                                                        text: root.lookupName
+                                                        color: root.palette.primaryText
+                                                        selectedTextColor: root.palette.frameBackground
+                                                        selectionColor: root.palette.accent
+                                                        font.pixelSize: 12
+                                                        clip: true
+                                                        onTextChanged: root.lookupName = text
+                                                        onAccepted: root.runLookup()
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    width: 74
+                                                    height: parent.height
+                                                    radius: 6
+                                                    color: lookupMouse.containsMouse && !root.runningAction ? root.palette.cardHover : root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: root.runningAction ? root.palette.frameBorder : root.palette.accent
+                                                    opacity: root.runningAction ? 0.5 : 1.0
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "Drill"
+                                                        color: root.palette.accent
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                    }
+
+                                                    MouseArea {
+                                                        id: lookupMouse
+
+                                                        anchors.fill: parent
+                                                        enabled: !root.runningAction
+                                                        hoverEnabled: !root.runningAction
+                                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        onClicked: root.runLookup()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 132
+                                        visible: root.actionDetails.length > 0
+                                        radius: 8
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.toneColor(root.statusTone)
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 6
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.statusMessage
+                                                color: root.toneColor(root.statusTone)
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Flickable {
+                                                width: parent.width
+                                                height: parent.height - 24
+                                                contentHeight: lookupResultText.implicitHeight
+                                                clip: true
+
+                                                Text {
+                                                    id: lookupResultText
+
+                                                    width: parent.width
+                                                    text: root.actionDetails
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    wrapMode: Text.WordWrap
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Preset checks"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Repeater {
+                                        model: root.dnsPolicy && root.dnsPolicy.checks ? root.dnsPolicy.checks : []
+
+                                        delegate: Rectangle {
+                                            id: dnsCheckRow
+
+                                            required property var modelData
+
+                                            width: dnsColumn.width
+                                            height: 76
+                                            radius: 6
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.toneColor(root.dnsCheckTone(modelData))
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 9
+                                                spacing: 4
+
+                                                Row {
+                                                    width: parent.width
+                                                    height: 18
+
+                                                    Text {
+                                                        width: parent.width - 104
+                                                        height: parent.height
+                                                        text: dnsCheckRow.modelData.host || "-"
+                                                        color: root.palette.primaryText
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Text {
+                                                        width: 104
+                                                        height: parent.height
+                                                        horizontalAlignment: Text.AlignRight
+                                                        text: dnsCheckRow.modelData.classification || "-"
+                                                        color: root.toneColor(root.dnsCheckTone(dnsCheckRow.modelData))
+                                                        font.pixelSize: 10
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.dnsCheckTarget(dnsCheckRow.modelData)
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: (dnsCheckRow.modelData.rcode || "-") + (dnsCheckRow.modelData.server ? " via " + dnsCheckRow.modelData.server : "")
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
                                             }
                                         }
                                     }
