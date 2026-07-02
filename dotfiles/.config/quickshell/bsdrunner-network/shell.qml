@@ -29,6 +29,10 @@ ShellRoot {
     property var dnsPolicy: ({})
     property var lastResult: ({})
     property string rightPanelTab: "events"
+    property bool featureTooltipVisible: false
+    property string featureTooltipText: ""
+    property real featureTooltipX: 0
+    property real featureTooltipY: 0
     property string snapshotStdoutText: ""
     property string snapshotStderrText: ""
     property int snapshotExitCode: 0
@@ -90,6 +94,23 @@ ShellRoot {
         if (check.classification && check.classification.indexOf("youtube") === 0)
             return "warning"
         return "success"
+    }
+
+    function showFeatureTooltip(row) {
+        if (!row || !row.hasCaps)
+            return
+
+        featureTooltipText = row.modelData.caps
+        var below = row.mapToItem(appFrame, 0, row.height + 6)
+        var above = row.mapToItem(appFrame, 0, -82)
+        featureTooltipX = Math.max(18, Math.min(below.x + row.width - 356, appFrame.width - 374))
+        featureTooltipY = below.y + 74 > appFrame.height ? Math.max(18, above.y) : below.y
+        featureTooltipVisible = true
+    }
+
+    function hideFeatureTooltip() {
+        featureTooltipVisible = false
+        featureTooltipText = ""
     }
 
     function headline() {
@@ -336,6 +357,8 @@ ShellRoot {
         color: "transparent"
 
         Rectangle {
+            id: appFrame
+
             anchors.fill: parent
             color: root.palette.panelBackground
 
@@ -628,12 +651,11 @@ ShellRoot {
 
                                     Repeater {
                                         model: [
-                                            {"label": "SSID", "width": 150},
-                                            {"label": "BSSID", "width": 122},
+                                            {"label": "SSID", "width": 220},
+                                            {"label": "BSSID", "width": 148},
                                             {"label": "CH", "width": 34},
                                             {"label": "BAND", "width": 56},
-                                            {"label": "SIG", "width": 42},
-                                            {"label": "CAPS", "width": 96}
+                                            {"label": "SIG", "width": 42}
                                         ]
 
                                         delegate: Text {
@@ -674,13 +696,15 @@ ShellRoot {
                                             id: scanRow
 
                                             required property var modelData
+                                            readonly property bool rowHovered: scanRowMouse.containsMouse
+                                            readonly property bool hasCaps: modelData.caps && modelData.caps.length > 0
 
                                             width: scanColumn.width
                                             height: 38
                                             radius: 6
-                                            color: root.sameBssid(scanRow.modelData) ? Qt.alpha(root.palette.success, 0.18) : root.palette.panelBackground
+                                            color: root.sameBssid(scanRow.modelData) ? Qt.alpha(root.palette.success, 0.18) : (rowHovered ? root.palette.cardHover : root.palette.panelBackground)
                                             border.width: 1
-                                            border.color: root.sameBssid(scanRow.modelData) ? root.palette.success : root.palette.frameBorder
+                                            border.color: root.sameBssid(scanRow.modelData) ? root.palette.success : (rowHovered ? root.palette.panelBorder : root.palette.frameBorder)
 
                                             Row {
                                                 anchors.fill: parent
@@ -689,7 +713,7 @@ ShellRoot {
                                                 spacing: 8
 
                                                 Text {
-                                                    width: 150
+                                                    width: 220
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
                                                     text: scanRow.modelData.ssid || "-"
@@ -700,7 +724,7 @@ ShellRoot {
                                                 }
 
                                                 Text {
-                                                    width: 122
+                                                    width: 148
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
                                                     text: scanRow.modelData.bssid || "-"
@@ -737,16 +761,17 @@ ShellRoot {
                                                     font.pixelSize: 11
                                                     font.bold: true
                                                 }
+                                            }
 
-                                                Text {
-                                                    width: 96
-                                                    height: parent.height
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.caps || "-"
-                                                    color: root.palette.mutedText
-                                                    font.pixelSize: 10
-                                                    elide: Text.ElideRight
-                                                }
+                                            MouseArea {
+                                                id: scanRowMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: scanRow.hasCaps
+                                                acceptedButtons: Qt.NoButton
+                                                onEntered: root.showFeatureTooltip(scanRow)
+                                                onPositionChanged: root.showFeatureTooltip(scanRow)
+                                                onExited: root.hideFeatureTooltip()
                                             }
                                         }
                                     }
@@ -1129,6 +1154,30 @@ ShellRoot {
                             }
                         }
                     }
+                }
+            }
+
+            Rectangle {
+                width: 356
+                height: Math.max(38, featureTooltipLabel.implicitHeight + 16)
+                x: root.featureTooltipX
+                y: root.featureTooltipY
+                z: 1000
+                visible: root.featureTooltipVisible
+                radius: 6
+                color: root.palette.cardBackground
+                border.width: 1
+                border.color: root.palette.accent
+
+                Text {
+                    id: featureTooltipLabel
+
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    text: root.featureTooltipText
+                    color: root.palette.primaryText
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
                 }
             }
         }
