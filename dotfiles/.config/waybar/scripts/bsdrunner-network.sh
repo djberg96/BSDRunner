@@ -25,6 +25,20 @@ iface_config() {
     ifconfig "$1" 2>/dev/null || true
 }
 
+band_for_channel() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            printf 'Unknown'
+            ;;
+        1|2|3|4|5|6|7|8|9|10|11|12|13|14)
+            printf '2.4 GHz'
+            ;;
+        *)
+            printf '5 GHz'
+            ;;
+    esac
+}
+
 run_privileged() {
     if command -v mdo >/dev/null 2>&1; then
         mdo "$@"
@@ -238,6 +252,8 @@ ifconfig_output="$(iface_config "$iface")"
 ipv4="$(printf '%s\n' "$ifconfig_output" | awk '/inet /{print $2; exit}')"
 status="$(printf '%s\n' "$ifconfig_output" | awk '/status:/{print $2; exit}')"
 ssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
+channel="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="channel") {print $(i+1); exit}}')"
+band="$(band_for_channel "$channel")"
 
 if [ "$action" = "menu" ]; then
     show_menu "$iface" "$ssid" "$ipv4"
@@ -250,6 +266,7 @@ fi
 if [ -n "$ssid" ]; then
     text=""
     tooltip="Wireless: $ssid ($iface)
+Band: $band${channel:+ (channel $channel)}
 Click for network actions
 Right-click to recover wireless networking"
     [ -n "$ipv4" ] && tooltip="$tooltip
