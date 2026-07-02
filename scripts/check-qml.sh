@@ -32,6 +32,9 @@ dotfiles/.config/quickshell/bsdrunner-files/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-dns/shell.qml
 dotfiles/.config/quickshell/bsdrunner-dns/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-dns/ThemePalette.qml
+dotfiles/.config/quickshell/bsdrunner-network/shell.qml
+dotfiles/.config/quickshell/bsdrunner-network/ThemeLoader.qml
+dotfiles/.config/quickshell/bsdrunner-network/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/shell.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/ThemePalette.qml

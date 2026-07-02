@@ -43,6 +43,13 @@ ShellRoot {
             "tone": "info"
         },
         {
+            "action": "network",
+            "icon": "NET",
+            "label": "Network",
+            "detail": "Wi-Fi status and recovery",
+            "tone": "network"
+        },
+        {
             "action": "zfs",
             "icon": "ZFS",
             "label": "ZFS",
@@ -98,6 +105,11 @@ ShellRoot {
             return [
                 "sh",
                 themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-dns.sh"
+            ]
+        case "network":
+            return [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-network.sh"
             ]
         case "zfs":
             return [
@@ -166,7 +178,7 @@ ShellRoot {
 
         visible: true
         implicitWidth: 330
-        implicitHeight: 408
+        implicitHeight: 468
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 
