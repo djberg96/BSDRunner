@@ -24,6 +24,7 @@ ShellRoot {
     property string activeActionLabel: ""
     property string lookupName: "freebsd.org"
     property bool joinDialogVisible: false
+    property bool joinSsidEditable: false
     property string joinSsid: ""
     property string joinBssid: ""
     property string joinPassword: ""
@@ -31,6 +32,7 @@ ShellRoot {
     property var routeInfo: ({})
     property var tools: ({})
     property var scanRows: []
+    property string scanFilter: "all"
     property var logLines: []
     property var dnsPolicy: ({})
     property var printers: ({})
@@ -68,6 +70,32 @@ ShellRoot {
 
     function ifaceValue(key) {
         return interfaceInfo && interfaceInfo[key] ? interfaceInfo[key] : ""
+    }
+
+    function scanRowsForFilter(filterId) {
+        var rows = scanRows || []
+        if (filterId === "all")
+            return rows
+
+        var filtered = []
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {}
+            if (filterId === "2.4" && row.band === "2.4 GHz")
+                filtered.push(row)
+            else if (filterId === "5" && row.band === "5 GHz")
+                filtered.push(row)
+            else if (filterId === "hotspot" && row.hotspot)
+                filtered.push(row)
+        }
+        return filtered
+    }
+
+    function filteredScanRows() {
+        return scanRowsForFilter(scanFilter)
+    }
+
+    function scanFilterCount(filterId) {
+        return scanRowsForFilter(filterId).length
     }
 
     function routeValue(key) {
@@ -209,9 +237,40 @@ ShellRoot {
         return row && row.bssid && ifaceValue("bssid") === row.bssid
     }
 
+    function profileBssid() {
+        return ifaceValue("profile_bssid")
+    }
+
+    function rowPinned(row) {
+        return row && row.bssid && row.ssid && row.ssid === ifaceValue("ssid") && profileBssid() === row.bssid
+    }
+
+    function ssidPinned(row) {
+        var pinned = profileBssid()
+        return row && row.ssid && row.ssid === ifaceValue("ssid") && pinned.length > 0 && pinned !== "any"
+    }
+
+    function pinText(row) {
+        if (rowPinned(row))
+            return "Free"
+        if (ssidPinned(row))
+            return "Move"
+        return "Pin"
+    }
+
+    function runPinAction(row) {
+        if (!row || !row.ssid || row.ssid === "(hidden)" || runningAction)
+            return
+        if (rowPinned(row))
+            runAction("unpin", "Unpinning " + row.ssid, row.ssid)
+        else
+            runAction("pin", "Pinning " + row.ssid, row.ssid, "", row.bssid || "")
+    }
+
     function openJoinDialog(row) {
         if (!row || !row.ssid || row.ssid === "(hidden)" || runningAction)
             return
+        joinSsidEditable = false
         joinSsid = row.ssid
         joinBssid = row.bssid || ""
         joinPassword = ""
@@ -219,8 +278,20 @@ ShellRoot {
         hideFeatureTooltip()
     }
 
+    function openManualJoinDialog() {
+        if (runningAction)
+            return
+        joinSsidEditable = true
+        joinSsid = ""
+        joinBssid = ""
+        joinPassword = ""
+        joinDialogVisible = true
+        hideFeatureTooltip()
+    }
+
     function closeJoinDialog() {
         joinDialogVisible = false
+        joinSsidEditable = false
         joinSsid = ""
         joinBssid = ""
         joinPassword = ""
@@ -304,11 +375,12 @@ ShellRoot {
     }
 
     function runJoin() {
-        if (joinSsid.length === 0 || runningAction)
+        var ssid = joinSsid.replace(/^\s+|\s+$/g, "")
+        if (ssid.length === 0 || runningAction)
             return
-        var ssid = joinSsid
         var bssid = joinBssid
         var password = joinPassword
+        joinSsid = ssid
         closeJoinDialog()
         runAction("join", "Joining " + ssid, ssid, password, bssid)
     }
@@ -611,6 +683,7 @@ ShellRoot {
                     Repeater {
                         model: [
                             {"id": "refresh", "label": "Refresh"},
+                            {"id": "rescan", "label": "Rescan"},
                             {"id": "recover", "label": "Recover Wi-Fi"}
                         ]
 
@@ -621,7 +694,7 @@ ShellRoot {
                             readonly property bool actionEnabled: !root.runningAction && !root.loading
                             readonly property bool hovered: actionMouse.containsMouse && actionEnabled
 
-                            width: 154
+                                width: 142
                             height: parent.height
                             radius: 8
                             color: hovered ? root.palette.cardHover : root.palette.cardBackground
@@ -647,6 +720,8 @@ ShellRoot {
                                 onClicked: {
                                     if (commandButton.modelData.id === "refresh")
                                         root.refreshSnapshot()
+                                    else if (commandButton.modelData.id === "rescan")
+                                        root.runAction("rescan", "Scanning wireless networks")
                                     else
                                         root.runAction("recover", "Recovering Wi-Fi")
                                 }
@@ -655,7 +730,7 @@ ShellRoot {
                     }
 
                     Text {
-                        width: parent.width - 318
+                        width: parent.width - 446
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: root.ifaceValue("media")
@@ -697,11 +772,89 @@ ShellRoot {
 
                                 Text {
                                     width: 120
-                                    text: root.scanRows.length + " seen"
+                                    text: root.filteredScanRows().length + " / " + root.scanRows.length + " seen"
                                     color: root.palette.mutedText
                                     horizontalAlignment: Text.AlignRight
                                     font.pixelSize: 11
                                     font.bold: true
+                                }
+                            }
+
+                            Row {
+                                width: parent.width
+                                height: 30
+                                spacing: 8
+
+                                Repeater {
+                                    model: [
+                                        {"id": "all", "label": "All"},
+                                        {"id": "2.4", "label": "2.4 GHz"},
+                                        {"id": "5", "label": "5 GHz"},
+                                        {"id": "hotspot", "label": "Hotspots"}
+                                    ]
+
+                                    delegate: Rectangle {
+                                        id: filterButton
+
+                                        required property var modelData
+                                        readonly property bool selected: root.scanFilter === filterButton.modelData.id
+                                        readonly property bool hovered: filterMouse.containsMouse
+
+                                        width: filterButton.modelData.id === "hotspot" ? 104 : 86
+                                        height: parent.height
+                                        radius: 7
+                                        color: selected ? Qt.alpha(root.palette.accent, 0.18) : (hovered ? root.palette.cardHover : root.palette.panelBackground)
+                                        border.width: 1
+                                        border.color: selected ? root.palette.accent : root.palette.panelBorder
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: filterButton.modelData.label + " " + root.scanFilterCount(filterButton.modelData.id)
+                                            color: filterButton.selected ? root.palette.accent : root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: filterMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.scanFilter = filterButton.modelData.id
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    readonly property bool actionEnabled: !root.runningAction && !root.loading
+                                    readonly property bool hovered: manualJoinMouse.containsMouse && actionEnabled
+
+                                    width: 112
+                                    height: parent.height
+                                    radius: 7
+                                    color: hovered ? root.palette.cardHover : root.palette.cardBackground
+                                    border.width: 1
+                                    border.color: root.palette.accent
+                                    opacity: actionEnabled ? 1.0 : 0.45
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Join Other"
+                                        color: root.palette.accent
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: manualJoinMouse
+
+                                        anchors.fill: parent
+                                        enabled: parent.actionEnabled
+                                        hoverEnabled: parent.actionEnabled
+                                        cursorShape: parent.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: root.openManualJoinDialog()
+                                    }
                                 }
                             }
 
@@ -719,11 +872,12 @@ ShellRoot {
 
                                     Repeater {
                                         model: [
-                                            {"label": "SSID", "width": 220},
-                                            {"label": "BSSID", "width": 148},
-                                            {"label": "CH", "width": 34},
-                                            {"label": "BAND", "width": 56},
-                                            {"label": "SIG", "width": 42}
+                                            {"label": "SSID", "width": 184},
+                                            {"label": "BSSID", "width": 142},
+                                            {"label": "CH", "width": 30},
+                                            {"label": "BAND", "width": 52},
+                                            {"label": "SIG", "width": 38},
+                                            {"label": "PIN", "width": 38}
                                         ]
 
                                         delegate: Text {
@@ -747,7 +901,7 @@ ShellRoot {
                                 id: scanFlickable
 
                                 width: parent.width
-                                height: parent.height - 60
+                                height: parent.height - 100
                                 contentHeight: scanColumn.height
                                 clip: true
 
@@ -758,7 +912,7 @@ ShellRoot {
                                     spacing: 6
 
                                     Repeater {
-                                        model: root.scanRows
+                                        model: root.filteredScanRows()
 
                                         delegate: Rectangle {
                                             id: scanRow
@@ -774,63 +928,6 @@ ShellRoot {
                                             border.width: 1
                                             border.color: root.sameBssid(scanRow.modelData) ? root.palette.success : (rowHovered ? root.palette.panelBorder : root.palette.frameBorder)
 
-                                            Row {
-                                                anchors.fill: parent
-                                                anchors.leftMargin: 10
-                                                anchors.rightMargin: 10
-                                                spacing: 8
-
-                                                Text {
-                                                    width: 220
-                                                    height: parent.height
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.ssid || "-"
-                                                    color: root.sameBssid(scanRow.modelData) ? root.palette.success : root.palette.primaryText
-                                                    font.pixelSize: 12
-                                                    font.bold: root.sameBssid(scanRow.modelData)
-                                                    elide: Text.ElideRight
-                                                }
-
-                                                Text {
-                                                    width: 148
-                                                    height: parent.height
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.bssid || "-"
-                                                    color: root.palette.secondaryText
-                                                    font.pixelSize: 11
-                                                    elide: Text.ElideRight
-                                                }
-
-                                                Text {
-                                                    width: 34
-                                                    height: parent.height
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.channel || "-"
-                                                    color: root.palette.secondaryText
-                                                    font.pixelSize: 11
-                                                }
-
-                                                Text {
-                                                    width: 56
-                                                    height: parent.height
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.band || "-"
-                                                    color: scanRow.modelData.band === "5 GHz" ? root.palette.accent : root.palette.secondaryText
-                                                    font.pixelSize: 10
-                                                    font.bold: true
-                                                }
-
-                                                Text {
-                                                    width: 42
-                                                    height: parent.height
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.signal || "-"
-                                                    color: root.toneColor(root.strengthTone(scanRow.modelData.signal))
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                }
-                                            }
-
                                             MouseArea {
                                                 id: scanRowMouse
 
@@ -842,6 +939,96 @@ ShellRoot {
                                                 onPositionChanged: root.showFeatureTooltip(scanRow)
                                                 onExited: root.hideFeatureTooltip()
                                                 onClicked: root.openJoinDialog(scanRow.modelData)
+                                            }
+
+                                            Row {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                spacing: 8
+
+                                                Text {
+                                                    width: 184
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.ssid || "-"
+                                                    color: root.sameBssid(scanRow.modelData) ? root.palette.success : root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.bold: root.sameBssid(scanRow.modelData)
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: 142
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.bssid || "-"
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 11
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: 30
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.channel || "-"
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 11
+                                                }
+
+                                                Text {
+                                                    width: 52
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.band || "-"
+                                                    color: scanRow.modelData.band === "5 GHz" ? root.palette.accent : root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: 38
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.signal || "-"
+                                                    color: root.toneColor(root.strengthTone(scanRow.modelData.signal))
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                }
+
+                                                Rectangle {
+                                                    readonly property bool actionEnabled: !root.runningAction && scanRow.modelData.ssid !== "(hidden)" && scanRow.modelData.bssid && scanRow.modelData.bssid.length > 0
+                                                    readonly property bool hovered: pinMouse.containsMouse && actionEnabled
+
+                                                    width: 38
+                                                    height: 24
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    radius: 5
+                                                    color: root.rowPinned(scanRow.modelData) ? Qt.alpha(root.palette.success, 0.18) : (hovered ? root.palette.cardHover : "transparent")
+                                                    border.width: 1
+                                                    border.color: root.rowPinned(scanRow.modelData) ? root.palette.success : root.palette.panelBorder
+                                                    opacity: actionEnabled ? 1.0 : 0.35
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: root.pinText(scanRow.modelData)
+                                                        color: root.rowPinned(scanRow.modelData) ? root.palette.success : root.palette.secondaryText
+                                                        font.pixelSize: 9
+                                                        font.bold: true
+                                                    }
+
+                                                    MouseArea {
+                                                        id: pinMouse
+
+                                                        anchors.fill: parent
+                                                        enabled: parent.actionEnabled
+                                                        hoverEnabled: parent.actionEnabled
+                                                        cursorShape: parent.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        onEntered: root.hideFeatureTooltip()
+                                                        onClicked: root.runPinAction(scanRow.modelData)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1484,7 +1671,7 @@ ShellRoot {
 
                 Rectangle {
                     width: 360
-                    height: 238
+                    height: root.joinSsidEditable ? 294 : 238
                     anchors.centerIn: parent
                     radius: 8
                     color: root.palette.cardBackground
@@ -1503,7 +1690,7 @@ ShellRoot {
 
                         Text {
                             width: parent.width
-                            text: "Join Wi-Fi"
+                            text: root.joinSsidEditable ? "Join Other Wi-Fi" : "Join Wi-Fi"
                             color: root.palette.accent
                             font.pixelSize: 17
                             font.bold: true
@@ -1511,6 +1698,7 @@ ShellRoot {
 
                         Column {
                             width: parent.width
+                            visible: !root.joinSsidEditable
                             spacing: 4
 
                             Text {
@@ -1528,6 +1716,34 @@ ShellRoot {
                                 color: root.palette.mutedText
                                 font.pixelSize: 10
                                 elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: root.joinSsidEditable ? 38 : 0
+                            visible: root.joinSsidEditable
+                            radius: 6
+                            color: root.palette.panelBackground
+                            border.width: 1
+                            border.color: joinSsidInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                            TextInput {
+                                id: joinSsidInput
+
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                verticalAlignment: TextInput.AlignVCenter
+                                text: root.joinSsid
+                                color: root.palette.primaryText
+                                selectedTextColor: root.palette.frameBackground
+                                selectionColor: root.palette.accent
+                                font.pixelSize: 13
+                                clip: true
+                                focus: root.joinDialogVisible && root.joinSsidEditable
+                                onTextChanged: root.joinSsid = text
+                                onAccepted: joinPasswordInput.forceActiveFocus()
                             }
                         }
 
@@ -1553,7 +1769,7 @@ ShellRoot {
                                 selectionColor: root.palette.accent
                                 font.pixelSize: 13
                                 clip: true
-                                focus: root.joinDialogVisible
+                                focus: root.joinDialogVisible && !root.joinSsidEditable
                                 onTextChanged: root.joinPassword = text
                                 onAccepted: root.runJoin()
                             }

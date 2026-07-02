@@ -104,6 +104,25 @@ iface_config() {
     ifconfig "$1" 2>/dev/null || true
 }
 
+ssid_from_config() {
+    printf '%s\n' "${1:-}" | awk '
+        {
+            line = $0
+            if (line ~ /(^|[[:space:]])ssid[[:space:]]/) {
+                if (line ~ /^ssid[[:space:]]/)
+                    sub(/^ssid[[:space:]]+/, "", line)
+                else
+                    sub(/^.*[[:space:]]ssid[[:space:]]+/, "", line)
+                sub(/[[:space:]]+channel[[:space:]].*$/, "", line)
+                sub(/^"/, "", line)
+                sub(/"$/, "", line)
+                print line
+                exit
+            }
+        }
+    '
+}
+
 is_wireless_iface() {
     iface_config "$1" | awk '
         /IEEE 802\.11/ { found = 1 }
@@ -174,6 +193,37 @@ band_for_channel() {
     esac
 }
 
+scan_networks() {
+    scan_iface="$1"
+
+    ifconfig "$scan_iface" list scan 2>/dev/null || true
+    wpa_cli -i "$scan_iface" scan_results 2>/dev/null |
+    awk -F '\t' '
+        function channel(freq) {
+            if (freq == 2484)
+                return 14
+            if (freq >= 2412 && freq <= 2472)
+                return int((freq - 2407) / 5)
+            if (freq >= 5000 && freq <= 5900)
+                return int((freq - 5000) / 5)
+            return "?"
+        }
+
+        NR == 1 { next }
+        NF >= 5 {
+            ssid = $5
+            for (i = 6; i <= NF; i++)
+                ssid = ssid "\t" $i
+            if (ssid == "")
+                ssid = "(hidden)"
+            flags = $4
+            gsub(/\]\[/, " ", flags)
+            gsub(/[][]/, "", flags)
+            printf "%s %s %s 54M %s:-96 100 %s\n", ssid, $1, channel($2), $3, flags
+        }
+    '
+}
+
 emit_scan_json() {
     scan_iface="$1"
 
@@ -182,7 +232,7 @@ emit_scan_json() {
         return
     fi
 
-    ifconfig "$scan_iface" list scan 2>/dev/null |
+    scan_networks "$scan_iface" |
     awk '
         BEGIN { first = 1 }
 
@@ -200,7 +250,12 @@ emit_scan_json() {
             return "unknown"
         }
 
-        NR == 1 { next }
+        function hotspot(value, lower) {
+            lower = tolower(value)
+            return lower ~ /(^|[^[:alnum:]])(iphone|ipad|android|pixel|galaxy|hotspot|tether|mobile)([^[:alnum:]]|$)/
+        }
+
+        /^SSID[[:space:]]/ { next }
         {
             bssid_index = 0
             for (i = 1; i <= NF; i++) {
@@ -219,6 +274,9 @@ emit_scan_json() {
                 ssid = "(hidden)"
 
             bssid = $bssid_index
+            if (seen[bssid]++)
+                next
+
             channel = $(bssid_index + 1)
             rate = $(bssid_index + 2)
             signal_noise = $(bssid_index + 3)
@@ -233,7 +291,7 @@ emit_scan_json() {
                 first = 0
             else
                 printf ","
-            printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":\"%s\",\"band\":\"%s\",\"rate\":\"%s\",\"signal\":\"%s\",\"noise\":\"%s\",\"caps\":\"%s\"}", esc(ssid), esc(bssid), esc(channel), band(channel), esc(rate), esc(signal), esc(noise), esc(caps)
+            printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":\"%s\",\"band\":\"%s\",\"rate\":\"%s\",\"signal\":\"%s\",\"noise\":\"%s\",\"caps\":\"%s\",\"hotspot\":%s}", esc(ssid), esc(bssid), esc(channel), band(channel), esc(rate), esc(signal), esc(noise), esc(caps), hotspot(ssid) ? "true" : "false"
         }
         END { }
     ' |
@@ -620,7 +678,7 @@ emit_snapshot() {
     ipv4="$(printf '%s\n' "$ifconfig_output" | awk '/inet /{print $2; exit}')"
     ipv6="$(printf '%s\n' "$ifconfig_output" | awk '/inet6 / && $2 !~ /^fe80:/{print $2; exit}')"
     status="$(printf '%s\n' "$ifconfig_output" | awk '/status:/{print $2; exit}')"
-    ssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
+    ssid="$(ssid_from_config "$ifconfig_output")"
     bssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="bssid") {print $(i+1); exit}}')"
     channel="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="channel") {print $(i+1); exit}}')"
     band="$(band_for_channel "$channel")"
@@ -628,6 +686,7 @@ emit_snapshot() {
     parent_iface="$(printf '%s\n' "$ifconfig_output" | awk '/parent interface:/{print $3; exit}')"
     media="$(printf '%s\n' "$ifconfig_output" | awk -F ': ' '/media:/{print $2; exit}')"
     roaming="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="roaming") {print $(i+1); exit}}')"
+    profile_bssid="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' '$4 ~ /\[CURRENT\]/ { print $3; exit }')"
     router="$(netstat -rn -f inet 2>/dev/null | awk '$1 == "default" { print $2; exit }')"
     route_iface="$(netstat -rn -f inet 2>/dev/null | awk '$1 == "default" { print $4; exit }')"
     last_tone="$(last_result_value tone)"
@@ -636,13 +695,14 @@ emit_snapshot() {
 
     printf '{'
     printf '"ok":true,'
-    printf '"interface":{"name":%s,"ipv4":%s,"ipv6":%s,"status":%s,"ssid":%s,"bssid":%s,"channel":%s,"band":%s,"authmode":%s,"parent":%s,"media":%s,"roaming":%s},' \
+    printf '"interface":{"name":%s,"ipv4":%s,"ipv6":%s,"status":%s,"ssid":%s,"bssid":%s,"profile_bssid":%s,"channel":%s,"band":%s,"authmode":%s,"parent":%s,"media":%s,"roaming":%s},' \
         "$(json_string "$iface")" \
         "$(json_string "$ipv4")" \
         "$(json_string "$ipv6")" \
         "$(json_string "$status")" \
         "$(json_string "$ssid")" \
         "$(json_string "$bssid")" \
+        "$(json_string "$profile_bssid")" \
         "$(json_string "$channel")" \
         "$(json_string "$band")" \
         "$(json_string "$authmode")" \
@@ -720,6 +780,156 @@ $details"
 
     write_last_result success "Network recovery completed."
     emit_action_result true "Network recovery completed." "$output"
+}
+
+rescan_networks() {
+    iface="$(wireless_iface || active_iface)"
+
+    if [ -z "$iface" ]; then
+        write_last_result error "No wireless interface found."
+        emit_action_result false "No wireless interface found." ""
+        exit 1
+    fi
+
+    scan_output=""
+    if wpa_output="$(run_privileged wpa_cli -i "$iface" scan 2>&1)"; then
+        scan_output="wpa_cli scan:
+$wpa_output"
+        sleep 2
+    else
+        scan_output="wpa_cli scan failed:
+$wpa_output"
+    fi
+
+    if ifconfig_output="$(run_privileged ifconfig "$iface" scan 2>&1)"; then
+        scan_output="${scan_output}
+ifconfig scan:
+$ifconfig_output"
+        write_last_result success "Wireless scan refreshed."
+        emit_action_result true "Wireless scan refreshed." "$scan_output"
+    else
+        write_last_result warning "Wireless scan finished with warnings."
+        emit_action_result false "Wireless scan finished with warnings." "$scan_output
+$ifconfig_output"
+        exit 1
+    fi
+}
+
+pin_network() {
+    target_ssid="${1:-}"
+    target_bssid="${2:-}"
+    iface="$(wireless_iface || active_iface)"
+
+    if [ -z "$iface" ]; then
+        write_last_result error "No wireless interface found."
+        emit_action_result false "No wireless interface found." ""
+        exit 1
+    fi
+
+    if [ -z "$target_ssid" ] || [ "$target_ssid" = "(hidden)" ] || [ -z "$target_bssid" ] || ! valid_join_value "$target_ssid" || ! valid_join_value "$target_bssid"; then
+        write_last_result error "Invalid Wi-Fi pin selection."
+        emit_action_result false "Invalid Wi-Fi pin selection." "$target_ssid"
+        exit 1
+    fi
+
+    network_id="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' -v ssid="$target_ssid" '$2 == ssid { print $1; exit }')"
+    previous_bssid="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' -v ssid="$target_ssid" '$2 == ssid { print $3; exit }')"
+    if [ -z "$network_id" ]; then
+        write_last_result error "Wi-Fi network is not saved."
+        emit_action_result false "Wi-Fi network is not saved." "$target_ssid"
+        exit 1
+    fi
+
+    output="Target: $target_ssid
+BSSID: $target_bssid"
+
+    rollback_pin() {
+        run_privileged wpa_cli -i "$iface" set_network "$network_id" bssid "${previous_bssid:-any}" >/dev/null 2>&1 || true
+        run_privileged wpa_cli -i "$iface" select_network "$network_id" >/dev/null 2>&1 || true
+        run_privileged wpa_cli -i "$iface" reassociate >/dev/null 2>&1 || true
+    }
+
+    if ! pin_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" bssid "$target_bssid" 2>&1)"; then
+        write_last_result error "Could not pin Wi-Fi access point."
+        emit_action_result false "Could not pin Wi-Fi access point." "$output
+$pin_output"
+        exit 1
+    fi
+    output="${output}
+Pinned saved profile $network_id.
+$pin_output"
+
+    current_ssid="$(ssid_from_config "$(iface_config "$iface")")"
+    if [ "$current_ssid" = "$target_ssid" ]; then
+        select_output="$(run_privileged wpa_cli -i "$iface" select_network "$network_id" 2>&1 || true)"
+        run_privileged wpa_cli -i "$iface" reassociate >/dev/null 2>&1 || true
+        output="${output}
+Selected network.
+$select_output"
+
+        pinned=no
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+            current="$(iface_config "$iface")"
+            current_bssid="$(printf '%s\n' "$current" | awk '{for (i=1;i<=NF;i++) if ($i=="bssid") {print $(i+1); exit}}')"
+            current_status="$(printf '%s\n' "$current" | awk '/status:/{print $2; exit}')"
+            if [ "$current_bssid" = "$target_bssid" ] && [ "$current_status" = "associated" ]; then
+                pinned=yes
+                break
+            fi
+            sleep 1
+        done
+
+        if [ "$pinned" != "yes" ]; then
+            rollback_pin
+            write_last_result warning "Wi-Fi pin failed; restored previous BSSID."
+            emit_action_result false "Wi-Fi pin failed; restored previous BSSID." "$output"
+            exit 1
+        fi
+    fi
+
+    save_output="$(run_privileged wpa_cli -i "$iface" save_config 2>&1 || true)"
+    output="${output}
+Saved Wi-Fi configuration.
+$save_output"
+
+    write_last_result success "Pinned $target_ssid to $target_bssid."
+    emit_action_result true "Pinned $target_ssid to $target_bssid." "$output"
+}
+
+unpin_network() {
+    target_ssid="${1:-}"
+    iface="$(wireless_iface || active_iface)"
+
+    if [ -z "$iface" ]; then
+        write_last_result error "No wireless interface found."
+        emit_action_result false "No wireless interface found." ""
+        exit 1
+    fi
+
+    if [ -z "$target_ssid" ] || [ "$target_ssid" = "(hidden)" ] || ! valid_join_value "$target_ssid"; then
+        write_last_result error "Invalid Wi-Fi unpin selection."
+        emit_action_result false "Invalid Wi-Fi unpin selection." "$target_ssid"
+        exit 1
+    fi
+
+    network_id="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' -v ssid="$target_ssid" '$2 == ssid { print $1; exit }')"
+    if [ -z "$network_id" ]; then
+        write_last_result error "Wi-Fi network is not saved."
+        emit_action_result false "Wi-Fi network is not saved." "$target_ssid"
+        exit 1
+    fi
+
+    output="Target: $target_ssid"
+    unpin_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" bssid any 2>&1 || true)"
+    save_output="$(run_privileged wpa_cli -i "$iface" save_config 2>&1 || true)"
+    output="${output}
+Set BSSID to any.
+$unpin_output
+Saved Wi-Fi configuration.
+$save_output"
+
+    write_last_result success "Unpinned $target_ssid."
+    emit_action_result true "Unpinned $target_ssid." "$output"
 }
 
 join_network() {
@@ -820,6 +1030,11 @@ $set_output"
         append_output "Using saved profile $network_id."
     fi
 
+    if [ -z "$target_bssid" ]; then
+        scan_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" scan_ssid 1 2>&1 || true)"
+        append_output "Enabled directed SSID scan." "$scan_output"
+    fi
+
     if [ -n "$target_bssid" ]; then
         if [ -z "$new_network" ]; then
             previous_bssid="$(wpa_cli -i "$iface" list_networks 2>/dev/null | awk -F '\t' -v id="$network_id" '$1 == id { print $3; exit }')"
@@ -837,12 +1052,13 @@ $select_output"
         exit 1
     fi
     append_output "Selected network." "$select_output"
+    run_privileged wpa_cli -i "$iface" scan >/dev/null 2>&1 || true
     run_privileged wpa_cli -i "$iface" reassociate >/dev/null 2>&1 || true
 
     joined=no
-    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
         current="$(iface_config "$iface")"
-        current_ssid="$(printf '%s\n' "$current" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
+        current_ssid="$(ssid_from_config "$current")"
         current_status="$(printf '%s\n' "$current" | awk '/status:/{print $2; exit}')"
         if [ "$current_ssid" = "$target_ssid" ] && [ "$current_status" = "associated" ]; then
             joined=yes
@@ -876,6 +1092,15 @@ case "$action" in
         ;;
     recover)
         recover_network
+        ;;
+    rescan)
+        rescan_networks
+        ;;
+    pin)
+        pin_network "$action_arg" "$action_bssid"
+        ;;
+    unpin)
+        unpin_network "$action_arg"
         ;;
     join)
         join_network "$action_arg" "$action_secret" "$action_bssid"
