@@ -27,6 +27,7 @@ ShellRoot {
     property var scanRows: []
     property var logLines: []
     property var dnsPolicy: ({})
+    property var printers: ({})
     property var lastResult: ({})
     property string rightPanelTab: "events"
     property bool featureTooltipVisible: false
@@ -94,6 +95,35 @@ ShellRoot {
         if (check.classification && check.classification.indexOf("youtube") === 0)
             return "warning"
         return "success"
+    }
+
+    function printerList(key) {
+        return printers && printers[key] ? printers[key] : []
+    }
+
+    function printerSummary() {
+        return printerList("discovered").length + " discovered / " + printerList("configured").length + " configured"
+    }
+
+    function printerCapabilityText(printer) {
+        var parts = []
+        if (printer.color === "T")
+            parts.push("Color")
+        if (printer.duplex === "T")
+            parts.push("Duplex")
+        if (printer.scan === "T")
+            parts.push("Scan")
+        return parts.length > 0 ? parts.join(" / ") : "Capabilities unknown"
+    }
+
+    function printerAddressText(printer) {
+        if (!printer)
+            return "-"
+        if (printer.address && printer.port)
+            return printer.address + ":" + printer.port
+        if (printer.hostname)
+            return printer.hostname
+        return "-"
     }
 
     function showFeatureTooltip(row) {
@@ -207,6 +237,7 @@ ShellRoot {
             scanRows = payload.scan || []
             logLines = payload.logs || []
             dnsPolicy = payload.dns_policy || {}
+            printers = payload.printers || {}
             lastResult = payload.last_result || {}
             if (!runningAction) {
                 statusTone = lastResult.tone || headlineTone()
@@ -801,7 +832,8 @@ ShellRoot {
                                 Repeater {
                                     model: [
                                         {"id": "events", "label": "Events"},
-                                        {"id": "dns", "label": "Tools"}
+                                        {"id": "dns", "label": "Tools"},
+                                        {"id": "printers", "label": "Printers"}
                                     ]
 
                                     delegate: Rectangle {
@@ -838,11 +870,11 @@ ShellRoot {
                                 }
 
                                 Text {
-                                    width: parent.width - 188
+                                    width: parent.width - 274
                                     height: parent.height
                                     verticalAlignment: Text.AlignVCenter
                                     horizontalAlignment: Text.AlignRight
-                                    text: root.rightPanelTab === "dns" ? root.dnsValue("status") : root.logLines.length + " lines"
+                                    text: root.rightPanelTab === "dns" ? root.dnsValue("status") : (root.rightPanelTab === "printers" ? root.printerSummary() : root.logLines.length + " lines")
                                     color: root.rightPanelTab === "dns" ? root.toneColor(root.dnsValue("tone")) : root.palette.mutedText
                                     font.pixelSize: 11
                                     font.bold: true
@@ -1147,6 +1179,225 @@ ShellRoot {
                                                     font.pixelSize: 10
                                                     elide: Text.ElideRight
                                                 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Flickable {
+                                id: printerFlickable
+
+                                width: parent.width
+                                height: parent.height - 40
+                                visible: root.rightPanelTab === "printers"
+                                contentHeight: printerColumn.height
+                                clip: true
+
+                                Column {
+                                    id: printerColumn
+
+                                    width: printerFlickable.width
+                                    spacing: 10
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 86
+                                        radius: 8
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.printerList("discovered").length > 0 ? root.palette.success : root.palette.warning
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 12
+                                            spacing: 6
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.printerSummary()
+                                                color: root.printerList("discovered").length > 0 ? root.palette.success : root.palette.warning
+                                                font.pixelSize: 16
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "IPP/mDNS " + root.printerList("discovered").length + " / CUPS " + root.printerList("configured").length + " / URI " + root.printerList("ipp_uris").length
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Tools: avahi-browse " + ((root.printers.available && root.printers.available.avahi_browse) ? "ok" : "missing") + " / ippfind " + ((root.printers.available && root.printers.available.ippfind) ? "ok" : "missing") + " / lpstat " + ((root.printers.available && root.printers.available.lpstat) ? "ok" : "missing")
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 10
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Discovered printers"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Repeater {
+                                        model: root.printerList("discovered")
+
+                                        delegate: Rectangle {
+                                            id: discoveredPrinterRow
+
+                                            required property var modelData
+
+                                            width: printerColumn.width
+                                            height: 92
+                                            radius: 6
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.palette.frameBorder
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 9
+                                                spacing: 5
+
+                                                Row {
+                                                    width: parent.width
+                                                    height: 18
+
+                                                    Text {
+                                                        width: parent.width - 66
+                                                        height: parent.height
+                                                        text: discoveredPrinterRow.modelData.name || "-"
+                                                        color: root.palette.primaryText
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Text {
+                                                        width: 66
+                                                        height: parent.height
+                                                        horizontalAlignment: Text.AlignRight
+                                                        text: discoveredPrinterRow.modelData.protocol || "-"
+                                                        color: root.palette.accent
+                                                        font.pixelSize: 10
+                                                        font.bold: true
+                                                    }
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.printerAddressText(discoveredPrinterRow.modelData)
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: (discoveredPrinterRow.modelData.type || "Model unknown") + " / " + root.printerCapabilityText(discoveredPrinterRow.modelData)
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: discoveredPrinterRow.modelData.admin_url || discoveredPrinterRow.modelData.hostname || "-"
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Configured queues"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Repeater {
+                                        model: root.printerList("configured")
+
+                                        delegate: Rectangle {
+                                            id: configuredPrinterRow
+
+                                            required property var modelData
+
+                                            width: printerColumn.width
+                                            height: 58
+                                            radius: 6
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.palette.frameBorder
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 9
+                                                spacing: 5
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: configuredPrinterRow.modelData.name || "-"
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: configuredPrinterRow.modelData.uri || "-"
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "IPP URIs"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Repeater {
+                                        model: root.printerList("ipp_uris")
+
+                                        delegate: Rectangle {
+                                            id: ippUriRow
+
+                                            required property string modelData
+
+                                            width: printerColumn.width
+                                            height: 34
+                                            radius: 6
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.palette.frameBorder
+
+                                            Text {
+                                                anchors.fill: parent
+                                                anchors.margins: 9
+                                                verticalAlignment: Text.AlignVCenter
+                                                text: ippUriRow.modelData
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 10
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }

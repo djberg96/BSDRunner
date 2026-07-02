@@ -250,6 +250,190 @@ emit_log_json() {
     '
 }
 
+emit_configured_printers_json() {
+    if ! command -v lpstat >/dev/null 2>&1; then
+        printf '[]'
+        return
+    fi
+
+    lpstat -v 2>/dev/null |
+    awk '
+        BEGIN { first = 1 }
+
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+
+        /^device for / {
+            name = $3
+            sub(/:$/, "", name)
+            uri = substr($0, index($0, ": ") + 2)
+
+            if (!first)
+                printf ","
+            first = 0
+            printf "{\"name\":\"%s\",\"uri\":\"%s\"}", esc(name), esc(uri)
+        }
+    ' |
+    awk 'BEGIN { printf "[" } { printf "%s", $0 } END { printf "]" }'
+}
+
+emit_ippfind_json() {
+    if ! command -v ippfind >/dev/null 2>&1; then
+        printf '[]'
+        return
+    fi
+
+    timeout 5 ippfind 2>/dev/null |
+    awk '
+        BEGIN { first = 1 }
+
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+
+        NF > 0 {
+            if (!first)
+                printf ","
+            first = 0
+            printf "\"%s\"", esc($0)
+        }
+    ' |
+    awk 'BEGIN { printf "[" } { printf "%s", $0 } END { printf "]" }'
+}
+
+emit_avahi_printers_json() {
+    if ! command -v avahi-browse >/dev/null 2>&1; then
+        printf '[]'
+        return
+    fi
+
+    timeout 5 avahi-browse -rt _ipp._tcp 2>/dev/null |
+    awk '
+        BEGIN { first = 1 }
+
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+
+        function value_for(key, source,    pattern, start, rest, stop) {
+            pattern = "\"" key "="
+            start = index(source, pattern)
+            if (start == 0)
+                return ""
+            rest = substr(source, start + length(pattern))
+            stop = index(rest, "\"")
+            if (stop > 0)
+                return substr(rest, 1, stop - 1)
+            stop = index(rest, " ")
+            if (stop > 0)
+                return substr(rest, 1, stop - 1)
+            return rest
+        }
+
+        function reset_record() {
+            service = ""
+            iface = ""
+            proto = ""
+            hostname = ""
+            address = ""
+            port = ""
+            txt = ""
+            type = "_ipp._tcp"
+            printer_type = ""
+            admin_url = ""
+            resource = ""
+            color = ""
+            duplex = ""
+            scan = ""
+        }
+
+        function emit_record(    key) {
+            if (service == "")
+                return
+            key = service "|" address "|" hostname
+            if (seen[key])
+                return
+            seen[key] = 1
+
+            if (txt != "") {
+                printer_type = value_for("ty", txt)
+                admin_url = value_for("adminurl", txt)
+                resource = value_for("rp", txt)
+                color = value_for("Color", txt)
+                duplex = value_for("Duplex", txt)
+                scan = value_for("Scan", txt)
+            }
+
+            if (!first)
+                printf ","
+            first = 0
+            printf "{\"name\":\"%s\",\"iface\":\"%s\",\"protocol\":\"%s\",\"hostname\":\"%s\",\"address\":\"%s\",\"port\":\"%s\",\"type\":\"%s\",\"admin_url\":\"%s\",\"resource\":\"%s\",\"color\":\"%s\",\"duplex\":\"%s\",\"scan\":\"%s\",\"txt\":\"%s\"}", esc(service), esc(iface), esc(proto), esc(hostname), esc(address), esc(port), esc(printer_type), esc(admin_url), esc(resource), esc(color), esc(duplex), esc(scan), esc(txt)
+        }
+
+        /^= / {
+            emit_record()
+            reset_record()
+            iface = $2
+            proto = $3
+            for (i = 4; i <= NF - 2; i++)
+                service = service (service == "" ? "" : " ") $i
+            next
+        }
+
+        /^[[:space:]]+hostname = / {
+            hostname = $0
+            sub(/^.*\[/, "", hostname)
+            sub(/\].*$/, "", hostname)
+            next
+        }
+
+        /^[[:space:]]+address = / {
+            address = $0
+            sub(/^.*\[/, "", address)
+            sub(/\].*$/, "", address)
+            next
+        }
+
+        /^[[:space:]]+port = / {
+            port = $0
+            sub(/^.*\[/, "", port)
+            sub(/\].*$/, "", port)
+            next
+        }
+
+        /^[[:space:]]+txt = / {
+            txt = $0
+            sub(/^[[:space:]]+txt = /, "", txt)
+            next
+        }
+
+        END {
+            emit_record()
+        }
+    ' |
+    awk 'BEGIN { printf "[" } { printf "%s", $0 } END { printf "]" }'
+}
+
+emit_printers_json() {
+    printf '{"available":{"lpstat":%s,"ippfind":%s,"avahi_browse":%s},"configured":' \
+        "$(json_bool command -v lpstat)" \
+        "$(json_bool command -v ippfind)" \
+        "$(json_bool command -v avahi-browse)"
+    emit_configured_printers_json
+    printf ',"ipp_uris":'
+    emit_ippfind_json
+    printf ',"discovered":'
+    emit_avahi_printers_json
+    printf '}'
+}
+
 emit_resolver_json() {
     if [ ! -r /etc/resolv.conf ]; then
         printf '[]'
@@ -460,6 +644,8 @@ emit_snapshot() {
     emit_log_json
     printf ',"dns_policy":'
     emit_dns_policy_json
+    printf ',"printers":'
+    emit_printers_json
     printf '}\n'
 }
 
