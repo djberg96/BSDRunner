@@ -127,6 +127,20 @@ json_bool() {
     fi
 }
 
+band_for_channel() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            printf 'unknown'
+            ;;
+        1|2|3|4|5|6|7|8|9|10|11|12|13|14)
+            printf '2.4 GHz'
+            ;;
+        *)
+            printf '5 GHz'
+            ;;
+    esac
+}
+
 emit_scan_json() {
     scan_iface="$1"
 
@@ -143,6 +157,14 @@ emit_scan_json() {
             gsub(/\\/, "\\\\", value)
             gsub(/"/, "\\\"", value)
             return value
+        }
+
+        function band(value) {
+            if (value ~ /^[0-9]+$/ && value >= 1 && value <= 14)
+                return "2.4 GHz"
+            if (value ~ /^[0-9]+$/)
+                return "5 GHz"
+            return "unknown"
         }
 
         NR == 1 { next }
@@ -178,7 +200,7 @@ emit_scan_json() {
                 first = 0
             else
                 printf ","
-            printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":\"%s\",\"rate\":\"%s\",\"signal\":\"%s\",\"noise\":\"%s\",\"caps\":\"%s\"}", esc(ssid), esc(bssid), esc(channel), esc(rate), esc(signal), esc(noise), esc(caps)
+            printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":\"%s\",\"band\":\"%s\",\"rate\":\"%s\",\"signal\":\"%s\",\"noise\":\"%s\",\"caps\":\"%s\"}", esc(ssid), esc(bssid), esc(channel), band(channel), esc(rate), esc(signal), esc(noise), esc(caps)
         }
         END { }
     ' |
@@ -227,6 +249,7 @@ emit_snapshot() {
     ssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
     bssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="bssid") {print $(i+1); exit}}')"
     channel="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="channel") {print $(i+1); exit}}')"
+    band="$(band_for_channel "$channel")"
     authmode="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="authmode") {print $(i+1); exit}}')"
     parent_iface="$(printf '%s\n' "$ifconfig_output" | awk '/parent interface:/{print $3; exit}')"
     media="$(printf '%s\n' "$ifconfig_output" | awk -F ': ' '/media:/{print $2; exit}')"
@@ -239,7 +262,7 @@ emit_snapshot() {
 
     printf '{'
     printf '"ok":true,'
-    printf '"interface":{"name":%s,"ipv4":%s,"ipv6":%s,"status":%s,"ssid":%s,"bssid":%s,"channel":%s,"authmode":%s,"parent":%s,"media":%s,"roaming":%s},' \
+    printf '"interface":{"name":%s,"ipv4":%s,"ipv6":%s,"status":%s,"ssid":%s,"bssid":%s,"channel":%s,"band":%s,"authmode":%s,"parent":%s,"media":%s,"roaming":%s},' \
         "$(json_string "$iface")" \
         "$(json_string "$ipv4")" \
         "$(json_string "$ipv6")" \
@@ -247,6 +270,7 @@ emit_snapshot() {
         "$(json_string "$ssid")" \
         "$(json_string "$bssid")" \
         "$(json_string "$channel")" \
+        "$(json_string "$band")" \
         "$(json_string "$authmode")" \
         "$(json_string "$parent_iface")" \
         "$(json_string "$media")" \

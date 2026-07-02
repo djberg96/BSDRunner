@@ -388,7 +388,7 @@ ShellRoot {
                                     {"label": "IPv4", "value": root.ifaceValue("ipv4")},
                                     {"label": "Gateway", "value": root.routeValue("gateway")},
                                     {"label": "BSSID", "value": root.ifaceValue("bssid")},
-                                    {"label": "Channel", "value": root.ifaceValue("channel")}
+                                    {"label": "Channel", "value": root.ifaceValue("channel") + (root.ifaceValue("band").length > 0 ? " / " + root.ifaceValue("band") : "")}
                                 ]
 
                                 delegate: Column {
@@ -582,11 +582,12 @@ ShellRoot {
 
                                     Repeater {
                                         model: [
-                                            {"label": "SSID", "width": 176},
-                                            {"label": "BSSID", "width": 132},
-                                            {"label": "CH", "width": 42},
-                                            {"label": "SIG", "width": 48},
-                                            {"label": "CAPS", "width": 122}
+                                            {"label": "SSID", "width": 150},
+                                            {"label": "BSSID", "width": 122},
+                                            {"label": "CH", "width": 34},
+                                            {"label": "BAND", "width": 56},
+                                            {"label": "SIG", "width": 42},
+                                            {"label": "CAPS", "width": 96}
                                         ]
 
                                         delegate: Text {
@@ -642,7 +643,7 @@ ShellRoot {
                                                 spacing: 8
 
                                                 Text {
-                                                    width: 176
+                                                    width: 150
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
                                                     text: scanRow.modelData.ssid || "-"
@@ -653,7 +654,7 @@ ShellRoot {
                                                 }
 
                                                 Text {
-                                                    width: 132
+                                                    width: 122
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
                                                     text: scanRow.modelData.bssid || "-"
@@ -663,7 +664,7 @@ ShellRoot {
                                                 }
 
                                                 Text {
-                                                    width: 42
+                                                    width: 34
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
                                                     text: scanRow.modelData.channel || "-"
@@ -672,7 +673,17 @@ ShellRoot {
                                                 }
 
                                                 Text {
-                                                    width: 48
+                                                    width: 56
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.band || "-"
+                                                    color: scanRow.modelData.band === "5 GHz" ? root.palette.accent : root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: 42
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
                                                     text: scanRow.modelData.signal || "-"
@@ -682,7 +693,7 @@ ShellRoot {
                                                 }
 
                                                 Text {
-                                                    width: 122
+                                                    width: 96
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
                                                     text: scanRow.modelData.caps || "-"
