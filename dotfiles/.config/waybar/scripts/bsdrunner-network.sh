@@ -25,6 +25,14 @@ iface_config() {
     ifconfig "$1" 2>/dev/null || true
 }
 
+run_privileged() {
+    if command -v mdo >/dev/null 2>&1; then
+        mdo "$@"
+    else
+        "$@"
+    fi
+}
+
 is_wireless_iface() {
     iface_config "$1" | awk '
         /IEEE 802\.11/ { found = 1 }
@@ -90,6 +98,65 @@ network_summary() {
     fi
 }
 
+recover_wireless_networking() {
+    scan_iface="$(wireless_iface "${1:-}" || true)"
+
+    if [ -z "$scan_iface" ]; then
+        show_message "BSDRunner Network" "No wireless interface found"
+        return 1
+    fi
+
+    output=""
+
+    if step_output="$(run_privileged ifconfig "$scan_iface" down 2>&1)"; then
+        output="${output}Interface $scan_iface brought down.
+$step_output"
+    else
+        output="${output}Failed to bring $scan_iface down.
+$step_output"
+        show_message "BSDRunner Network" "$output"
+        return 1
+    fi
+
+    if step_output="$(run_privileged ifconfig "$scan_iface" up 2>&1)"; then
+        output="${output}
+Interface $scan_iface brought up.
+$step_output"
+    else
+        output="${output}
+Failed to bring $scan_iface up.
+$step_output"
+        show_message "BSDRunner Network" "$output"
+        return 1
+    fi
+
+    if step_output="$(run_privileged service netif restart 2>&1)"; then
+        output="${output}
+netif restarted.
+$step_output"
+    else
+        output="${output}
+Failed to restart netif.
+$step_output"
+        show_message "BSDRunner Network" "$output"
+        return 1
+    fi
+
+    if step_output="$(run_privileged service routing restart 2>&1)"; then
+        output="${output}
+routing restarted.
+$step_output"
+    else
+        output="${output}
+Failed to restart routing.
+$step_output"
+        show_message "BSDRunner Network" "$output"
+        return 1
+    fi
+
+    show_message "BSDRunner Network" "Wireless networking recovered on $scan_iface"
+}
+
 rescan_wireless_networks() {
     scan_iface="$(wireless_iface "${1:-}" || true)"
 
@@ -98,10 +165,15 @@ rescan_wireless_networks() {
         return 1
     fi
 
-    scan_output="$(ifconfig "$scan_iface" scan 2>&1 || true)"
+    if scan_output="$(ifconfig "$scan_iface" scan 2>&1)"; then
+        scan_ok=yes
+    else
+        scan_ok=no
+    fi
 
-    if [ -z "$scan_output" ]; then
-        scan_output="Wireless scan completed on $scan_iface"
+    if [ "$scan_ok" != "yes" ] || [ -z "$scan_output" ]; then
+        recover_wireless_networking "$scan_iface"
+        return $?
     fi
 
     if command -v rofi >/dev/null 2>&1; then
@@ -125,11 +197,15 @@ show_menu() {
 
     choice="$(
         printf '%s\n' \
+            "Recover wireless networking" \
             "Rescan wireless networks" \
         | $launcher -i -p "Network" -mesg "$summary" 2>/dev/null
     )"
 
     case "${choice:-}" in
+        "Recover wireless networking")
+            recover_wireless_networking "$active_iface"
+            ;;
         "Rescan wireless networks")
             rescan_wireless_networks "$active_iface"
             ;;
@@ -138,7 +214,7 @@ show_menu() {
 
 action="${1:-status}"
 case "$action" in
-    status|menu)
+    status|menu|recover)
         ;;
     *)
         action="status"
@@ -153,6 +229,9 @@ if [ -z "$iface" ]; then
     if [ "$action" = "menu" ]; then
         show_menu "" "" ""
         exit 0
+    elif [ "$action" = "recover" ]; then
+        recover_wireless_networking ""
+        exit $?
     fi
 
     printf '{"text":"󰤮","tooltip":"No active network interface","class":"disconnected"}\n'
@@ -167,12 +246,16 @@ ssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="ss
 if [ "$action" = "menu" ]; then
     show_menu "$iface" "$ssid" "$ipv4"
     exit 0
+elif [ "$action" = "recover" ]; then
+    recover_wireless_networking "$iface"
+    exit $?
 fi
 
 if [ -n "$ssid" ]; then
     text=""
     tooltip="Wireless: $ssid ($iface)
-Click to rescan wireless networks"
+Click for network actions
+Right-click to recover wireless networking"
     [ -n "$ipv4" ] && tooltip="$tooltip
 IPv4: $ipv4"
     class="wifi"

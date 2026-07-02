@@ -109,7 +109,8 @@
       "interval": 5,
       "format": "{}",
       "tooltip": true,
-      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-network.sh menu"
+      "on-click": "sh ~/.config/waybar/scripts/bsdrunner-network.sh menu",
+      "on-click-right": "sh ~/.config/waybar/scripts/bsdrunner-network.sh recover"
     },
 
     "custom/battery": {
