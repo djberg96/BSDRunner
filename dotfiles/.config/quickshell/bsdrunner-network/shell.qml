@@ -23,6 +23,11 @@ ShellRoot {
     property string activeActionBssid: ""
     property string activeActionLabel: ""
     property string lookupName: "freebsd.org"
+    property string pingName: "10.50.0.1"
+    property string traceName: "freebsd.org"
+    property string httpUrl: "https://www.youtube.com/"
+    property string selectedTool: "ping"
+    property string lastToolId: ""
     property bool helpDialogVisible: false
     property bool joinDialogVisible: false
     property bool joinSsidEditable: false
@@ -379,6 +384,98 @@ ShellRoot {
         runAction("drill", "Running DNS lookup", name)
     }
 
+    function runPing() {
+        var name = pingName.replace(/^\s+|\s+$/g, "")
+        if (name.length === 0 || runningAction)
+            return
+        pingName = name
+        if (looksLikePortTarget(name)) {
+            runAction("port", "Checking " + name, name)
+            return
+        }
+        runAction("ping", "Pinging " + name, name)
+    }
+
+    function runTrace() {
+        var name = traceName.replace(/^\s+|\s+$/g, "")
+        if (name.length === 0 || runningAction)
+            return
+        traceName = name
+        runAction("traceroute", "Tracing route to " + name, name)
+    }
+
+    function runHttpCheck() {
+        var url = httpUrl.replace(/^\s+|\s+$/g, "")
+        if (url.length === 0 || runningAction)
+            return
+        httpUrl = url
+        runAction("http", "Checking " + url, url)
+    }
+
+    function selectedToolName() {
+        if (selectedTool === "drill")
+            return "Drill"
+        if (selectedTool === "traceroute")
+            return "Traceroute"
+        if (selectedTool === "http")
+            return "HTTP"
+        return "Ping"
+    }
+
+    function selectedToolButtonText() {
+        if (selectedTool === "drill")
+            return "Drill"
+        if (selectedTool === "traceroute")
+            return "Trace"
+        if (selectedTool === "http")
+            return "Check"
+        return "Ping"
+    }
+
+    function selectedToolHost() {
+        if (selectedTool === "drill")
+            return lookupName
+        if (selectedTool === "traceroute")
+            return traceName
+        if (selectedTool === "http")
+            return httpUrl
+        return pingName
+    }
+
+    function setSelectedToolHost(value) {
+        if (selectedTool === "drill")
+            lookupName = value
+        else if (selectedTool === "traceroute")
+            traceName = value
+        else if (selectedTool === "http")
+            httpUrl = value
+        else
+            pingName = value
+    }
+
+    function runSelectedTool() {
+        if (selectedTool === "drill")
+            runLookup()
+        else if (selectedTool === "traceroute")
+            runTrace()
+        else if (selectedTool === "http")
+            runHttpCheck()
+        else
+            runPing()
+    }
+
+    function looksLikePortTarget(value) {
+        var match = /^([A-Za-z0-9._-]+):([0-9]+)$/.exec(value)
+        if (!match)
+            return false
+        var port = Number(match[2])
+        return port >= 1 && port <= 65535
+    }
+
+    function selectedToolHasOutput() {
+        return actionDetails.length > 0 && lastToolId === selectedTool
+    }
+
     function runJoin() {
         var ssid = joinSsid.replace(/^\s+|\s+$/g, "")
         if (ssid.length === 0 || runningAction)
@@ -419,12 +516,16 @@ ShellRoot {
         }
 
         var completedActionId = activeActionId
+        if (completedActionId === "port")
+            lastToolId = "ping"
+        else if (completedActionId === "drill" || completedActionId === "ping" || completedActionId === "traceroute" || completedActionId === "http")
+            lastToolId = completedActionId
         activeActionId = ""
         activeActionArg = ""
         activeActionSecret = ""
         activeActionBssid = ""
         activeActionLabel = ""
-        if (completedActionId !== "drill")
+        if (completedActionId !== "drill" && completedActionId !== "ping" && completedActionId !== "traceroute" && completedActionId !== "http" && completedActionId !== "port")
             refreshSnapshot()
     }
 
@@ -1091,7 +1192,8 @@ ShellRoot {
                                 Repeater {
                                     model: [
                                         {"id": "events", "label": "Events"},
-                                        {"id": "dns", "label": "Tools"},
+                                        {"id": "diagnostics", "label": "Diagnostics"},
+                                        {"id": "tools", "label": "Tools"},
                                         {"id": "printers", "label": "Printers"}
                                     ]
 
@@ -1102,7 +1204,7 @@ ShellRoot {
                                         readonly property bool selected: root.rightPanelTab === modelData.id
                                         readonly property bool hovered: tabMouse.containsMouse
 
-                                        width: 86
+                                        width: rightTabButton.modelData.id === "diagnostics" ? 112 : 74
                                         height: parent.height
                                         radius: 6
                                         color: selected ? Qt.alpha(root.palette.accent, 0.18) : (hovered ? root.palette.cardHover : root.palette.panelBackground)
@@ -1128,17 +1230,6 @@ ShellRoot {
                                     }
                                 }
 
-                                Text {
-                                    width: parent.width - 274
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
-                                    horizontalAlignment: Text.AlignRight
-                                    text: root.rightPanelTab === "dns" ? root.dnsValue("status") : (root.rightPanelTab === "printers" ? root.printerSummary() : root.logLines.length + " lines")
-                                    color: root.rightPanelTab === "dns" ? root.toneColor(root.dnsValue("tone")) : root.palette.mutedText
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                }
                             }
 
                             Flickable {
@@ -1191,7 +1282,7 @@ ShellRoot {
 
                                 width: parent.width
                                 height: parent.height - 40
-                                visible: root.rightPanelTab === "dns"
+                                visible: root.rightPanelTab === "diagnostics"
                                 contentHeight: dnsColumn.height
                                 clip: true
 
@@ -1240,131 +1331,6 @@ ShellRoot {
                                                 color: root.palette.mutedText
                                                 font.pixelSize: 10
                                                 elide: Text.ElideRight
-                                            }
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        width: parent.width
-                                        height: 82
-                                        radius: 8
-                                        color: root.palette.panelBackground
-                                        border.width: 1
-                                        border.color: root.palette.frameBorder
-
-                                        Column {
-                                            anchors.fill: parent
-                                            anchors.margins: 10
-                                            spacing: 8
-
-                                            Text {
-                                                width: parent.width
-                                                text: "DNS lookup"
-                                                color: root.palette.accent
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                            }
-
-                                            Row {
-                                                width: parent.width
-                                                height: 34
-                                                spacing: 8
-
-                                                Rectangle {
-                                                    width: parent.width - 82
-                                                    height: parent.height
-                                                    radius: 6
-                                                    color: root.palette.cardBackground
-                                                    border.width: 1
-                                                    border.color: lookupInput.activeFocus ? root.palette.accent : root.palette.frameBorder
-
-                                                    TextInput {
-                                                        id: lookupInput
-
-                                                        anchors.fill: parent
-                                                        anchors.leftMargin: 10
-                                                        anchors.rightMargin: 10
-                                                        verticalAlignment: TextInput.AlignVCenter
-                                                        text: root.lookupName
-                                                        color: root.palette.primaryText
-                                                        selectedTextColor: root.palette.frameBackground
-                                                        selectionColor: root.palette.accent
-                                                        font.pixelSize: 12
-                                                        clip: true
-                                                        onTextChanged: root.lookupName = text
-                                                        onAccepted: root.runLookup()
-                                                    }
-                                                }
-
-                                                Rectangle {
-                                                    width: 74
-                                                    height: parent.height
-                                                    radius: 6
-                                                    color: lookupMouse.containsMouse && !root.runningAction ? root.palette.cardHover : root.palette.cardBackground
-                                                    border.width: 1
-                                                    border.color: root.runningAction ? root.palette.frameBorder : root.palette.accent
-                                                    opacity: root.runningAction ? 0.5 : 1.0
-
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        text: "Drill"
-                                                        color: root.palette.accent
-                                                        font.pixelSize: 12
-                                                        font.bold: true
-                                                    }
-
-                                                    MouseArea {
-                                                        id: lookupMouse
-
-                                                        anchors.fill: parent
-                                                        enabled: !root.runningAction
-                                                        hoverEnabled: !root.runningAction
-                                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                        onClicked: root.runLookup()
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        width: parent.width
-                                        height: 132
-                                        visible: root.actionDetails.length > 0
-                                        radius: 8
-                                        color: root.palette.panelBackground
-                                        border.width: 1
-                                        border.color: root.toneColor(root.statusTone)
-
-                                        Column {
-                                            anchors.fill: parent
-                                            anchors.margins: 10
-                                            spacing: 6
-
-                                            Text {
-                                                width: parent.width
-                                                text: root.statusMessage
-                                                color: root.toneColor(root.statusTone)
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                                elide: Text.ElideRight
-                                            }
-
-                                            Flickable {
-                                                width: parent.width
-                                                height: parent.height - 24
-                                                contentHeight: lookupResultText.implicitHeight
-                                                clip: true
-
-                                                Text {
-                                                    id: lookupResultText
-
-                                                    width: parent.width
-                                                    text: root.actionDetails
-                                                    color: root.palette.secondaryText
-                                                    font.pixelSize: 10
-                                                    wrapMode: Text.WordWrap
-                                                }
                                             }
                                         }
                                     }
@@ -1438,6 +1404,174 @@ ShellRoot {
                                                     font.pixelSize: 10
                                                     elide: Text.ElideRight
                                                 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Column {
+                                id: toolsColumn
+
+                                width: parent.width
+                                height: parent.height - 40
+                                visible: root.rightPanelTab === "tools"
+                                spacing: 10
+
+                                Row {
+                                    width: parent.width
+                                    height: 30
+                                    spacing: 8
+
+                                    Repeater {
+                                        model: [
+                                            {"id": "ping", "label": "Ping"},
+                                            {"id": "traceroute", "label": "Traceroute"},
+                                            {"id": "drill", "label": "Drill"},
+                                            {"id": "http", "label": "HTTP"}
+                                        ]
+
+                                        delegate: Rectangle {
+                                            id: toolSelectButton
+
+                                            required property var modelData
+                                            readonly property bool selected: root.selectedTool === modelData.id
+                                            readonly property bool hovered: toolSelectMouse.containsMouse
+
+                                            width: modelData.id === "traceroute" ? 104 : 64
+                                            height: parent.height
+                                            radius: 6
+                                            color: selected ? Qt.alpha(root.palette.accent, 0.18) : (hovered ? root.palette.cardHover : root.palette.panelBackground)
+                                            border.width: 1
+                                            border.color: selected ? root.palette.accent : root.palette.frameBorder
+                                            opacity: root.runningAction ? 0.7 : 1.0
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: toolSelectButton.modelData.label
+                                                color: toolSelectButton.selected ? root.palette.accent : root.palette.secondaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: toolSelectMouse
+
+                                                anchors.fill: parent
+                                                enabled: !root.runningAction
+                                                hoverEnabled: !root.runningAction
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.selectedTool = toolSelectButton.modelData.id
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 50
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Row {
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        spacing: 8
+
+                                        Rectangle {
+                                            width: parent.width - 106
+                                            height: parent.height
+                                            radius: 6
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: toolInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                            TextInput {
+                                                id: toolInput
+
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                verticalAlignment: TextInput.AlignVCenter
+                                                text: root.selectedToolHost()
+                                                color: root.palette.primaryText
+                                                selectedTextColor: root.palette.frameBackground
+                                                selectionColor: root.palette.accent
+                                                font.pixelSize: 12
+                                                clip: true
+                                                onTextChanged: root.setSelectedToolHost(text)
+                                                onAccepted: root.runSelectedTool()
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 90
+                                            height: parent.height
+                                            radius: 6
+                                            color: toolRunMouse.containsMouse && !root.runningAction ? root.palette.cardHover : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.runningAction ? root.palette.frameBorder : root.palette.accent
+                                            opacity: root.runningAction ? 0.5 : 1.0
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: root.selectedToolButtonText()
+                                                color: root.palette.accent
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: toolRunMouse
+
+                                                anchors.fill: parent
+                                                enabled: !root.runningAction
+                                                hoverEnabled: !root.runningAction
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.runSelectedTool()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: parent.height - 100
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.selectedToolHasOutput() ? root.toneColor(root.statusTone) : root.palette.frameBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 6
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.selectedToolHasOutput() ? root.statusMessage : root.selectedToolName() + " output"
+                                            color: root.selectedToolHasOutput() ? root.toneColor(root.statusTone) : root.palette.mutedText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Flickable {
+                                            width: parent.width
+                                            height: parent.height - 24
+                                            contentHeight: toolResultText.implicitHeight
+                                            clip: true
+
+                                            Text {
+                                                id: toolResultText
+
+                                                width: parent.width
+                                                text: root.selectedToolHasOutput() ? root.actionDetails : ""
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 10
+                                                wrapMode: Text.WordWrap
                                             }
                                         }
                                     }

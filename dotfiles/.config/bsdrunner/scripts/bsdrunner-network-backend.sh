@@ -84,6 +84,24 @@ valid_lookup_name() {
     esac
 }
 
+valid_http_url() {
+    case "${1:-}" in
+        http://*|https://*)
+            case "$1" in
+                *[[:space:]]*|*'"'*|*'\'*)
+                    return 1
+                    ;;
+                *)
+                    return 0
+                    ;;
+            esac
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 valid_join_value() {
     case "${1:-}" in
         *'
@@ -625,6 +643,211 @@ $output"
     fi
 }
 
+ping_host() {
+    host="${1:-}"
+
+    if ! valid_lookup_name "$host"; then
+        write_last_result error "Invalid ping host."
+        emit_action_result false "Invalid ping host." "$host"
+        exit 1
+    fi
+
+    if ! command -v ping >/dev/null 2>&1; then
+        write_last_result error "ping is not installed."
+        emit_action_result false "ping is not installed." ""
+        exit 1
+    fi
+
+    output="$(timeout 8 ping -c 4 "$host" 2>&1 || true)"
+    transmitted="$(printf '%s\n' "$output" | awk -F ' packets transmitted' '/packets transmitted/{print $1; exit}')"
+    received="$(printf '%s\n' "$output" | awk -F ', ' '/packets transmitted/{for (i = 1; i <= NF; i++) if ($i ~ /packets received/) { sub(/ packets received/, "", $i); print $i; exit }}')"
+    loss="$(printf '%s\n' "$output" | awk -F ', ' '/packet loss/{for (i = 1; i <= NF; i++) if ($i ~ /packet loss/) { print $i; exit }}')"
+    rtt="$(printf '%s\n' "$output" | awk -F ' = ' '/round-trip|rtt/{print $2; exit}')"
+
+    details="Host: $host"
+    [ -n "$transmitted" ] && details="${details}
+Transmitted: $transmitted"
+    [ -n "$received" ] && details="${details}
+Received: $received"
+    [ -n "$loss" ] && details="${details}
+Loss: $loss"
+    [ -n "$rtt" ] && details="${details}
+Round trip: $rtt"
+    details="${details}
+
+$output"
+
+    if [ "${received:-0}" != "0" ]; then
+        write_last_result success "Ping completed."
+        emit_action_result true "Ping completed." "$details"
+    else
+        write_last_result warning "Ping returned no replies."
+        emit_action_result false "Ping returned no replies." "$details"
+        exit 1
+    fi
+}
+
+trace_route() {
+    host="${1:-}"
+
+    if ! valid_lookup_name "$host"; then
+        write_last_result error "Invalid traceroute host."
+        emit_action_result false "Invalid traceroute host." "$host"
+        exit 1
+    fi
+
+    if ! command -v traceroute >/dev/null 2>&1; then
+        write_last_result error "traceroute is not installed."
+        emit_action_result false "traceroute is not installed." ""
+        exit 1
+    fi
+
+    output="$(timeout 20 traceroute -m 12 "$host" 2>&1 || true)"
+    hop_count="$(printf '%s\n' "$output" | awk '/^[[:space:]]*[0-9]+[[:space:]]/ { count++ } END { print count + 0 }')"
+    last_hop="$(printf '%s\n' "$output" | awk '/^[[:space:]]*[0-9]+[[:space:]]/ { line = $0 } END { print line }')"
+
+    details="Host: $host"
+    [ -n "$hop_count" ] && details="${details}
+Hops shown: $hop_count"
+    [ -n "$last_hop" ] && details="${details}
+Last hop: $last_hop"
+    details="${details}
+
+$output"
+
+    if [ "$hop_count" -gt 0 ]; then
+        write_last_result success "Traceroute completed."
+        emit_action_result true "Traceroute completed." "$details"
+    else
+        write_last_result warning "Traceroute returned no hops."
+        emit_action_result false "Traceroute returned no hops." "$details"
+        exit 1
+    fi
+}
+
+http_check() {
+    url="${1:-}"
+
+    if ! valid_http_url "$url"; then
+        write_last_result error "Invalid HTTP URL."
+        emit_action_result false "Invalid HTTP URL." "$url"
+        exit 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        headers_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-http.XXXXXX")"
+        if output="$(timeout 20 curl -L -sS -o /dev/null -D "$headers_tmp" -w 'HTTP status: %{http_code}
+Effective URL: %{url_effective}
+Remote IP: %{remote_ip}
+Content type: %{content_type}
+Download size: %{size_download}
+Total time: %{time_total}s
+' "$url" 2>&1)"; then
+            rc=0
+        else
+            rc=$?
+        fi
+
+        status="$(printf '%s\n' "$output" | awk -F ': ' '/^HTTP status:/{print $2; exit}')"
+        details="URL: $url
+Tool: curl"
+        [ -n "$output" ] && details="${details}
+
+$output"
+        if [ -s "$headers_tmp" ]; then
+            details="${details}
+Response headers:
+$(awk 'NF > 0 { print }' "$headers_tmp" | tail -40)"
+        fi
+        rm -f "$headers_tmp"
+
+        if [ "$rc" -eq 0 ] && [ -n "$status" ] && [ "$status" -ge 200 ] && [ "$status" -lt 400 ]; then
+            write_last_result success "HTTP check completed."
+            emit_action_result true "HTTP check completed." "$details"
+        else
+            write_last_result warning "HTTP check returned a warning."
+            emit_action_result false "HTTP check returned a warning." "$details"
+            exit 1
+        fi
+        return
+    fi
+
+    if ! command -v fetch >/dev/null 2>&1; then
+        write_last_result error "Neither curl nor fetch is installed."
+        emit_action_result false "Neither curl nor fetch is installed." ""
+        exit 1
+    fi
+
+    if output="$(timeout 20 fetch -qo /dev/null "$url" 2>&1)"; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    details="URL: $url
+Tool: fetch"
+    [ -n "$output" ] && details="${details}
+
+$output"
+
+    if [ "$rc" -eq 0 ]; then
+        write_last_result success "HTTP check completed."
+        emit_action_result true "HTTP check completed." "$details"
+    else
+        write_last_result warning "HTTP check returned a warning."
+        emit_action_result false "HTTP check returned a warning." "$details"
+        exit 1
+    fi
+}
+
+port_check() {
+    target="${1:-}"
+
+    case "$target" in
+        *:*)
+            host="${target%:*}"
+            port="${target##*:}"
+            ;;
+        *)
+            host=""
+            port=""
+            ;;
+    esac
+
+    if ! valid_lookup_name "$host" || [ -z "$port" ] || [ "$port" != "$(printf '%s' "$port" | tr -cd '0-9')" ] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        write_last_result error "Invalid port target."
+        emit_action_result false "Invalid port target." "$target"
+        exit 1
+    fi
+
+    if ! command -v nc >/dev/null 2>&1; then
+        write_last_result error "nc is not installed."
+        emit_action_result false "nc is not installed." ""
+        exit 1
+    fi
+
+    if output="$(timeout 8 nc -vz -w 3 "$host" "$port" 2>&1)"; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    details="Target: $host:$port
+Tool: nc"
+    [ -n "$output" ] && details="${details}
+
+$output"
+
+    if [ "$rc" -eq 0 ]; then
+        write_last_result success "Port is reachable."
+        emit_action_result true "Port is reachable." "$details"
+    else
+        write_last_result warning "Port is not reachable."
+        emit_action_result false "Port is not reachable." "$details"
+        exit 1
+    fi
+}
+
 emit_dns_policy_json() {
     checks_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns.XXXXXX")"
     trap 'rm -f "$checks_tmp"' EXIT HUP INT TERM
@@ -1089,6 +1312,18 @@ case "$action" in
         ;;
     drill)
         drill_lookup "$action_arg"
+        ;;
+    ping)
+        ping_host "$action_arg"
+        ;;
+    traceroute)
+        trace_route "$action_arg"
+        ;;
+    http)
+        http_check "$action_arg"
+        ;;
+    port)
+        port_check "$action_arg"
         ;;
     recover)
         recover_network
