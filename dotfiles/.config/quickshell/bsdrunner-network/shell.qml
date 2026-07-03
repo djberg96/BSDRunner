@@ -23,6 +23,7 @@ ShellRoot {
     property string activeActionBssid: ""
     property string activeActionLabel: ""
     property string lookupName: "freebsd.org"
+    property string pingName: "10.50.0.1"
     property bool helpDialogVisible: false
     property bool joinDialogVisible: false
     property bool joinSsidEditable: false
@@ -379,6 +380,14 @@ ShellRoot {
         runAction("drill", "Running DNS lookup", name)
     }
 
+    function runPing() {
+        var name = pingName.replace(/^\s+|\s+$/g, "")
+        if (name.length === 0 || runningAction)
+            return
+        pingName = name
+        runAction("ping", "Pinging " + name, name)
+    }
+
     function runJoin() {
         var ssid = joinSsid.replace(/^\s+|\s+$/g, "")
         if (ssid.length === 0 || runningAction)
@@ -424,7 +433,7 @@ ShellRoot {
         activeActionSecret = ""
         activeActionBssid = ""
         activeActionLabel = ""
-        if (completedActionId !== "drill")
+        if (completedActionId !== "drill" && completedActionId !== "ping")
             refreshSnapshot()
     }
 
@@ -1091,7 +1100,8 @@ ShellRoot {
                                 Repeater {
                                     model: [
                                         {"id": "events", "label": "Events"},
-                                        {"id": "dns", "label": "Tools"},
+                                        {"id": "diagnostics", "label": "Diagnostics"},
+                                        {"id": "tools", "label": "Tools"},
                                         {"id": "printers", "label": "Printers"}
                                     ]
 
@@ -1102,7 +1112,7 @@ ShellRoot {
                                         readonly property bool selected: root.rightPanelTab === modelData.id
                                         readonly property bool hovered: tabMouse.containsMouse
 
-                                        width: 86
+                                        width: rightTabButton.modelData.id === "diagnostics" ? 112 : 74
                                         height: parent.height
                                         radius: 6
                                         color: selected ? Qt.alpha(root.palette.accent, 0.18) : (hovered ? root.palette.cardHover : root.palette.panelBackground)
@@ -1128,17 +1138,6 @@ ShellRoot {
                                     }
                                 }
 
-                                Text {
-                                    width: parent.width - 274
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
-                                    horizontalAlignment: Text.AlignRight
-                                    text: root.rightPanelTab === "dns" ? root.dnsValue("status") : (root.rightPanelTab === "printers" ? root.printerSummary() : root.logLines.length + " lines")
-                                    color: root.rightPanelTab === "dns" ? root.toneColor(root.dnsValue("tone")) : root.palette.mutedText
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                }
                             }
 
                             Flickable {
@@ -1191,7 +1190,7 @@ ShellRoot {
 
                                 width: parent.width
                                 height: parent.height - 40
-                                visible: root.rightPanelTab === "dns"
+                                visible: root.rightPanelTab === "diagnostics"
                                 contentHeight: dnsColumn.height
                                 clip: true
 
@@ -1243,6 +1242,96 @@ ShellRoot {
                                             }
                                         }
                                     }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Preset checks"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Repeater {
+                                        model: root.dnsPolicy && root.dnsPolicy.checks ? root.dnsPolicy.checks : []
+
+                                        delegate: Rectangle {
+                                            id: dnsCheckRow
+
+                                            required property var modelData
+
+                                            width: dnsColumn.width
+                                            height: 76
+                                            radius: 6
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.toneColor(root.dnsCheckTone(modelData))
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 9
+                                                spacing: 4
+
+                                                Row {
+                                                    width: parent.width
+                                                    height: 18
+
+                                                    Text {
+                                                        width: parent.width - 104
+                                                        height: parent.height
+                                                        text: dnsCheckRow.modelData.host || "-"
+                                                        color: root.palette.primaryText
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Text {
+                                                        width: 104
+                                                        height: parent.height
+                                                        horizontalAlignment: Text.AlignRight
+                                                        text: dnsCheckRow.modelData.classification || "-"
+                                                        color: root.toneColor(root.dnsCheckTone(dnsCheckRow.modelData))
+                                                        font.pixelSize: 10
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.dnsCheckTarget(dnsCheckRow.modelData)
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: (dnsCheckRow.modelData.rcode || "-") + (dnsCheckRow.modelData.server ? " via " + dnsCheckRow.modelData.server : "")
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Flickable {
+                                id: toolsFlickable
+
+                                width: parent.width
+                                height: parent.height - 40
+                                visible: root.rightPanelTab === "tools"
+                                contentHeight: toolsColumn.height
+                                clip: true
+
+                                Column {
+                                    id: toolsColumn
+
+                                    width: toolsFlickable.width
+                                    spacing: 10
 
                                     Rectangle {
                                         width: parent.width
@@ -1329,7 +1418,90 @@ ShellRoot {
 
                                     Rectangle {
                                         width: parent.width
-                                        height: 132
+                                        height: 82
+                                        radius: 8
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 8
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Ping"
+                                                color: root.palette.accent
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            Row {
+                                                width: parent.width
+                                                height: 34
+                                                spacing: 8
+
+                                                Rectangle {
+                                                    width: parent.width - 82
+                                                    height: parent.height
+                                                    radius: 6
+                                                    color: root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: pingInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                                    TextInput {
+                                                        id: pingInput
+
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: 10
+                                                        anchors.rightMargin: 10
+                                                        verticalAlignment: TextInput.AlignVCenter
+                                                        text: root.pingName
+                                                        color: root.palette.primaryText
+                                                        selectedTextColor: root.palette.frameBackground
+                                                        selectionColor: root.palette.accent
+                                                        font.pixelSize: 12
+                                                        clip: true
+                                                        onTextChanged: root.pingName = text
+                                                        onAccepted: root.runPing()
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    width: 74
+                                                    height: parent.height
+                                                    radius: 6
+                                                    color: pingMouse.containsMouse && !root.runningAction ? root.palette.cardHover : root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: root.runningAction ? root.palette.frameBorder : root.palette.accent
+                                                    opacity: root.runningAction ? 0.5 : 1.0
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "Ping"
+                                                        color: root.palette.accent
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                    }
+
+                                                    MouseArea {
+                                                        id: pingMouse
+
+                                                        anchors.fill: parent
+                                                        enabled: !root.runningAction
+                                                        hoverEnabled: !root.runningAction
+                                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        onClicked: root.runPing()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 188
                                         visible: root.actionDetails.length > 0
                                         radius: 8
                                         color: root.palette.panelBackground
@@ -1353,90 +1525,17 @@ ShellRoot {
                                             Flickable {
                                                 width: parent.width
                                                 height: parent.height - 24
-                                                contentHeight: lookupResultText.implicitHeight
+                                                contentHeight: toolResultText.implicitHeight
                                                 clip: true
 
                                                 Text {
-                                                    id: lookupResultText
+                                                    id: toolResultText
 
                                                     width: parent.width
                                                     text: root.actionDetails
                                                     color: root.palette.secondaryText
                                                     font.pixelSize: 10
                                                     wrapMode: Text.WordWrap
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Text {
-                                        width: parent.width
-                                        text: "Preset checks"
-                                        color: root.palette.mutedText
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                    }
-
-                                    Repeater {
-                                        model: root.dnsPolicy && root.dnsPolicy.checks ? root.dnsPolicy.checks : []
-
-                                        delegate: Rectangle {
-                                            id: dnsCheckRow
-
-                                            required property var modelData
-
-                                            width: dnsColumn.width
-                                            height: 76
-                                            radius: 6
-                                            color: root.palette.panelBackground
-                                            border.width: 1
-                                            border.color: root.toneColor(root.dnsCheckTone(modelData))
-
-                                            Column {
-                                                anchors.fill: parent
-                                                anchors.margins: 9
-                                                spacing: 4
-
-                                                Row {
-                                                    width: parent.width
-                                                    height: 18
-
-                                                    Text {
-                                                        width: parent.width - 104
-                                                        height: parent.height
-                                                        text: dnsCheckRow.modelData.host || "-"
-                                                        color: root.palette.primaryText
-                                                        font.pixelSize: 12
-                                                        font.bold: true
-                                                        elide: Text.ElideRight
-                                                    }
-
-                                                    Text {
-                                                        width: 104
-                                                        height: parent.height
-                                                        horizontalAlignment: Text.AlignRight
-                                                        text: dnsCheckRow.modelData.classification || "-"
-                                                        color: root.toneColor(root.dnsCheckTone(dnsCheckRow.modelData))
-                                                        font.pixelSize: 10
-                                                        font.bold: true
-                                                        elide: Text.ElideRight
-                                                    }
-                                                }
-
-                                                Text {
-                                                    width: parent.width
-                                                    text: root.dnsCheckTarget(dnsCheckRow.modelData)
-                                                    color: root.palette.secondaryText
-                                                    font.pixelSize: 10
-                                                    elide: Text.ElideRight
-                                                }
-
-                                                Text {
-                                                    width: parent.width
-                                                    text: (dnsCheckRow.modelData.rcode || "-") + (dnsCheckRow.modelData.server ? " via " + dnsCheckRow.modelData.server : "")
-                                                    color: root.palette.mutedText
-                                                    font.pixelSize: 10
-                                                    elide: Text.ElideRight
                                                 }
                                             }
                                         }
