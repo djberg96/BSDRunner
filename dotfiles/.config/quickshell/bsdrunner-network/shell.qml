@@ -25,6 +25,7 @@ ShellRoot {
     property string lookupName: "freebsd.org"
     property string pingName: "10.50.0.1"
     property string traceName: "freebsd.org"
+    property string httpUrl: "https://www.youtube.com/"
     property string selectedTool: "ping"
     property string lastToolId: ""
     property bool helpDialogVisible: false
@@ -399,11 +400,21 @@ ShellRoot {
         runAction("traceroute", "Tracing route to " + name, name)
     }
 
+    function runHttpCheck() {
+        var url = httpUrl.replace(/^\s+|\s+$/g, "")
+        if (url.length === 0 || runningAction)
+            return
+        httpUrl = url
+        runAction("http", "Checking " + url, url)
+    }
+
     function selectedToolName() {
         if (selectedTool === "drill")
             return "Drill"
         if (selectedTool === "traceroute")
             return "Traceroute"
+        if (selectedTool === "http")
+            return "HTTP"
         return "Ping"
     }
 
@@ -412,6 +423,8 @@ ShellRoot {
             return "Drill"
         if (selectedTool === "traceroute")
             return "Trace"
+        if (selectedTool === "http")
+            return "Check"
         return "Ping"
     }
 
@@ -420,6 +433,8 @@ ShellRoot {
             return lookupName
         if (selectedTool === "traceroute")
             return traceName
+        if (selectedTool === "http")
+            return httpUrl
         return pingName
     }
 
@@ -428,6 +443,8 @@ ShellRoot {
             lookupName = value
         else if (selectedTool === "traceroute")
             traceName = value
+        else if (selectedTool === "http")
+            httpUrl = value
         else
             pingName = value
     }
@@ -437,6 +454,8 @@ ShellRoot {
             runLookup()
         else if (selectedTool === "traceroute")
             runTrace()
+        else if (selectedTool === "http")
+            runHttpCheck()
         else
             runPing()
     }
@@ -485,14 +504,14 @@ ShellRoot {
         }
 
         var completedActionId = activeActionId
-        if (completedActionId === "drill" || completedActionId === "ping" || completedActionId === "traceroute")
+        if (completedActionId === "drill" || completedActionId === "ping" || completedActionId === "traceroute" || completedActionId === "http")
             lastToolId = completedActionId
         activeActionId = ""
         activeActionArg = ""
         activeActionSecret = ""
         activeActionBssid = ""
         activeActionLabel = ""
-        if (completedActionId !== "drill" && completedActionId !== "ping" && completedActionId !== "traceroute")
+        if (completedActionId !== "drill" && completedActionId !== "ping" && completedActionId !== "traceroute" && completedActionId !== "http")
             refreshSnapshot()
     }
 
@@ -1394,7 +1413,8 @@ ShellRoot {
                                         model: [
                                             {"id": "ping", "label": "Ping"},
                                             {"id": "traceroute", "label": "Traceroute"},
-                                            {"id": "drill", "label": "Drill"}
+                                            {"id": "drill", "label": "Drill"},
+                                            {"id": "http", "label": "HTTP"}
                                         ]
 
                                         delegate: Rectangle {
@@ -1404,7 +1424,7 @@ ShellRoot {
                                             readonly property bool selected: root.selectedTool === modelData.id
                                             readonly property bool hovered: toolSelectMouse.containsMouse
 
-                                            width: modelData.id === "traceroute" ? 112 : 74
+                                            width: modelData.id === "traceroute" ? 104 : 64
                                             height: parent.height
                                             radius: 6
                                             color: selected ? Qt.alpha(root.palette.accent, 0.18) : (hovered ? root.palette.cardHover : root.palette.panelBackground)

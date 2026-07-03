@@ -84,6 +84,24 @@ valid_lookup_name() {
     esac
 }
 
+valid_http_url() {
+    case "${1:-}" in
+        http://*|https://*)
+            case "$1" in
+                *[[:space:]]*|*'"'*|*'\'*)
+                    return 1
+                    ;;
+                *)
+                    return 0
+                    ;;
+            esac
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 valid_join_value() {
     case "${1:-}" in
         *'
@@ -707,6 +725,81 @@ $output"
     fi
 }
 
+http_check() {
+    url="${1:-}"
+
+    if ! valid_http_url "$url"; then
+        write_last_result error "Invalid HTTP URL."
+        emit_action_result false "Invalid HTTP URL." "$url"
+        exit 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        headers_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-http.XXXXXX")"
+        if output="$(timeout 20 curl -L -sS -o /dev/null -D "$headers_tmp" -w 'HTTP status: %{http_code}
+Effective URL: %{url_effective}
+Remote IP: %{remote_ip}
+Content type: %{content_type}
+Download size: %{size_download}
+Total time: %{time_total}s
+' "$url" 2>&1)"; then
+            rc=0
+        else
+            rc=$?
+        fi
+
+        status="$(printf '%s\n' "$output" | awk -F ': ' '/^HTTP status:/{print $2; exit}')"
+        details="URL: $url
+Tool: curl"
+        [ -n "$output" ] && details="${details}
+
+$output"
+        if [ -s "$headers_tmp" ]; then
+            details="${details}
+Response headers:
+$(awk 'NF > 0 { print }' "$headers_tmp" | tail -40)"
+        fi
+        rm -f "$headers_tmp"
+
+        if [ "$rc" -eq 0 ] && [ -n "$status" ] && [ "$status" -ge 200 ] && [ "$status" -lt 400 ]; then
+            write_last_result success "HTTP check completed."
+            emit_action_result true "HTTP check completed." "$details"
+        else
+            write_last_result warning "HTTP check returned a warning."
+            emit_action_result false "HTTP check returned a warning." "$details"
+            exit 1
+        fi
+        return
+    fi
+
+    if ! command -v fetch >/dev/null 2>&1; then
+        write_last_result error "Neither curl nor fetch is installed."
+        emit_action_result false "Neither curl nor fetch is installed." ""
+        exit 1
+    fi
+
+    if output="$(timeout 20 fetch -qo /dev/null "$url" 2>&1)"; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    details="URL: $url
+Tool: fetch"
+    [ -n "$output" ] && details="${details}
+
+$output"
+
+    if [ "$rc" -eq 0 ]; then
+        write_last_result success "HTTP check completed."
+        emit_action_result true "HTTP check completed." "$details"
+    else
+        write_last_result warning "HTTP check returned a warning."
+        emit_action_result false "HTTP check returned a warning." "$details"
+        exit 1
+    fi
+}
+
 emit_dns_policy_json() {
     checks_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns.XXXXXX")"
     trap 'rm -f "$checks_tmp"' EXIT HUP INT TERM
@@ -1177,6 +1270,9 @@ case "$action" in
         ;;
     traceroute)
         trace_route "$action_arg"
+        ;;
+    http)
+        http_check "$action_arg"
         ;;
     recover)
         recover_network
