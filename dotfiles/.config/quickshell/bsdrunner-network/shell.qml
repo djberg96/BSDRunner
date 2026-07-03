@@ -23,6 +23,7 @@ ShellRoot {
     property string activeActionBssid: ""
     property string activeActionLabel: ""
     property string lookupName: "freebsd.org"
+    property bool helpDialogVisible: false
     property bool joinDialogVisible: false
     property bool joinSsidEditable: false
     property string joinSsid: ""
@@ -70,6 +71,10 @@ ShellRoot {
 
     function ifaceValue(key) {
         return interfaceInfo && interfaceInfo[key] ? interfaceInfo[key] : ""
+    }
+
+    function closeHelpDialog() {
+        helpDialogVisible = false
     }
 
     function scanRowsForFilter(filterId) {
@@ -694,7 +699,7 @@ ShellRoot {
                             readonly property bool actionEnabled: !root.runningAction && !root.loading
                             readonly property bool hovered: actionMouse.containsMouse && actionEnabled
 
-                                width: 142
+                            width: 142
                             height: parent.height
                             radius: 8
                             color: hovered ? root.palette.cardHover : root.palette.cardBackground
@@ -729,8 +734,36 @@ ShellRoot {
                         }
                     }
 
+                    Rectangle {
+                        readonly property bool hovered: helpMouse.containsMouse
+
+                        width: 76
+                        height: parent.height
+                        radius: 8
+                        color: hovered ? root.palette.cardHover : root.palette.cardBackground
+                        border.width: 1
+                        border.color: root.palette.panelBorder
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Help"
+                            color: root.palette.accent
+                            font.pixelSize: 13
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: helpMouse
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.helpDialogVisible = true
+                        }
+                    }
+
                     Text {
-                        width: parent.width - 446
+                        width: parent.width - 532
                         height: parent.height
                         verticalAlignment: Text.AlignVCenter
                         text: root.ifaceValue("media")
@@ -1655,6 +1688,151 @@ ShellRoot {
                     color: root.palette.primaryText
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                z: 1150
+                visible: root.helpDialogVisible
+                color: Qt.alpha(root.palette.frameBackground, 0.64)
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.closeHelpDialog()
+                }
+
+                Rectangle {
+                    width: 560
+                    height: 526
+                    anchors.centerIn: parent
+                    radius: 8
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.palette.accent
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {}
+                    }
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        Row {
+                            width: parent.width
+                            height: 28
+
+                            Text {
+                                width: parent.width - 38
+                                height: parent.height
+                                verticalAlignment: Text.AlignVCenter
+                                text: "Wi-Fi Capability Terms"
+                                color: root.palette.accent
+                                font.pixelSize: 17
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                width: 28
+                                height: 28
+                                radius: 6
+                                color: helpCloseMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "X"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: helpCloseMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.closeHelpDialog()
+                                }
+                            }
+                        }
+
+                        Flickable {
+                            width: parent.width
+                            height: parent.height - 40
+                            contentHeight: helpColumn.height
+                            clip: true
+
+                            Column {
+                                id: helpColumn
+
+                                width: parent.width
+                                spacing: 8
+
+                                Repeater {
+                                    model: [
+                                        {"term": "RSN", "text": "Modern WPA2/WPA3-style security information. Secured APs usually advertise this."},
+                                        {"term": "WPA", "text": "Older WPA security information. Less modern than RSN."},
+                                        {"term": "HTCAP", "text": "802.11n high-throughput support. Common on 2.4 GHz and 5 GHz networks."},
+                                        {"term": "VHTCAP", "text": "802.11ac very-high-throughput support. Usually a 5 GHz capability."},
+                                        {"term": "HECAP / HEOPER", "text": "802.11ax Wi-Fi 6 capability and operating details."},
+                                        {"term": "WME", "text": "Wireless multimedia quality-of-service support for voice, video, best effort, and background traffic."},
+                                        {"term": "BSSLOAD", "text": "Access-point load information, such as channel utilization or client capacity hints."},
+                                        {"term": "APCHANREP", "text": "Neighbor channel reports that help clients discover nearby APs and roam."},
+                                        {"term": "VHTOPMODE", "text": "802.11ac operating-mode information for the AP."},
+                                        {"term": "VHTPWRENV", "text": "Transmit-power envelope information for 802.11ac operation."},
+                                        {"term": "MU_EDCA_PARAM_SET", "text": "Wi-Fi 6 traffic-scheduling parameters for multi-user behavior."},
+                                        {"term": "WPS", "text": "Wi-Fi Protected Setup onboarding support. Convenient, but not a feature to rely on for security."}
+                                    ]
+
+                                    delegate: Rectangle {
+                                        id: helpTermRow
+
+                                        required property var modelData
+
+                                        width: helpColumn.width
+                                        height: Math.max(42, helpTermBody.implicitHeight + 16)
+                                        radius: 6
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+
+                                        Row {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            spacing: 10
+
+                                            Text {
+                                                width: 132
+                                                height: parent.height
+                                                verticalAlignment: Text.AlignTop
+                                                text: helpTermRow.modelData.term
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                id: helpTermBody
+
+                                                width: parent.width - 142
+                                                text: helpTermRow.modelData.text
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
