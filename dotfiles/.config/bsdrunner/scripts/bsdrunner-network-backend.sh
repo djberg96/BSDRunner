@@ -669,6 +669,44 @@ $output"
     fi
 }
 
+trace_route() {
+    host="${1:-}"
+
+    if ! valid_lookup_name "$host"; then
+        write_last_result error "Invalid traceroute host."
+        emit_action_result false "Invalid traceroute host." "$host"
+        exit 1
+    fi
+
+    if ! command -v traceroute >/dev/null 2>&1; then
+        write_last_result error "traceroute is not installed."
+        emit_action_result false "traceroute is not installed." ""
+        exit 1
+    fi
+
+    output="$(timeout 20 traceroute -m 12 "$host" 2>&1 || true)"
+    hop_count="$(printf '%s\n' "$output" | awk '/^[[:space:]]*[0-9]+[[:space:]]/ { count++ } END { print count + 0 }')"
+    last_hop="$(printf '%s\n' "$output" | awk '/^[[:space:]]*[0-9]+[[:space:]]/ { line = $0 } END { print line }')"
+
+    details="Host: $host"
+    [ -n "$hop_count" ] && details="${details}
+Hops shown: $hop_count"
+    [ -n "$last_hop" ] && details="${details}
+Last hop: $last_hop"
+    details="${details}
+
+$output"
+
+    if [ "$hop_count" -gt 0 ]; then
+        write_last_result success "Traceroute completed."
+        emit_action_result true "Traceroute completed." "$details"
+    else
+        write_last_result warning "Traceroute returned no hops."
+        emit_action_result false "Traceroute returned no hops." "$details"
+        exit 1
+    fi
+}
+
 emit_dns_policy_json() {
     checks_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns.XXXXXX")"
     trap 'rm -f "$checks_tmp"' EXIT HUP INT TERM
@@ -1136,6 +1174,9 @@ case "$action" in
         ;;
     ping)
         ping_host "$action_arg"
+        ;;
+    traceroute)
+        trace_route "$action_arg"
         ;;
     recover)
         recover_network

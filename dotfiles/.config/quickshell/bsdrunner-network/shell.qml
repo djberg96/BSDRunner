@@ -24,6 +24,7 @@ ShellRoot {
     property string activeActionLabel: ""
     property string lookupName: "freebsd.org"
     property string pingName: "10.50.0.1"
+    property string traceName: "freebsd.org"
     property bool helpDialogVisible: false
     property bool joinDialogVisible: false
     property bool joinSsidEditable: false
@@ -388,6 +389,14 @@ ShellRoot {
         runAction("ping", "Pinging " + name, name)
     }
 
+    function runTrace() {
+        var name = traceName.replace(/^\s+|\s+$/g, "")
+        if (name.length === 0 || runningAction)
+            return
+        traceName = name
+        runAction("traceroute", "Tracing route to " + name, name)
+    }
+
     function runJoin() {
         var ssid = joinSsid.replace(/^\s+|\s+$/g, "")
         if (ssid.length === 0 || runningAction)
@@ -433,7 +442,7 @@ ShellRoot {
         activeActionSecret = ""
         activeActionBssid = ""
         activeActionLabel = ""
-        if (completedActionId !== "drill" && completedActionId !== "ping")
+        if (completedActionId !== "drill" && completedActionId !== "ping" && completedActionId !== "traceroute")
             refreshSnapshot()
     }
 
@@ -1493,6 +1502,89 @@ ShellRoot {
                                                         hoverEnabled: !root.runningAction
                                                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                                         onClicked: root.runPing()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 82
+                                        radius: 8
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 8
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Traceroute"
+                                                color: root.palette.accent
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            Row {
+                                                width: parent.width
+                                                height: 34
+                                                spacing: 8
+
+                                                Rectangle {
+                                                    width: parent.width - 98
+                                                    height: parent.height
+                                                    radius: 6
+                                                    color: root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: traceInput.activeFocus ? root.palette.accent : root.palette.frameBorder
+
+                                                    TextInput {
+                                                        id: traceInput
+
+                                                        anchors.fill: parent
+                                                        anchors.leftMargin: 10
+                                                        anchors.rightMargin: 10
+                                                        verticalAlignment: TextInput.AlignVCenter
+                                                        text: root.traceName
+                                                        color: root.palette.primaryText
+                                                        selectedTextColor: root.palette.frameBackground
+                                                        selectionColor: root.palette.accent
+                                                        font.pixelSize: 12
+                                                        clip: true
+                                                        onTextChanged: root.traceName = text
+                                                        onAccepted: root.runTrace()
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    width: 90
+                                                    height: parent.height
+                                                    radius: 6
+                                                    color: traceMouse.containsMouse && !root.runningAction ? root.palette.cardHover : root.palette.cardBackground
+                                                    border.width: 1
+                                                    border.color: root.runningAction ? root.palette.frameBorder : root.palette.accent
+                                                    opacity: root.runningAction ? 0.5 : 1.0
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "Trace"
+                                                        color: root.palette.accent
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                    }
+
+                                                    MouseArea {
+                                                        id: traceMouse
+
+                                                        anchors.fill: parent
+                                                        enabled: !root.runningAction
+                                                        hoverEnabled: !root.runningAction
+                                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        onClicked: root.runTrace()
                                                     }
                                                 }
                                             }
