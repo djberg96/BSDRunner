@@ -625,6 +625,50 @@ $output"
     fi
 }
 
+ping_host() {
+    host="${1:-}"
+
+    if ! valid_lookup_name "$host"; then
+        write_last_result error "Invalid ping host."
+        emit_action_result false "Invalid ping host." "$host"
+        exit 1
+    fi
+
+    if ! command -v ping >/dev/null 2>&1; then
+        write_last_result error "ping is not installed."
+        emit_action_result false "ping is not installed." ""
+        exit 1
+    fi
+
+    output="$(timeout 8 ping -c 4 "$host" 2>&1 || true)"
+    transmitted="$(printf '%s\n' "$output" | awk -F ' packets transmitted' '/packets transmitted/{print $1; exit}')"
+    received="$(printf '%s\n' "$output" | awk -F ', ' '/packets transmitted/{for (i = 1; i <= NF; i++) if ($i ~ /packets received/) { sub(/ packets received/, "", $i); print $i; exit }}')"
+    loss="$(printf '%s\n' "$output" | awk -F ', ' '/packet loss/{for (i = 1; i <= NF; i++) if ($i ~ /packet loss/) { print $i; exit }}')"
+    rtt="$(printf '%s\n' "$output" | awk -F ' = ' '/round-trip|rtt/{print $2; exit}')"
+
+    details="Host: $host"
+    [ -n "$transmitted" ] && details="${details}
+Transmitted: $transmitted"
+    [ -n "$received" ] && details="${details}
+Received: $received"
+    [ -n "$loss" ] && details="${details}
+Loss: $loss"
+    [ -n "$rtt" ] && details="${details}
+Round trip: $rtt"
+    details="${details}
+
+$output"
+
+    if [ "${received:-0}" != "0" ]; then
+        write_last_result success "Ping completed."
+        emit_action_result true "Ping completed." "$details"
+    else
+        write_last_result warning "Ping returned no replies."
+        emit_action_result false "Ping returned no replies." "$details"
+        exit 1
+    fi
+}
+
 emit_dns_policy_json() {
     checks_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns.XXXXXX")"
     trap 'rm -f "$checks_tmp"' EXIT HUP INT TERM
@@ -1089,6 +1133,9 @@ case "$action" in
         ;;
     drill)
         drill_lookup "$action_arg"
+        ;;
+    ping)
+        ping_host "$action_arg"
         ;;
     recover)
         recover_network
