@@ -800,6 +800,54 @@ $output"
     fi
 }
 
+port_check() {
+    target="${1:-}"
+
+    case "$target" in
+        *:*)
+            host="${target%:*}"
+            port="${target##*:}"
+            ;;
+        *)
+            host=""
+            port=""
+            ;;
+    esac
+
+    if ! valid_lookup_name "$host" || [ -z "$port" ] || [ "$port" != "$(printf '%s' "$port" | tr -cd '0-9')" ] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        write_last_result error "Invalid port target."
+        emit_action_result false "Invalid port target." "$target"
+        exit 1
+    fi
+
+    if ! command -v nc >/dev/null 2>&1; then
+        write_last_result error "nc is not installed."
+        emit_action_result false "nc is not installed." ""
+        exit 1
+    fi
+
+    if output="$(timeout 8 nc -vz -w 3 "$host" "$port" 2>&1)"; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    details="Target: $host:$port
+Tool: nc"
+    [ -n "$output" ] && details="${details}
+
+$output"
+
+    if [ "$rc" -eq 0 ]; then
+        write_last_result success "Port is reachable."
+        emit_action_result true "Port is reachable." "$details"
+    else
+        write_last_result warning "Port is not reachable."
+        emit_action_result false "Port is not reachable." "$details"
+        exit 1
+    fi
+}
+
 emit_dns_policy_json() {
     checks_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns.XXXXXX")"
     trap 'rm -f "$checks_tmp"' EXIT HUP INT TERM
@@ -1273,6 +1321,9 @@ case "$action" in
         ;;
     http)
         http_check "$action_arg"
+        ;;
+    port)
+        port_check "$action_arg"
         ;;
     recover)
         recover_network

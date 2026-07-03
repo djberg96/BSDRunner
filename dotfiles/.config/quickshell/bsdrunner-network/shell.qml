@@ -389,6 +389,10 @@ ShellRoot {
         if (name.length === 0 || runningAction)
             return
         pingName = name
+        if (looksLikePortTarget(name)) {
+            runAction("port", "Checking " + name, name)
+            return
+        }
         runAction("ping", "Pinging " + name, name)
     }
 
@@ -460,6 +464,14 @@ ShellRoot {
             runPing()
     }
 
+    function looksLikePortTarget(value) {
+        var match = /^([A-Za-z0-9._-]+):([0-9]+)$/.exec(value)
+        if (!match)
+            return false
+        var port = Number(match[2])
+        return port >= 1 && port <= 65535
+    }
+
     function selectedToolHasOutput() {
         return actionDetails.length > 0 && lastToolId === selectedTool
     }
@@ -504,14 +516,16 @@ ShellRoot {
         }
 
         var completedActionId = activeActionId
-        if (completedActionId === "drill" || completedActionId === "ping" || completedActionId === "traceroute" || completedActionId === "http")
+        if (completedActionId === "port")
+            lastToolId = "ping"
+        else if (completedActionId === "drill" || completedActionId === "ping" || completedActionId === "traceroute" || completedActionId === "http")
             lastToolId = completedActionId
         activeActionId = ""
         activeActionArg = ""
         activeActionSecret = ""
         activeActionBssid = ""
         activeActionLabel = ""
-        if (completedActionId !== "drill" && completedActionId !== "ping" && completedActionId !== "traceroute" && completedActionId !== "http")
+        if (completedActionId !== "drill" && completedActionId !== "ping" && completedActionId !== "traceroute" && completedActionId !== "http" && completedActionId !== "port")
             refreshSnapshot()
     }
 
