@@ -1614,7 +1614,26 @@ ShellRoot {
                                         }
 
                                         Repeater {
-                                            model: root.selectedPackage ? [
+                                            model: root.selectedPackage ? (root.currentView === "updates" ? [
+                                                {
+                                                    "id": "upgrade",
+                                                    "label": "Upgrade",
+                                                    "tone": "warning",
+                                                    "available": root.hasAvailableUpgrade(root.selectedPackage)
+                                                },
+                                                {
+                                                    "id": root.isInstalledPackage(root.selectedPackage) ? "reinstall" : "install",
+                                                    "label": root.isInstalledPackage(root.selectedPackage) ? "Reinstall" : "Install",
+                                                    "tone": "accent",
+                                                    "available": true
+                                                },
+                                                {
+                                                    "id": "remove",
+                                                    "label": "Remove",
+                                                    "tone": "danger",
+                                                    "available": root.isInstalledPackage(root.selectedPackage) && !root.isProtectedPackage(root.selectedPackage)
+                                                }
+                                            ] : [
                                                 {
                                                     "id": root.isInstalledPackage(root.selectedPackage) ? "reinstall" : "install",
                                                     "label": root.isInstalledPackage(root.selectedPackage) ? "Reinstall" : "Install",
@@ -1633,7 +1652,7 @@ ShellRoot {
                                                     "tone": "danger",
                                                     "available": root.isInstalledPackage(root.selectedPackage) && !root.isProtectedPackage(root.selectedPackage)
                                                 }
-                                            ] : []
+                                            ]) : []
 
                                             delegate: Rectangle {
                                                 id: actionButton
