@@ -5,6 +5,7 @@ PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH
 
 action="${1:-}"
 package_name="${2:-}"
+log_package_name="${package_name:-all}"
 
 json_escape() {
     printf '%s' "$1" | awk '
@@ -44,7 +45,7 @@ log_file_for_action() {
     state_dir="${HOME}/.local/state/bsdrunner/pkg-actions"
     timestamp="$(date '+%Y%m%d-%H%M%S')"
     mkdir -p "$state_dir"
-    printf '%s/%s-%s-%s.log\n' "$state_dir" "$timestamp" "$action" "$package_name"
+    printf '%s/%s-%s-%s.log\n' "$state_dir" "$timestamp" "$action" "$log_package_name"
 }
 
 write_log_file() {
@@ -100,6 +101,9 @@ verify_expected_state() {
     case "$action" in
         install|reinstall|upgrade)
             package_is_installed
+            ;;
+        upgrade-all)
+            return 0
             ;;
         remove)
             ! package_is_installed
@@ -163,6 +167,9 @@ run_preview() {
         reinstall)
             pkg install -n -f -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
+        upgrade-all)
+            pkg upgrade -n -y >"$stdout_file" 2>"$stderr_file"
+            ;;
         remove)
             pkg delete -n -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
@@ -185,7 +192,7 @@ validate_preview() {
 
     planned_removals="$(planned_removed_packages "$preview_stdout_file")"
     case "$action" in
-        install|reinstall|upgrade)
+        install|reinstall|upgrade|upgrade-all)
             if [ -n "$planned_removals" ]; then
                 write_log_file "$log_file" /dev/null /dev/null "$preview_stdout_file" "$preview_stderr_file"
                 details="$(printf 'BSDRunner blocked this action because pkg planned to remove installed packages:\n%s\n\nUse the terminal if you intentionally want to resolve this conflict manually.' "$planned_removals")"
@@ -269,6 +276,8 @@ case "$action" in
             exit 1
         fi
         ;;
+    upgrade-all)
+        ;;
     *)
         emit_json false "Unknown package action: $action" "" ""
         exit 1
@@ -293,6 +302,12 @@ case "$action" in
         failure_message="Unable to upgrade $package_name."
         run_action \
             mdo -- pkg install -y -- "$package_name"
+        ;;
+    upgrade-all)
+        success_message="Upgrade all request completed."
+        failure_message="Unable to upgrade all packages."
+        run_action \
+            mdo -- pkg upgrade -y
         ;;
     remove)
         success_message="Removed $package_name."

@@ -173,13 +173,16 @@ ShellRoot {
     }
 
     function requestAction(actionId, actionLabel, pkgName) {
-        if (runningAction || !pkgName)
+        if (runningAction)
+            return
+
+        if (actionId !== "upgrade-all" && !pkgName)
             return
 
         clearActionFeedback()
         pendingActionId = actionId
         pendingActionLabel = actionLabel
-        pendingActionPackageName = pkgName
+        pendingActionPackageName = actionId === "upgrade-all" ? "available updates" : pkgName
     }
 
     function confirmationText() {
@@ -193,6 +196,8 @@ ShellRoot {
             return "Reinstall " + pendingActionPackageName + " from the configured FreeBSD package repositories?"
         case "upgrade":
             return "Upgrade " + pendingActionPackageName + " to the latest available package version?"
+        case "upgrade-all":
+            return "Upgrade all packages with available updates?"
         case "remove":
             return "Remove " + pendingActionPackageName + " from this system?"
         default:
@@ -218,7 +223,9 @@ ShellRoot {
         actionStderrFinished = false
 
         actionFeedbackTone = "warning"
-        actionFeedbackTitle = "Running " + activeActionLabel + " for " + activeActionPackageName
+        actionFeedbackTitle = activeActionId === "upgrade-all"
+            ? "Running Upgrade All"
+            : "Running " + activeActionLabel + " for " + activeActionPackageName
         actionFeedbackDetails = "Working..."
         actionProcess.running = true
     }
@@ -336,6 +343,29 @@ ShellRoot {
     }
 
     function applyOptimisticActionState(actionId, pkgName) {
+        if (actionId === "upgrade-all") {
+            if (currentView === "updates")
+                packageData = []
+            else {
+                var upgradedPackages = []
+                for (var upgradeIndex = 0; upgradeIndex < packageData.length; upgradeIndex += 1) {
+                    var upgradeCurrent = packageData[upgradeIndex]
+                    var upgradeUpdated = copyPackageRecord(upgradeCurrent)
+                    if (hasAvailableUpgrade(upgradeCurrent)) {
+                        upgradeUpdated.installed = true
+                        upgradeUpdated.installed_version = upgradeUpdated.version || upgradeUpdated.installed_version
+                        upgradeUpdated.update_available = false
+                    }
+                    upgradedPackages.push(upgradeUpdated)
+                }
+                packageData = upgradedPackages
+            }
+
+            updatesCountLabel = "0"
+            installedSizeLabel = "Refreshing..."
+            return
+        }
+
         if (!pkgName || pkgName.length === 0)
             return
 
@@ -622,7 +652,7 @@ ShellRoot {
             "sh",
             themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-software-backend.sh",
             root.activeActionId,
-            root.activeActionPackageName
+            root.activeActionId === "upgrade-all" ? "" : root.activeActionPackageName
         ]
         stdout: StdioCollector {
             id: actionStdout
@@ -1019,18 +1049,60 @@ ShellRoot {
                             anchors.bottom: parent.bottom
                             spacing: 16
 
-                            Column {
+                            Row {
                                 id: centerHeader
 
                                 width: parent.width
-                                spacing: 0
+                                height: 40
+                                spacing: 12
 
                                 Text {
-                                    width: parent.width
+                                    width: parent.width - (upgradeAllButton.visible ? upgradeAllButton.width + parent.spacing : 0)
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: parent.height
                                     text: root.viewTitle()
                                     color: root.palette.primaryText
                                     font.pixelSize: 34
                                     font.bold: true
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+
+                                Rectangle {
+                                    id: upgradeAllButton
+
+                                    readonly property bool actionEnabled: root.currentView === "updates"
+                                        && root.updatesCountLabel !== "0"
+                                        && root.updatesCountLabel !== "--"
+                                        && !root.loadingPackages
+                                        && !root.runningAction
+                                        && root.pendingActionId.length === 0
+
+                                    visible: root.currentView === "updates"
+                                    width: 126
+                                    height: 34
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    radius: 12
+                                    color: actionEnabled ? root.palette.warning : root.palette.panelBackground
+                                    opacity: actionEnabled ? 1.0 : 0.42
+                                    border.width: actionEnabled ? 2 : 1
+                                    border.color: actionEnabled ? root.palette.warning : root.palette.frameBorder
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Upgrade All"
+                                        color: upgradeAllButton.actionEnabled ? root.palette.primaryText : root.palette.mutedText
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: upgradeAllButton.actionEnabled
+                                        hoverEnabled: upgradeAllButton.actionEnabled
+                                        cursorShape: upgradeAllButton.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+                                        onClicked: root.requestAction("upgrade-all", "Upgrade All", "")
+                                    }
                                 }
                             }
 
@@ -1545,7 +1617,9 @@ ShellRoot {
 
                                                 Text {
                                                     width: parent.width
-                                                    text: root.pendingActionLabel + " " + root.pendingActionPackageName + "?"
+                                                    text: root.pendingActionId === "upgrade-all"
+                                                        ? root.pendingActionLabel + "?"
+                                                        : root.pendingActionLabel + " " + root.pendingActionPackageName + "?"
                                                     color: root.palette.primaryText
                                                     font.pixelSize: 13
                                                     font.bold: true
