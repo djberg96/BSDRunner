@@ -1,7 +1,9 @@
 [
   {
-    "layer": "top",
+    "layer": "bottom",
     "position": "top",
+    "exclusive": true,
+    "exclusive-zone": 52,
     "spacing": 8,
     "height": 44,
     "margin-top": 8,
