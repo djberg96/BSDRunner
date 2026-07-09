@@ -57,6 +57,13 @@ ShellRoot {
             "tone": "storage"
         },
         {
+            "action": "jails",
+            "icon": "JLS",
+            "label": "Jails",
+            "detail": "FreeBSD isolation",
+            "tone": "info"
+        },
+        {
             "action": "firefox",
             "icon": "WEB",
             "label": "Firefox",
@@ -115,6 +122,11 @@ ShellRoot {
             return [
                 "sh",
                 themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-zfs.sh"
+            ]
+        case "jails":
+            return [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails.sh"
             ]
         case "firefox":
             return ["firefox"]
@@ -178,7 +190,7 @@ ShellRoot {
 
         visible: true
         implicitWidth: 330
-        implicitHeight: 468
+        implicitHeight: 530
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 

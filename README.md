@@ -185,6 +185,18 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-zfs.sh
 
 See `docs/zfs.md` for the backend commands and scope.
 
+## Jails
+
+BSDRunner includes a beginner-focused FreeBSD jails surface. It lists native
+jails, detects Bastille when installed, explains the storage/userland/config
+model, and exposes guarded lifecycle actions for existing jails.
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
+```
+
+See `docs/jails.md` for backend commands, current scope, and the creation model.
+
 ## Scope
 
 This starter is targeted at:
