@@ -694,10 +694,18 @@ ShellRoot {
                         border.width: 1
                         border.color: root.palette.frameBorder
 
-                        Column {
+                        Flickable {
                             anchors.fill: parent
                             anchors.margins: 14
-                            spacing: 12
+                            contentWidth: width
+                            contentHeight: centerContent.height
+                            clip: true
+
+                            Column {
+                                id: centerContent
+
+                                width: parent.width
+                                spacing: 12
 
                             Text {
                                 width: parent.width
@@ -945,6 +953,7 @@ ShellRoot {
                                     wrapMode: Text.WordWrap
                                 }
                             }
+                            }
                         }
                     }
 
@@ -956,10 +965,18 @@ ShellRoot {
                         border.width: 1
                         border.color: root.palette.frameBorder
 
-                        Column {
+                        Flickable {
                             anchors.fill: parent
                             anchors.margins: 14
-                            spacing: 12
+                            contentWidth: width
+                            contentHeight: beginnerContent.height
+                            clip: true
+
+                            Column {
+                                id: beginnerContent
+
+                                width: parent.width
+                                spacing: 12
 
                             Text {
                                 width: parent.width
@@ -1075,6 +1092,7 @@ ShellRoot {
                                         wrapMode: Text.WordWrap
                                     }
                                 }
+                            }
                             }
                         }
                     }
