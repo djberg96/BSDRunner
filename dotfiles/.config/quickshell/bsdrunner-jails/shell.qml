@@ -26,6 +26,7 @@ ShellRoot {
     property string pendingActionDescription: ""
     property string selectedJailName: ""
     property string selectedJailBackend: ""
+    property string selectedBeginnerTopic: "storage"
     property var runningJails: []
     property var configuredJails: []
     property var bastilleJails: []
@@ -49,6 +50,33 @@ ShellRoot {
 
     readonly property var jails: mergedJails()
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
+    readonly property var beginnerTopics: [
+        {
+            "id": "storage",
+            "title": "1. Storage",
+            "body": "A jail needs a filesystem root. ZFS datasets are the cleanest place to keep those roots.",
+            "detail": "Start by deciding where jail roots live. On a ZFS machine, a dataset like zroot/jails keeps jail files separate and makes snapshots, quotas, and cleanup easier to reason about."
+        },
+        {
+            "id": "userland",
+            "title": "2. Userland",
+            "body": "FreeBSD does not create a full system tree by itself. You fetch or extract a release first.",
+            "detail": "The jail shares the host kernel, but it still needs its own /bin, /etc, /usr, and packages. Bastille can bootstrap this; native jails usually start from a fetched base.txz or an existing template."
+        },
+        {
+            "id": "config",
+            "title": "3. Config",
+            "body": "jail.conf gives the jail a name, path, hostname, network address, and startup behavior.",
+            "detail": "The config is the contract between the host and the jail. It points at the root path, names the jail, chooses networking, controls devfs, and decides whether service jail start should include it."
+        },
+        {
+            "id": "lifecycle",
+            "title": "4. Lifecycle",
+            "body": "Once configured, start, stop, restart, and console are the everyday operations.",
+            "detail": "After setup, jails feel like small service machines. Start boots the jail, console gets you inside, restart applies many config changes, and stop shuts the contained userland down."
+        }
+    ]
+    readonly property var selectedBeginner: findBeginnerTopic(selectedBeginnerTopic)
 
     function toneColor(tone) {
         switch (tone) {
@@ -90,6 +118,14 @@ ShellRoot {
                 return all[i]
         }
         return null
+    }
+
+    function findBeginnerTopic(topicId) {
+        for (var i = 0; i < beginnerTopics.length; i += 1) {
+            if (beginnerTopics[i].id === topicId)
+                return beginnerTopics[i]
+        }
+        return beginnerTopics.length > 0 ? beginnerTopics[0] : null
     }
 
     function selectJail(jail) {
@@ -987,23 +1023,19 @@ ShellRoot {
                             }
 
                             Repeater {
-                                model: [
-                                    {"title": "1. Storage", "body": "A jail needs a filesystem root. ZFS datasets are the cleanest place to keep those roots."},
-                                    {"title": "2. Userland", "body": "FreeBSD does not create a full system tree by itself. You fetch or extract a release first."},
-                                    {"title": "3. Config", "body": "jail.conf gives the jail a name, path, hostname, network address, and startup behavior."},
-                                    {"title": "4. Lifecycle", "body": "Once configured, start, stop, restart, and console are the everyday operations."}
-                                ]
+                                model: root.beginnerTopics
 
                                 Rectangle {
                                     id: mapCard
                                     required property var modelData
+                                    readonly property bool selected: root.selectedBeginnerTopic === modelData.id
 
                                     width: parent.width
                                     height: 78
                                     radius: 8
-                                    color: root.palette.panelBackground
+                                    color: mapMouse.containsMouse ? root.palette.cardHover : (selected ? Qt.alpha(root.palette.accent, 0.14) : root.palette.panelBackground)
                                     border.width: 1
-                                    border.color: root.palette.frameBorder
+                                    border.color: selected ? root.palette.accent : root.palette.frameBorder
 
                                     Column {
                                         anchors.fill: parent
@@ -1028,6 +1060,49 @@ ShellRoot {
                                             maximumLineCount: 3
                                             elide: Text.ElideRight
                                         }
+                                    }
+
+                                    MouseArea {
+                                        id: mapMouse
+
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.selectedBeginnerTopic = mapCard.modelData.id
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 124
+                                radius: 8
+                                color: Qt.alpha(root.palette.accent, 0.10)
+                                border.width: 1
+                                border.color: root.palette.accent
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 6
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.selectedBeginner ? root.selectedBeginner.title : "Beginner Map"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.selectedBeginner ? root.selectedBeginner.detail : ""
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 5
+                                        elide: Text.ElideRight
                                     }
                                 }
                             }
