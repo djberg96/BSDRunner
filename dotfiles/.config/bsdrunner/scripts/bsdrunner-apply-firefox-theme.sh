@@ -344,6 +344,60 @@ panel .subviewbutton:hover,
     background-color: var(--bsdrunner-surface-alt) !important;
     color: var(--bsdrunner-text) !important;
 }
+
+findbar {
+    background-color: var(--bsdrunner-surface) !important;
+    color: var(--bsdrunner-text) !important;
+    border-top: 2px solid var(--bsdrunner-accent) !important;
+    box-shadow: 0 -1px 0 color-mix(in srgb, var(--bsdrunner-accent) 30%, transparent) !important;
+}
+
+findbar toolbarbutton,
+findbar .toolbarbutton-icon,
+findbar .toolbarbutton-text,
+findbar .findbar-find-previous,
+findbar .findbar-find-next,
+findbar .findbar-closebutton {
+    color: var(--bsdrunner-text) !important;
+    fill: currentColor !important;
+}
+
+findbar toolbarbutton {
+    background-color: color-mix(in srgb, var(--bsdrunner-accent) 12%, var(--bsdrunner-surface)) !important;
+    border: 1px solid color-mix(in srgb, var(--bsdrunner-accent) 62%, var(--bsdrunner-surface-alt)) !important;
+    border-radius: 6px !important;
+}
+
+findbar toolbarbutton:hover {
+    background-color: color-mix(in srgb, var(--bsdrunner-accent) 24%, var(--bsdrunner-surface)) !important;
+    border-color: var(--bsdrunner-accent) !important;
+}
+
+findbar toolbarbutton:hover,
+findbar toolbarbutton:hover .toolbarbutton-icon,
+findbar toolbarbutton:hover .toolbarbutton-text,
+findbar toolbarbutton[checked="true"],
+findbar toolbarbutton[open="true"],
+findbar toolbarbutton:active {
+    color: var(--bsdrunner-text) !important;
+    fill: currentColor !important;
+}
+
+findbar .findbar-closebutton {
+    background-color: color-mix(in srgb, var(--bsdrunner-warning) 16%, var(--bsdrunner-surface)) !important;
+    border-color: color-mix(in srgb, var(--bsdrunner-warning) 70%, var(--bsdrunner-surface-alt)) !important;
+}
+
+findbar .findbar-closebutton:hover {
+    background-color: color-mix(in srgb, var(--bsdrunner-warning) 30%, var(--bsdrunner-surface)) !important;
+    border-color: var(--bsdrunner-warning) !important;
+}
+
+findbar .findbar-textbox {
+    background-color: var(--bsdrunner-bg) !important;
+    color: var(--bsdrunner-text) !important;
+    border: 1px solid color-mix(in srgb, var(--bsdrunner-accent) 58%, var(--bsdrunner-surface-alt)) !important;
+}
 EOF
 }
 
