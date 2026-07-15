@@ -562,14 +562,26 @@ ensure_import() {
 ensure_user_pref() {
     profile_dir="$1"
     user_js="$profile_dir/user.js"
-    pref='user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);'
+
+    ensure_user_pref_line "$user_js" \
+        "// BSDRunner: enable profile chrome CSS." \
+        'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);'
+    ensure_user_pref_line "$user_js" \
+        "// BSDRunner: use the portal file picker to avoid GTK/Wayland hit-test glitches." \
+        'user_pref("widget.use-xdg-desktop-portal.file-picker", 1);'
+}
+
+ensure_user_pref_line() {
+    user_js="$1"
+    comment="$2"
+    pref="$3"
 
     if [ -f "$user_js" ] && grep -Fxq "$pref" "$user_js"; then
         return
     fi
 
     {
-        printf '\n// BSDRunner: enable profile chrome CSS.\n'
+        printf '\n%s\n' "$comment"
         printf '%s\n' "$pref"
     } >> "$user_js"
 }
