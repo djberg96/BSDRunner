@@ -174,10 +174,17 @@ ShellRoot {
         if (!row || !row.hasCaps)
             return
 
-        featureTooltipText = row.modelData.caps
-        var below = row.mapToItem(appFrame, 0, row.height + 6)
-        var above = row.mapToItem(appFrame, 0, -82)
-        featureTooltipX = Math.max(18, Math.min(below.x + row.width - 356, appFrame.width - 374))
+        showTooltipForItem(row, row.modelData.caps)
+    }
+
+    function showTooltipForItem(item, text) {
+        if (!item || !text || text.length === 0)
+            return
+
+        featureTooltipText = text
+        var below = item.mapToItem(appFrame, 0, item.height + 6)
+        var above = item.mapToItem(appFrame, 0, -82)
+        featureTooltipX = Math.max(18, Math.min(below.x + item.width - 356, appFrame.width - 374))
         featureTooltipY = below.y + 74 > appFrame.height ? Math.max(18, above.y) : below.y
         featureTooltipVisible = true
     }
@@ -266,6 +273,14 @@ ShellRoot {
         if (ssidPinned(row))
             return "Move"
         return "Pin"
+    }
+
+    function pinTooltipText(row) {
+        if (rowPinned(row))
+            return "Free this saved Wi-Fi profile so it can use any access point for this SSID."
+        if (ssidPinned(row))
+            return "Move the saved Wi-Fi profile pin to this BSSID. Useful only when staying near this access point."
+        return "Pin the saved Wi-Fi profile to this exact BSSID. This edits the saved profile; avoid while roaming."
     }
 
     function runPinAction(row) {
@@ -790,7 +805,7 @@ ShellRoot {
                         model: [
                             {"id": "refresh", "label": "Refresh"},
                             {"id": "rescan", "label": "Rescan"},
-                            {"id": "recover", "label": "Recover Wi-Fi"}
+                            {"id": "recover", "label": "Restart Wi-Fi"}
                         ]
 
                         delegate: Rectangle {
@@ -829,7 +844,7 @@ ShellRoot {
                                     else if (commandButton.modelData.id === "rescan")
                                         root.runAction("rescan", "Scanning wireless networks")
                                     else
-                                        root.runAction("recover", "Recovering Wi-Fi")
+                                        root.runAction("recover", "Restarting Wi-Fi")
                                 }
                             }
                         }
@@ -1159,7 +1174,9 @@ ShellRoot {
                                                         enabled: parent.actionEnabled
                                                         hoverEnabled: parent.actionEnabled
                                                         cursorShape: parent.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                        onEntered: root.hideFeatureTooltip()
+                                                        onEntered: root.showTooltipForItem(parent, root.pinTooltipText(scanRow.modelData))
+                                                        onPositionChanged: root.showTooltipForItem(parent, root.pinTooltipText(scanRow.modelData))
+                                                        onExited: root.hideFeatureTooltip()
                                                         onClicked: root.runPinAction(scanRow.modelData)
                                                     }
                                                 }
