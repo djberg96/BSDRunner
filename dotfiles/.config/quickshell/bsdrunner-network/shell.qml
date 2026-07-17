@@ -495,11 +495,10 @@ ShellRoot {
         var ssid = joinSsid.replace(/^\s+|\s+$/g, "")
         if (ssid.length === 0 || runningAction)
             return
-        var bssid = joinBssid
         var password = joinPassword
         joinSsid = ssid
         closeJoinDialog()
-        runAction("join", "Joining " + ssid, ssid, password, bssid)
+        runAction("join", "Joining " + ssid, ssid, password, "")
     }
 
     function maybeFinalizeAction() {
@@ -513,7 +512,16 @@ ShellRoot {
         try {
             payload = JSON.parse(text)
         } catch (error) {
-            payload = null
+            var match = /(\{[^\n]*"ok"[^\n]*\})\s*$/.exec(text)
+            if (match) {
+                try {
+                    payload = JSON.parse(match[1])
+                } catch (innerError) {
+                    payload = null
+                }
+            } else {
+                payload = null
+            }
         }
 
         if (payload && payload.ok && actionExitCode === 0) {

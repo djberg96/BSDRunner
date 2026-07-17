@@ -1256,6 +1256,8 @@ $set_output"
     if [ -z "$target_bssid" ]; then
         scan_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" scan_ssid 1 2>&1 || true)"
         append_output "Enabled directed SSID scan." "$scan_output"
+        bssid_output="$(run_privileged wpa_cli -i "$iface" set_network "$network_id" bssid any 2>&1 || true)"
+        append_output "Allowed any BSSID for roaming." "$bssid_output"
     fi
 
     if [ -n "$target_bssid" ]; then
