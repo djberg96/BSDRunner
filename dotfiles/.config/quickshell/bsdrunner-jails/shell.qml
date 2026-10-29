@@ -2804,14 +2804,18 @@ ShellRoot {
                                     Rectangle {
                                         visible: root.wizardStep === 4
                                         width: parent.width
-                                        height: 104
+                                        height: creationConfirmationContent.implicitHeight + 20
                                         radius: 7
                                         color: root.palette.cardBackground
                                         border.width: 1
                                         border.color: root.creationConfirmation === root.previewName ? root.palette.success : root.palette.panelBorder
 
                                         Column {
-                                            anchors.fill: parent
+                                            id: creationConfirmationContent
+
+                                            anchors.top: parent.top
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
                                             anchors.margins: 10
                                             spacing: 6
 
