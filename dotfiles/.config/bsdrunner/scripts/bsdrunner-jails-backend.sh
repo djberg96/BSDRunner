@@ -53,6 +53,31 @@ valid_name() {
     esac
 }
 
+valid_release() {
+    case "${1:-}" in
+        ""|*[!A-Za-z0-9_.-]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+valid_address() {
+    case "${1:-}" in
+        inherit)
+            return 0
+            ;;
+        ""|*[!A-Fa-f0-9:./]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
 write_last_result() {
     tone="$1"
     message="$2"
@@ -364,17 +389,80 @@ do_console() {
     emit_action_result true "Opened console for ${name}." ""
 }
 
+do_preview() {
+    name="${1:-}"
+    release="${2:-}"
+    address="${3:-}"
+    autostart="${4:-yes}"
+
+    valid_name "$name" || {
+        emit_action_result false "Invalid jail name." "Use letters, numbers, dots, underscores, or hyphens."
+        exit 1
+    }
+    valid_release "$release" || {
+        emit_action_result false "Invalid FreeBSD release." "Use a release such as 15.0-RELEASE."
+        exit 1
+    }
+    valid_address "$address" || {
+        emit_action_result false "Invalid jail address." "Use an IPv4 or IPv6 address with an optional CIDR prefix."
+        exit 1
+    }
+    case "$autostart" in
+        yes|no)
+            ;;
+        *)
+            emit_action_result false "Invalid autostart preference." "Choose yes or no."
+            exit 1
+            ;;
+    esac
+
+    bootstrap_command="bastille bootstrap --update ${release}"
+    create_command="bastille create --thick"
+    if [ "$autostart" = "no" ]; then
+        create_command="${create_command} --no-boot"
+    fi
+    create_command="${create_command} ${name} ${release} ${address}"
+
+    if command -v bastille >/dev/null 2>&1; then
+        availability_note="Bastille is installed. Review the plan before running it manually as root."
+    else
+        availability_note="Bastille is not installed. Install and run bastille setup before using this plan."
+    fi
+
+    printf '{'
+    printf '"ok":true,'
+    printf '"message":"Create preview ready. Nothing was changed.",'
+    printf '"backend":"bastille","mutates":false,'
+    printf '"inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","jail_type":"thick"},' \
+        "$(printf '%s' "$name" | json_escape)" \
+        "$(printf '%s' "$release" | json_escape)" \
+        "$(printf '%s' "$address" | json_escape)" \
+        "$autostart"
+    printf '"commands":["%s","%s"],' \
+        "$(printf '%s' "$bootstrap_command" | json_escape)" \
+        "$(printf '%s' "$create_command" | json_escape)"
+    printf '"notes":["This plan creates a thick service jail; Bastille owns its storage and jail.conf entry.","%s"]' \
+        "$(printf '%s' "$availability_note" | json_escape)"
+    printf '}\n'
+}
+
 if [ -n "$fixture_file" ]; then
-    if [ "$action" != "snapshot" ]; then
-        emit_action_result false "Actions are disabled in demo mode." "Restart Jails normally to manage real jails."
-        exit 1
-    fi
-    if [ ! -r "$fixture_file" ]; then
-        emit_action_result false "Unable to load Jails demo data." "$fixture_file"
-        exit 1
-    fi
-    cat "$fixture_file"
-    exit 0
+    case "$action" in
+        snapshot)
+            if [ ! -r "$fixture_file" ]; then
+                emit_action_result false "Unable to load Jails demo data." "$fixture_file"
+                exit 1
+            fi
+            cat "$fixture_file"
+            exit 0
+            ;;
+        preview)
+            ;;
+        *)
+            emit_action_result false "Actions are disabled in demo mode." "Restart Jails normally to manage real jails."
+            exit 1
+            ;;
+    esac
 fi
 
 case "$action" in
@@ -386,6 +474,9 @@ case "$action" in
         ;;
     console)
         do_console "${2:-}" "${3:-native}"
+        ;;
+    preview)
+        do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"

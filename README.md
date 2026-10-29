@@ -196,8 +196,9 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
 ```
 
 Use `--demo` to explore representative native and Bastille jail states without a
-configured FreeBSD jail host. See `docs/jails.md` for backend commands,
-fixture-backed tests, current scope, and the creation model.
+configured FreeBSD jail host. The UI also includes a read-only Bastille thick-jail
+creation preview. See `docs/jails.md` for backend commands, fixture-backed tests,
+current scope, and the creation model.
 
 ## Scope
 

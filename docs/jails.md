@@ -10,6 +10,7 @@ The UI is intentionally read-mostly. It helps a new user answer:
 - whether native FreeBSD jail tools or Bastille are available
 - what path, hostname, IP address, JID, and backend a selected jail uses
 - which lifecycle actions are safe for the selected state
+- what a proposed Bastille thick-jail creation would do before any command runs
 
 ## Launch
 
@@ -32,6 +33,9 @@ Demo mode shows running native, configured native, and stopped Bastille-backed
 jails. It is read-only: the backend rejects start, stop, restart, and console
 requests while the demo fixture is active. The installed fixture lives at
 `~/.config/bsdrunner/jails/demo-snapshot.json`.
+
+The **Create Preview** button remains available in demo mode because it only
+validates input and generates a plan.
 
 ## Backend
 
@@ -62,6 +66,18 @@ bsdrunner-jails-backend.sh console NAME native
 For Bastille-backed rows, the third argument is `bastille` and the backend calls
 `bastille start`, `bastille stop`, `bastille restart`, or `bastille console`.
 
+The read-only creation preview accepts a jail name, FreeBSD release, IP address
+or CIDR, and an autostart preference:
+
+```sh
+bsdrunner-jails-backend.sh preview web 15.0-RELEASE 10.0.0.20/24 yes
+```
+
+It returns JSON containing the validated inputs and exact Bastille commands. It
+does not invoke Bastille, download a release, create storage, or write config.
+The current preview deliberately plans a thick service jail. Choosing no
+autostart adds Bastille's `--no-boot` option.
+
 If `mdo` is available, lifecycle commands use it for privilege escalation. If it
 is not available, the backend runs the command directly and expects the caller to
 already have the required privileges.
@@ -75,15 +91,19 @@ The UI treats jail creation as four visible concepts:
 3. Config: `jail.conf` gives the jail its name, path, hostname, IP, and startup behavior.
 4. Lifecycle: once configured, everyday work is start, stop, restart, and console.
 
-This is why V1 does not include a live create wizard. A safe creation workflow
-will need strong validation around datasets, release downloads, `devfs`, network
-settings, and generated `/etc/jail.conf.d/NAME.conf` files.
+This is why V1 does not include a live, mutating create wizard. The Create Jail
+Preview teaches the Bastille provisioning path and exposes its commands without
+executing them. A future native or mutating workflow will need stronger
+validation around datasets, release downloads, `devfs`, network settings, and
+generated `/etc/jail.conf.d/NAME.conf` files.
 
 ## Bastille
 
-Bastille is treated as an optional automation backend, not a requirement. When it
-is installed, BSDRunner can list Bastille jails and call Bastille lifecycle
-commands. When it is absent, the native jail view still works.
+Bastille is the assumed managed-jail backend, while native FreeBSD jails remain
+the no-dependency baseline. When Bastille is installed, BSDRunner can list its
+jails, call its lifecycle commands, and preview thick-jail creation. When it is
+absent, native jail status still works and creation plans remain available for
+learning or future setup.
 
 This keeps the learning path FreeBSD-native while leaving room for Bastille's
 useful features: bootstrapping releases, templates, cloning, snapshots, and
@@ -93,8 +113,9 @@ resource limits.
 
 The fixture-backed backend suite runs without FreeBSD jail tools or root access.
 It supplies representative `jls`, `jail.conf`, `sysrc`, and `bastille list`
-results through an isolated test path, then checks snapshot parsing, demo-mode
-guards, lifecycle dispatch, validation failures, and persisted action status.
+results through an isolated test path, then checks snapshot parsing, read-only
+creation plans, demo-mode guards, lifecycle dispatch, validation failures, and
+persisted action status.
 
 The suite requires `jq`:
 
@@ -131,4 +152,6 @@ bastille list -a
 ```
 
 Then open the UI and confirm that the list, details, backend detection, and
-guarded lifecycle actions match the command-line state.
+guarded lifecycle actions match the command-line state. Open **Create Preview**,
+generate plans with autostart enabled and disabled, and confirm that no jail or
+state file is created.

@@ -92,13 +92,13 @@ V1 should not deeply edit jail networking, template systems, or desktop app
 permissions. Those are later features once the status and lifecycle workflow
 feels trustworthy.
 
-The next UI milestone after read-mostly lifecycle management should be a
-read-only `Create Jail Preview`. This should behave like a guided planning
-wizard, not a mutating workflow. It should collect or infer the intended jail
-name, storage location, release/userland source, hostname, networking shape,
-autostart preference, and optional Bastille mode, then show the exact commands
-and `/etc/jail.conf.d/NAME.conf` content it would create. The preview should
-teach the provisioning model and expose risk before any root action exists.
+The first follow-up UI milestone is now a read-only `Create Jail Preview`. It
+behaves like a guided planning wizard, not a mutating workflow. The current
+version collects the jail name, release, network address, and autostart
+preference, then emits an exact Bastille thick-jail plan. A future native mode
+should add storage and hostname fields plus the generated
+`/etc/jail.conf.d/NAME.conf` content. The preview teaches the provisioning model
+and exposes risk before any root action exists.
 
 ### Provisioning Model
 
@@ -124,9 +124,9 @@ coordination that should not be hidden in V1.
 
 Creation should graduate in stages:
 
-1. read-only create preview with generated commands and config
-2. native thick-jail creation with strong confirmation gates
-3. optional Bastille-backed creation once Bastille metadata is modeled cleanly
+1. read-only Bastille thick-jail preview with generated commands (implemented)
+2. native preview with generated config, storage, and userland steps
+3. mutating creation with strong confirmation gates and clean Bastille metadata
 4. thin/shared-base and desktop-app jail profiles after service jails are solid
 
 ### Jail Types
@@ -176,8 +176,8 @@ assumptions.
 
 ### Bastille Role
 
-Bastille should be evaluated as an optional service-jail automation backend.
-It may save work for:
+Bastille is the assumed managed service-jail backend while the native backend
+remains the no-dependency status and lifecycle baseline. It may save work for:
 
 - release bootstrapping
 - thick/thin jail creation
@@ -234,7 +234,7 @@ choosing a privacy action, and continuing navigation.
 
 Possible follow-up features:
 
-- read-only jail creation preview wizard
+- native create-preview mode with generated `jail.conf` content
 - plain jail creation and destruction with strong confirmations
 - optional Bastille template and release management
 - desktop app jail profiles and launcher integration

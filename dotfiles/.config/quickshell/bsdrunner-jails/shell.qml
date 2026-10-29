@@ -15,6 +15,8 @@ ShellRoot {
     property bool loading: false
     property bool runningAction: false
     property bool beginnerMapVisible: true
+    property bool createPreviewVisible: false
+    property bool createPreviewLoading: false
     property string statusTone: "info"
     property string statusMessage: "Loading jail status..."
     property string actionDetails: ""
@@ -48,6 +50,18 @@ ShellRoot {
     property bool actionExited: false
     property bool actionStdoutFinished: false
     property bool actionStderrFinished: false
+    property string previewName: "web"
+    property string previewRelease: "15.0-RELEASE"
+    property string previewAddress: "10.0.0.20/24"
+    property bool previewAutostart: true
+    property var previewPayload: null
+    property string previewError: ""
+    property string previewStdoutText: ""
+    property string previewStderrText: ""
+    property int previewExitCode: 0
+    property bool previewExited: false
+    property bool previewStdoutFinished: false
+    property bool previewStderrFinished: false
 
     readonly property var jails: mergedJails()
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
@@ -281,6 +295,69 @@ ShellRoot {
         actionProcess.running = true
     }
 
+    function openCreatePreview() {
+        createPreviewVisible = true
+        previewPayload = null
+        previewError = ""
+    }
+
+    function closeCreatePreview() {
+        if (createPreviewLoading)
+            return
+        createPreviewVisible = false
+    }
+
+    function runCreatePreview() {
+        if (createPreviewProcess.running)
+            return
+        createPreviewLoading = true
+        previewPayload = null
+        previewError = ""
+        previewStdoutText = ""
+        previewStderrText = ""
+        previewExitCode = 0
+        previewExited = false
+        previewStdoutFinished = false
+        previewStderrFinished = false
+        createPreviewProcess.running = true
+    }
+
+    function maybeFinalizeCreatePreview() {
+        if (!previewExited || !previewStdoutFinished || !previewStderrFinished)
+            return
+        createPreviewLoading = false
+        var payload = null
+        try {
+            payload = JSON.parse(previewStdoutText || "{}")
+        } catch (error) {
+            previewError = "The Jails backend returned invalid preview data."
+            return
+        }
+        if (previewExitCode !== 0 || !payload.ok) {
+            previewError = payload.message || previewStderrText || "Unable to build the create preview."
+            return
+        }
+        previewPayload = payload
+    }
+
+    function createPreviewText() {
+        if (previewError.length > 0)
+            return previewError
+        if (!previewPayload)
+            return "Enter the proposed jail details, then generate a read-only plan. No commands will run."
+
+        var lines = ["COMMANDS"]
+        var commands = previewPayload.commands || []
+        for (var i = 0; i < commands.length; i += 1)
+            lines.push("$ " + commands[i])
+        lines.push("")
+        lines.push("NOTES")
+        var notes = previewPayload.notes || []
+        for (var j = 0; j < notes.length; j += 1)
+            lines.push("• " + notes[j])
+        return lines.join("\n")
+    }
+
     function refreshSnapshot() {
         if (snapshotProcess.running)
             return
@@ -431,6 +508,34 @@ ShellRoot {
         }
     }
 
+    Process {
+        id: createPreviewProcess
+        property var controller: root
+
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "preview", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                createPreviewProcess.controller.previewStdoutText = text
+                createPreviewProcess.controller.previewStdoutFinished = true
+                createPreviewProcess.controller.maybeFinalizeCreatePreview()
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                createPreviewProcess.controller.previewStderrText = text
+                createPreviewProcess.controller.previewStderrFinished = true
+                createPreviewProcess.controller.maybeFinalizeCreatePreview()
+            }
+        }
+        onExited: function (exitCode) {
+            createPreviewProcess.controller.previewExitCode = exitCode
+            createPreviewProcess.controller.previewExited = true
+            createPreviewProcess.controller.maybeFinalizeCreatePreview()
+        }
+    }
+
     Connections {
         target: Quickshell
 
@@ -569,33 +674,33 @@ ShellRoot {
                             }
 
                             Rectangle {
-                                width: 112
+                                width: 140
                                 height: 38
                                 radius: 7
-                                color: mapToggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                color: headerCreatePreviewMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.18)
                                 border.width: 1
-                                border.color: root.beginnerMapVisible ? root.palette.accent : root.palette.panelBorder
+                                border.color: root.palette.accent
                                 anchors.verticalCenter: parent.verticalCenter
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: root.beginnerMapVisible ? "Hide Map" : "Show Map"
-                                    color: root.beginnerMapVisible ? root.palette.accent : root.palette.primaryText
+                                    text: "Create Preview"
+                                    color: root.palette.primaryText
                                     font.pixelSize: 13
                                     font.bold: true
                                 }
 
                                 MouseArea {
-                                    id: mapToggleMouse
+                                    id: headerCreatePreviewMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.beginnerMapVisible = !root.beginnerMapVisible
+                                    onClicked: root.openCreatePreview()
                                 }
                             }
 
                             Rectangle {
-                                width: 120
+                                width: 92
                                 height: 38
                                 radius: 7
                                 color: refreshMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
@@ -641,12 +746,44 @@ ShellRoot {
                             anchors.margins: 12
                             spacing: 10
 
-                            Text {
+                            Row {
                                 width: parent.width
-                                text: "Jail Inventory"
-                                color: root.palette.accent
-                                font.pixelSize: 14
-                                font.bold: true
+                                height: 26
+                                spacing: 8
+
+                                Text {
+                                    width: parent.width - 120
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Jail Inventory"
+                                    color: root.palette.accent
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+
+                                Rectangle {
+                                    width: 112
+                                    height: 26
+                                    radius: 6
+                                    color: mapToggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.beginnerMapVisible ? root.palette.accent : root.palette.panelBorder
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.beginnerMapVisible ? "Hide Map" : "Show Map"
+                                        color: root.beginnerMapVisible ? root.palette.accent : root.palette.primaryText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: mapToggleMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.beginnerMapVisible = !root.beginnerMapVisible
+                                    }
+                                }
                             }
 
                             Rectangle {
@@ -1189,13 +1326,357 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "V1 avoids destructive setup. Use ZFS to create storage, then add a simple jail.conf.d file; creation wizard comes after status feels trustworthy."
+                                        text: "Create Preview now builds a read-only Bastille plan. It validates the inputs and shows exact commands without running them."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
                                     }
                                 }
                             }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.createPreviewVisible
+                anchors.fill: parent
+                z: 20
+                color: Qt.alpha(root.palette.panelBackground, 0.92)
+
+                MouseArea {
+                    anchors.fill: parent
+                }
+
+                Rectangle {
+                    width: 920
+                    height: 570
+                    anchors.centerIn: parent
+                    radius: 10
+                    color: root.palette.cardBackground
+                    border.width: 1
+                    border.color: root.palette.accent
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        Row {
+                            width: parent.width
+                            height: 42
+                            spacing: 12
+
+                            Column {
+                                width: parent.width - 54
+                                spacing: 2
+
+                                Text {
+                                    width: parent.width
+                                    text: "Create Jail Preview"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "Bastille thick-jail plan • read-only • no commands are executed"
+                                    color: root.palette.accent
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+                            }
+
+                            Rectangle {
+                                width: 42
+                                height: 34
+                                radius: 7
+                                color: closePreviewMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "×"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: closePreviewMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !root.createPreviewLoading
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.closeCreatePreview()
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            height: parent.height - 54
+                            spacing: 14
+
+                            Rectangle {
+                                width: 320
+                                height: parent.height
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 14
+                                    spacing: 9
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Proposed service jail"
+                                        color: root.palette.accent
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Jail name"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 40
+                                        radius: 6
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: previewNameInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                        TextInput {
+                                            id: previewNameInput
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            text: root.previewName
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.pixelSize: 13
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            onTextEdited: root.previewName = text
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "FreeBSD release"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 40
+                                        radius: 6
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: previewReleaseInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                        TextInput {
+                                            id: previewReleaseInput
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            text: root.previewRelease
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.pixelSize: 13
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            onTextEdited: root.previewRelease = text
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "IP address / CIDR"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 40
+                                        radius: 6
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: previewAddressInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                        TextInput {
+                                            id: previewAddressInput
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            text: root.previewAddress
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.pixelSize: 13
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            onTextEdited: root.previewAddress = text
+                                        }
+                                    }
+
+                                    Row {
+                                        width: parent.width
+                                        height: 44
+                                        spacing: 10
+
+                                        Column {
+                                            width: parent.width - 104
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 2
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Start at boot"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.previewAutostart ? "Bastille boot enabled" : "Adds --no-boot"
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 10
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 94
+                                            height: 32
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            radius: 16
+                                            color: root.previewAutostart ? Qt.alpha(root.palette.success, 0.22) : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.previewAutostart ? root.palette.success : root.palette.panelBorder
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: root.previewAutostart ? "Enabled" : "Disabled"
+                                                color: root.previewAutostart ? root.palette.success : root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.previewAutostart = !root.previewAutostart
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 46
+                                        radius: 7
+                                        color: generatePreviewMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.18)
+                                        border.width: 1
+                                        border.color: root.palette.accent
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.createPreviewLoading ? "Building Preview…" : "Generate Read-Only Plan"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: generatePreviewMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: !root.createPreviewLoading
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.runCreatePreview()
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.tools.bastille ? "Bastille is detected on this host." : "Bastille is not detected; preview still works for planning."
+                                        color: root.tools.bastille ? root.palette.success : root.palette.warning
+                                        font.pixelSize: 10
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width - 334
+                                height: parent.height
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.previewError.length > 0 ? root.palette.danger : root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 14
+                                    spacing: 10
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.previewPayload ? root.previewPayload.message : "Provisioning plan"
+                                        color: root.previewError.length > 0 ? root.palette.danger : root.palette.accent
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: parent.height - 34
+                                        radius: 7
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.palette.panelBorder
+
+                                        Flickable {
+                                            anchors.fill: parent
+                                            anchors.margins: 12
+                                            contentWidth: width
+                                            contentHeight: Math.max(height, previewPlanText.contentHeight)
+                                            clip: true
+
+                                            TextEdit {
+                                                id: previewPlanText
+                                                width: parent.width
+                                                height: Math.max(parent.height, contentHeight)
+                                                text: root.createPreviewText()
+                                                readOnly: true
+                                                selectByMouse: true
+                                                wrapMode: TextEdit.Wrap
+                                                textFormat: TextEdit.PlainText
+                                                color: root.previewError.length > 0 ? root.palette.danger : root.palette.primaryText
+                                                selectionColor: root.palette.accent
+                                                selectedTextColor: root.palette.panelBackground
+                                                font.family: "monospace"
+                                                font.pixelSize: 12
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

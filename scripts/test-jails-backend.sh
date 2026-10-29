@@ -53,6 +53,15 @@ assert_json "$demo_output" \
     "demo fixture should satisfy the snapshot contract"
 pass "demo fixture satisfies the snapshot contract"
 
+: >"$command_log"
+demo_preview_output="$test_root/demo-preview.json"
+run_backend preview demo-web 15.0-RELEASE 10.0.0.40/24 no >"$demo_preview_output"
+assert_json "$demo_preview_output" \
+    '.ok == true and .mutates == false and .backend == "bastille" and .commands == ["bastille bootstrap --update 15.0-RELEASE","bastille create --thick --no-boot demo-web 15.0-RELEASE 10.0.0.40/24"]' \
+    "demo mode should allow a read-only create preview"
+[ ! -s "$command_log" ] || fail "create preview should not execute fixture commands"
+pass "demo mode allows the read-only create preview"
+
 demo_action_output="$test_root/demo-action.json"
 if run_backend start web native >"$demo_action_output"; then
     fail "demo mode should reject lifecycle actions"
@@ -91,6 +100,29 @@ assert_json "$snapshot_output" \
     '(.bastille | length) == 2 and .bastille[0].state == "running" and .bastille[1].state == "stopped"' \
     "snapshot should parse Bastille output"
 pass "snapshot parses native and Bastille fixtures"
+
+: >"$command_log"
+preview_output="$test_root/preview.json"
+run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$preview_output"
+assert_json "$preview_output" \
+    '.ok == true and .mutates == false and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .commands == ["bastille bootstrap --update 15.0-RELEASE","bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
+    "create preview should return an exact non-mutating Bastille plan"
+[ ! -s "$command_log" ] || fail "create preview should not execute Bastille"
+
+invalid_preview_output="$test_root/invalid-preview.json"
+if run_backend preview 'bad name' 15.0-RELEASE 10.0.0.20 yes >"$invalid_preview_output"; then
+    fail "create preview should reject invalid jail names"
+fi
+assert_json "$invalid_preview_output" \
+    '.ok == false and .message == "Invalid jail name."' \
+    "create preview should return structured validation errors"
+if run_backend preview web 15.0-RELEASE '10.0.0.20;reboot' yes >"$invalid_preview_output"; then
+    fail "create preview should reject unsafe addresses"
+fi
+assert_json "$invalid_preview_output" \
+    '.ok == false and .message == "Invalid jail address."' \
+    "create preview should reject unsafe address characters"
+pass "create preview is exact, read-only, and validated"
 
 empty_bin="$test_root/empty-bin"
 mkdir -p "$empty_bin"
