@@ -14,6 +14,7 @@ ShellRoot {
     readonly property var palette: themeLoader.palette
     property bool loading: false
     property bool runningAction: false
+    property bool beginnerMapVisible: true
     property string statusTone: "info"
     property string statusMessage: "Loading jail status..."
     property string actionDetails: ""
@@ -544,7 +545,7 @@ ShellRoot {
                             }
 
                             Column {
-                                width: parent.width - 156
+                                width: parent.width - 280
                                 spacing: 6
 
                                 Text {
@@ -564,6 +565,32 @@ ShellRoot {
                                     wrapMode: Text.WordWrap
                                     maximumLineCount: 2
                                     elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                width: 112
+                                height: 38
+                                radius: 7
+                                color: mapToggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.beginnerMapVisible ? root.palette.accent : root.palette.panelBorder
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: root.beginnerMapVisible ? "Hide Map" : "Show Map"
+                                    color: root.beginnerMapVisible ? root.palette.accent : root.palette.primaryText
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: mapToggleMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.beginnerMapVisible = !root.beginnerMapVisible
                                 }
                             }
 
@@ -723,7 +750,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: 382
+                        width: root.beginnerMapVisible ? 382 : parent.width - 330
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -994,7 +1021,8 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 726
+                        visible: root.beginnerMapVisible
+                        width: root.beginnerMapVisible ? parent.width - 726 : 0
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
