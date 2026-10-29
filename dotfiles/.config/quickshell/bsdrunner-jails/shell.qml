@@ -35,6 +35,9 @@ ShellRoot {
     property var bastilleJails: []
     property var tools: ({})
     property var services: ({})
+    property var bastilleReleases: []
+    property bool bastilleSetup: false
+    property string hostRelease: ""
     property string lastResultTone: "info"
     property string lastResultMessage: "No jail action has run yet."
     property string lastResultTimestamp: ""
@@ -52,6 +55,7 @@ ShellRoot {
     property bool actionStderrFinished: false
     property string previewName: "web"
     property string previewRelease: "15.0-RELEASE"
+    property bool previewReleaseCustomized: false
     property string previewAddress: "10.0.0.20/24"
     property bool previewAutostart: true
     property var previewPayload: null
@@ -346,7 +350,16 @@ ShellRoot {
         if (!previewPayload)
             return "Enter the proposed jail details, then generate a read-only plan. No commands will run."
 
-        var lines = ["COMMANDS"]
+        var checks = previewPayload.checks || {}
+        var lines = ["READINESS"]
+        lines.push((checks.bastille_installed ? "[ok] " : "[!] ") + "Bastille installed")
+        lines.push((checks.bastille_setup ? "[ok] " : "[!] ") + "Bastille setup and inventory readable")
+        lines.push((checks.name_available ? "[ok] " : "[!] ") + "Jail name available")
+        lines.push((checks.address_available ? "[ok] " : "[!] ") + "IP address available")
+        lines.push((checks.host_compatible ? "[ok] " : "[!] ") + "Host release compatible" + (checks.host_release ? " (" + checks.host_release + ")" : ""))
+        lines.push((checks.release_bootstrapped ? "[ok] " : "[plan] ") + "Release " + (checks.release_bootstrapped ? "already bootstrapped" : "will be bootstrapped"))
+        lines.push("")
+        lines.push("COMMANDS")
         var commands = previewPayload.commands || []
         for (var i = 0; i < commands.length; i += 1)
             lines.push("$ " + commands[i])
@@ -404,6 +417,11 @@ ShellRoot {
 
         tools = payload.tools || {}
         services = payload.services || {}
+        bastilleReleases = payload.bastille_releases || []
+        bastilleSetup = payload.bastille_setup || false
+        hostRelease = payload.host_release || ""
+        if (!previewReleaseCustomized && bastilleReleases.length > 0)
+            previewRelease = bastilleReleases[bastilleReleases.length - 1]
         runningJails = payload.running || []
         configuredJails = payload.configured || []
         bastilleJails = payload.bastille || []
@@ -1539,8 +1557,19 @@ ShellRoot {
                                             font.pixelSize: 13
                                             verticalAlignment: TextInput.AlignVCenter
                                             clip: true
-                                            onTextEdited: root.previewRelease = text
+                                            onTextEdited: {
+                                                root.previewRelease = text
+                                                root.previewReleaseCustomized = true
+                                            }
                                         }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.bastilleReleases.length > 0 ? "Bootstrapped: " + root.bastilleReleases.join(", ") : "No bootstrapped releases detected."
+                                        color: root.bastilleReleases.length > 0 ? root.palette.mutedText : root.palette.warning
+                                        font.pixelSize: 9
+                                        elide: Text.ElideRight
                                     }
 
                                     Text {
@@ -1653,8 +1682,8 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.tools.bastille ? "Bastille is detected on this host." : "Bastille is not detected; preview still works for planning."
-                                        color: root.tools.bastille ? root.palette.success : root.palette.warning
+                                        text: !root.tools.bastille ? "Bastille is not detected; preview still works for planning." : root.bastilleSetup ? "Bastille inventory is readable" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "") : "Bastille is installed, but setup or read access needs attention."
+                                        color: root.tools.bastille && root.bastilleSetup ? root.palette.success : root.palette.warning
                                         font.pixelSize: 10
                                         wrapMode: Text.WordWrap
                                     }
@@ -1667,7 +1696,7 @@ ShellRoot {
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.previewError.length > 0 ? root.palette.danger : root.palette.frameBorder
+                                border.color: root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.frameBorder
 
                                 Column {
                                     anchors.fill: parent
@@ -1677,7 +1706,7 @@ ShellRoot {
                                     Text {
                                         width: parent.width
                                         text: root.previewPayload ? root.previewPayload.message : "Provisioning plan"
-                                        color: root.previewError.length > 0 ? root.palette.danger : root.palette.accent
+                                        color: root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.accent
                                         font.pixelSize: 14
                                         font.bold: true
                                         elide: Text.ElideRight

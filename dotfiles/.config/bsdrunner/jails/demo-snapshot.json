@@ -12,6 +12,12 @@
     "jail": "YES",
     "bastille": "YES"
   },
+  "host_release": "15.0-RELEASE",
+  "bastille_setup": true,
+  "bastille_releases": [
+    "14.3-RELEASE",
+    "15.0-RELEASE"
+  ],
   "running": [
     {
       "name": "web",
@@ -52,7 +58,7 @@
       "state": "stopped",
       "backend": "bastille",
       "autostart": "NO",
-      "release": "managed by Bastille"
+      "release": "14.3-RELEASE"
     }
   ],
   "last_result": {

@@ -124,7 +124,8 @@ coordination that should not be hidden in V1.
 
 Creation should graduate in stages:
 
-1. read-only Bastille thick-jail preview with generated commands (implemented)
+1. host-aware, read-only Bastille thick-jail preview with generated commands,
+   release reuse, and collision checks (implemented)
 2. native preview with generated config, storage, and userland steps
 3. mutating creation with strong confirmation gates and clean Bastille metadata
 4. thin/shared-base and desktop-app jail profiles after service jails are solid

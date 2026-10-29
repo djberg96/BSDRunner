@@ -42,6 +42,33 @@ run_privileged() {
     fi
 }
 
+run_bastille_read() {
+    if bastille "$@" 2>/dev/null; then
+        return 0
+    fi
+    if command -v mdo >/dev/null 2>&1; then
+        mdo bastille "$@" 2>/dev/null
+        return $?
+    fi
+    return 1
+}
+
+run_bastille_list_all() {
+    if output="$(run_bastille_read list all 2>/dev/null)"; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+    run_bastille_read list -a 2>/dev/null
+}
+
+host_release_value() {
+    if command -v freebsd-version >/dev/null 2>&1; then
+        freebsd-version -u 2>/dev/null || true
+    elif command -v uname >/dev/null 2>&1; then
+        uname -r 2>/dev/null || true
+    fi
+}
+
 valid_name() {
     case "${1:-}" in
         ""|*[!A-Za-z0-9_.-]*)
@@ -204,7 +231,55 @@ bastille_jails_json() {
         return
     fi
 
-    bastille list -a 2>/dev/null |
+    config_output="$(run_bastille_read config ALL get host.hostname,path,ip4.addr,osrelease,boot 2>/dev/null || true)"
+    if printf '%s\n' "$config_output" | awk '
+        ($1 == "-" || $1 ~ /^[0-9]+$/) && ($3 == "host.hostname" || $3 == "path" || $3 == "ip4.addr" || $3 == "osrelease" || $3 == "boot") { found = 1 }
+        END { exit found ? 0 : 1 }
+    '; then
+        printf '%s\n' "$config_output" |
+        awk '
+            function esc(value) {
+                gsub(/\\/, "\\\\", value)
+                gsub(/"/, "\\\"", value)
+                return value
+            }
+            ($1 == "-" || $1 ~ /^[0-9]+$/) && ($3 == "host.hostname" || $3 == "path" || $3 == "ip4.addr" || $3 == "osrelease" || $3 == "boot") {
+                jid = $1
+                jail = $2
+                property = $3
+                $1 = $2 = $3 = ""
+                sub(/^[[:space:]]+/, "", $0)
+                value = $0
+                if (!(jail in seen)) {
+                    seen[jail] = 1
+                    order[++count] = jail
+                    jids[jail] = jid
+                }
+                values[jail, property] = value
+            }
+            END {
+                printf "["
+                for (i = 1; i <= count; i += 1) {
+                    jail = order[i]
+                    host = values[jail, "host.hostname"]
+                    if (host == "") host = jail
+                    state = jids[jail] == "0" || jids[jail] == "-" ? "stopped" : "running"
+                    boot = values[jail, "boot"]
+                    if (boot == "on" || boot == "yes" || boot == "YES") boot = "YES"
+                    else if (boot == "off" || boot == "no" || boot == "NO") boot = "NO"
+                    else boot = "unknown"
+                    release = values[jail, "osrelease"]
+                    if (release == "") release = "managed by Bastille"
+                    if (i > 1) printf ","
+                    printf "{\"name\":\"%s\",\"jid\":\"%s\",\"hostname\":\"%s\",\"path\":\"%s\",\"ipv4\":\"%s\",\"ipv6\":\"\",\"state\":\"%s\",\"backend\":\"bastille\",\"autostart\":\"%s\",\"release\":\"%s\"}", esc(jail), esc(jids[jail]), esc(host), esc(values[jail, "path"]), esc(values[jail, "ip4.addr"]), esc(state), esc(boot), esc(release)
+                }
+                printf "]"
+            }
+        '
+        return
+    fi
+
+    run_bastille_list_all |
     awk '
         function esc(value) {
             gsub(/\\/, "\\\\", value)
@@ -229,6 +304,121 @@ bastille_jails_json() {
     '
 }
 
+bastille_releases_json() {
+    awk '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        BEGIN { printf "["; first = 1 }
+        {
+            for (i = 1; i <= NF; i += 1) {
+                value = $i
+                gsub(/^[^0-9]+|[^A-Za-z0-9_.-]+$/, "", value)
+                if (value ~ /^[0-9]+\.[0-9]+-RELEASE(-p[0-9]+)?$/ && !seen[value]++) {
+                    if (!first) printf ","
+                    first = 0
+                    printf "\"%s\"", esc(value)
+                }
+            }
+        }
+        END { printf "]" }
+    '
+}
+
+bastille_inventory() {
+    config_output="$(run_bastille_read config ALL get host.hostname,ip4.addr 2>/dev/null || true)"
+    if printf '%s\n' "$config_output" | awk '
+        ($1 == "-" || $1 ~ /^[0-9]+$/) && ($3 == "host.hostname" || $3 == "ip4.addr") { found = 1 }
+        END { exit found ? 0 : 1 }
+    '; then
+        printf '%s\n' "$config_output" |
+        awk '
+            ($1 == "-" || $1 ~ /^[0-9]+$/) && ($3 == "host.hostname" || $3 == "ip4.addr") {
+                jail = $2
+                property = $3
+                $1 = $2 = $3 = ""
+                sub(/^[[:space:]]+/, "", $0)
+                if (!(jail in seen)) order[++count] = jail
+                seen[jail] = 1
+                values[jail, property] = $0
+            }
+            END {
+                for (i = 1; i <= count; i += 1) {
+                    jail = order[i]
+                    print jail, values[jail, "ip4.addr"]
+                }
+            }
+        '
+        return
+    fi
+
+    run_bastille_list_all |
+    awk '
+        /^[[:space:]]*$/ || /^JID[[:space:]]/ || /^-/ { next }
+        NF >= 3 { print $3, $2 }
+    '
+}
+
+native_inventory() {
+    command -v jls >/dev/null 2>&1 || return 0
+    jls -n jid name host.hostname path ip4.addr ip6.addr 2>/dev/null |
+    awk '
+        function field(name, i, value) {
+            for (i = 1; i <= NF; i += 1) {
+                value = $i
+                if (value ~ "^" name "=") {
+                    sub("^" name "=", "", value)
+                    gsub(/^"|"$/, "", value)
+                    return value
+                }
+            }
+            return ""
+        }
+        NF > 0 {
+            name = field("name")
+            if (name == "") name = field("host.hostname")
+            print name, field("ip4.addr")
+        }
+    '
+}
+
+configured_name_exists() {
+    target="$1"
+    for file in "$etc_dir/jail.conf" "$etc_dir/jail.conf.d/"*.conf; do
+        [ -r "$file" ] || continue
+        if [ "$file" = "$etc_dir/jail.conf" ]; then
+            awk -v target="$target" '
+                /^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*\{/ {
+                    name = $1
+                    if (name == target) found = 1
+                }
+                END { exit found ? 0 : 1 }
+            ' "$file" && return 0
+        else
+            base="${file##*/}"
+            base="${base%.conf}"
+            [ "$base" = "$target" ] && return 0
+        fi
+    done
+    return 1
+}
+
+release_is_bootstrapped() {
+    target="$1"
+    awk -v target="$target" '
+        {
+            for (i = 1; i <= NF; i += 1) {
+                value = $i
+                gsub(/^[^0-9]+|[^A-Za-z0-9_.-]+$/, "", value)
+                if (value == target) found = 1
+            }
+        }
+        END { exit found ? 0 : 1 }
+    '
+}
+
 service_enabled() {
     name="$1"
     if command -v sysrc >/dev/null 2>&1; then
@@ -247,6 +437,14 @@ emit_snapshot() {
 
     native_enabled="$(service_enabled jail)"
     bastille_enabled="$(service_enabled bastille)"
+    host_release="$(host_release_value | awk 'NF { print; exit }')"
+    bastille_setup=false
+    bastille_release_output=""
+    if command -v bastille >/dev/null 2>&1; then
+        if bastille_release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+            bastille_setup=true
+        fi
+    fi
 
     printf '{'
     printf '"ok":true,'
@@ -260,6 +458,11 @@ emit_snapshot() {
     printf '"services":{"jail":"%s","bastille":"%s"},' \
         "$(printf '%s' "$native_enabled" | json_escape)" \
         "$(printf '%s' "$bastille_enabled" | json_escape)"
+    printf '"host_release":"%s","bastille_setup":%s,"bastille_releases":' \
+        "$(printf '%s' "$host_release" | json_escape)" \
+        "$bastille_setup"
+    printf '%s\n' "$bastille_release_output" | bastille_releases_json
+    printf ','
     printf '"running":'
     running_jails_json
     printf ',"configured":'
@@ -416,6 +619,77 @@ do_preview() {
             ;;
     esac
 
+    bastille_installed=false
+    bastille_setup=false
+    release_bootstrapped=false
+    name_available=true
+    address_available=true
+    host_compatible=true
+    host_release="$(host_release_value | awk 'NF { print; exit }')"
+    release_output=""
+    inventory=""
+
+    if command -v bastille >/dev/null 2>&1; then
+        bastille_installed=true
+        if release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+            bastille_setup=true
+        fi
+        if printf '%s\n' "$release_output" | release_is_bootstrapped "$release"; then
+            release_bootstrapped=true
+        fi
+        inventory="$(bastille_inventory 2>/dev/null || true)"
+    fi
+    native_rows="$(native_inventory 2>/dev/null || true)"
+    if [ -n "$native_rows" ]; then
+        inventory="${inventory}${inventory:+
+}${native_rows}"
+    fi
+
+    old_ifs="$IFS"
+    IFS='
+'
+    for row in $inventory; do
+        IFS="$old_ifs"
+        set -- $row
+        existing_name="${1:-}"
+        existing_address="${2:-}"
+        [ "$existing_name" = "$name" ] && name_available=false
+        if [ "$address" != "inherit" ] && [ -n "$existing_address" ]; then
+            proposed_address="${address##*|}"
+            proposed_address="${proposed_address%%/*}"
+            existing_address="${existing_address##*|}"
+            existing_address="${existing_address%%/*}"
+            [ "$existing_address" = "$proposed_address" ] && address_available=false
+        fi
+        IFS='
+'
+    done
+    IFS="$old_ifs"
+    if configured_name_exists "$name"; then
+        name_available=false
+    fi
+
+    if ! awk -v host="$host_release" -v jail="$release" '
+        BEGIN {
+            if (host !~ /^[0-9]+\.[0-9]+/ || jail !~ /^[0-9]+\.[0-9]+/)
+                exit 0
+            split(host, host_parts, ".")
+            split(jail, jail_parts, ".")
+            if (jail_parts[1] < host_parts[1] || (jail_parts[1] == host_parts[1] && jail_parts[2] <= host_parts[2]))
+                exit 0
+            exit 1
+        }
+    '; then
+        host_compatible=false
+    fi
+
+    ready=true
+    if [ "$bastille_installed" != true ] || [ "$bastille_setup" != true ] || \
+       [ "$name_available" != true ] || [ "$address_available" != true ] || \
+       [ "$host_compatible" != true ]; then
+        ready=false
+    fi
+
     bootstrap_command="bastille bootstrap --update ${release}"
     create_command="bastille create --thick"
     if [ "$autostart" = "no" ]; then
@@ -423,26 +697,57 @@ do_preview() {
     fi
     create_command="${create_command} ${name} ${release} ${address}"
 
-    if command -v bastille >/dev/null 2>&1; then
-        availability_note="Bastille is installed. Review the plan before running it manually as root."
+    if [ "$bastille_installed" = true ] && [ "$bastille_setup" = true ]; then
+        availability_note="Bastille is installed and its release inventory is readable."
+    elif [ "$bastille_installed" = true ]; then
+        availability_note="Bastille is installed, but setup or privileged read access is still required."
     else
         availability_note="Bastille is not installed. Install and run bastille setup before using this plan."
+    fi
+    if [ "$release_bootstrapped" = true ]; then
+        release_note="${release} is already bootstrapped, so the plan skips that step."
+    else
+        release_note="${release} is not in the bootstrapped release inventory, so the plan includes it."
+    fi
+    if [ "$name_available" = true ] && [ "$address_available" = true ]; then
+        collision_note="No existing jail name or running IP address conflicts were found."
+    else
+        collision_note="Resolve the reported name or address conflict before running this plan."
+    fi
+    if [ "$host_compatible" = true ]; then
+        host_note="The proposed release is compatible with the detected host release, or the host release is unknown."
+    else
+        host_note="The proposed release is newer than the detected host release. Upgrade the host or choose an older jail release."
+    fi
+
+    if [ "$ready" = true ]; then
+        preview_message="Create preview ready. Nothing was changed."
+    else
+        preview_message="Create preview needs attention. Nothing was changed."
     fi
 
     printf '{'
     printf '"ok":true,'
-    printf '"message":"Create preview ready. Nothing was changed.",'
-    printf '"backend":"bastille","mutates":false,'
+    printf '"message":"%s",' "$(printf '%s' "$preview_message" | json_escape)"
+    printf '"backend":"bastille","mutates":false,"ready":%s,' "$ready"
     printf '"inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","jail_type":"thick"},' \
         "$(printf '%s' "$name" | json_escape)" \
         "$(printf '%s' "$release" | json_escape)" \
         "$(printf '%s' "$address" | json_escape)" \
         "$autostart"
-    printf '"commands":["%s","%s"],' \
-        "$(printf '%s' "$bootstrap_command" | json_escape)" \
-        "$(printf '%s' "$create_command" | json_escape)"
-    printf '"notes":["This plan creates a thick service jail; Bastille owns its storage and jail.conf entry.","%s"]' \
-        "$(printf '%s' "$availability_note" | json_escape)"
+    printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"host_release":"%s","host_compatible":%s},' \
+        "$bastille_installed" "$bastille_setup" "$release_bootstrapped" "$name_available" "$address_available" \
+        "$(printf '%s' "$host_release" | json_escape)" "$host_compatible"
+    printf '"commands":['
+    if [ "$release_bootstrapped" != true ]; then
+        printf '"%s",' "$(printf '%s' "$bootstrap_command" | json_escape)"
+    fi
+    printf '"%s"],' "$(printf '%s' "$create_command" | json_escape)"
+    printf '"notes":["This plan creates a thick service jail; Bastille owns its storage and jail.conf entry.","%s","%s","%s","%s"]' \
+        "$(printf '%s' "$availability_note" | json_escape)" \
+        "$(printf '%s' "$release_note" | json_escape)" \
+        "$(printf '%s' "$collision_note" | json_escape)" \
+        "$(printf '%s' "$host_note" | json_escape)"
     printf '}\n'
 }
 

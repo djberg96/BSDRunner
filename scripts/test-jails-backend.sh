@@ -57,7 +57,7 @@ pass "demo fixture satisfies the snapshot contract"
 demo_preview_output="$test_root/demo-preview.json"
 run_backend preview demo-web 15.0-RELEASE 10.0.0.40/24 no >"$demo_preview_output"
 assert_json "$demo_preview_output" \
-    '.ok == true and .mutates == false and .backend == "bastille" and .commands == ["bastille bootstrap --update 15.0-RELEASE","bastille create --thick --no-boot demo-web 15.0-RELEASE 10.0.0.40/24"]' \
+    '.ok == true and .mutates == false and .backend == "bastille" and .ready == true and .checks.release_bootstrapped == true and .commands == ["bastille create --thick --no-boot demo-web 15.0-RELEASE 10.0.0.40/24"]' \
     "demo mode should allow a read-only create preview"
 [ ! -s "$command_log" ] || fail "create preview should not execute fixture commands"
 pass "demo mode allows the read-only create preview"
@@ -91,23 +91,45 @@ assert_json "$snapshot_output" \
     '.services == {"jail":"YES","bastille":"NO"}' \
     "snapshot should report fixture-backed service settings"
 assert_json "$snapshot_output" \
+    '.host_release == "15.0-RELEASE" and .bastille_setup == true and .bastille_releases == ["14.3-RELEASE","15.0-RELEASE"]' \
+    "snapshot should report host and Bastille release readiness"
+assert_json "$snapshot_output" \
     '(.running | length) == 2 and .running[0].name == "api" and .running[1].ipv6 == "none"' \
     "snapshot should parse jls output"
 assert_json "$snapshot_output" \
     '(.configured | length) == 3 and ([.configured[].name] | sort) == ["api","metrics","worker"]' \
     "snapshot should parse jail.conf fixtures"
 assert_json "$snapshot_output" \
-    '(.bastille | length) == 2 and .bastille[0].state == "running" and .bastille[1].state == "stopped"' \
-    "snapshot should parse Bastille output"
+    '(.bastille | length) == 2 and .bastille[0].state == "running" and .bastille[0].release == "15.0-RELEASE" and .bastille[0].autostart == "YES" and .bastille[1].state == "stopped" and .bastille[1].release == "14.3-RELEASE" and .bastille[1].autostart == "NO"' \
+    "snapshot should parse rich Bastille metadata"
 pass "snapshot parses native and Bastille fixtures"
 
 : >"$command_log"
 preview_output="$test_root/preview.json"
 run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$preview_output"
 assert_json "$preview_output" \
-    '.ok == true and .mutates == false and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .commands == ["bastille bootstrap --update 15.0-RELEASE","bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
+    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands == ["bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
     "create preview should return an exact non-mutating Bastille plan"
 [ ! -s "$command_log" ] || fail "create preview should not execute Bastille"
+
+bootstrap_preview_output="$test_root/bootstrap-preview.json"
+run_backend preview web 14.4-RELEASE 10.0.0.20/24 no >"$bootstrap_preview_output"
+assert_json "$bootstrap_preview_output" \
+    '.ready == true and .checks.release_bootstrapped == false and .checks.host_compatible == true and .commands == ["bastille bootstrap --update 14.4-RELEASE","bastille create --thick --no-boot web 14.4-RELEASE 10.0.0.20/24"]' \
+    "create preview should bootstrap a missing compatible release"
+
+collision_preview_output="$test_root/collision-preview.json"
+run_backend preview cache 15.0-RELEASE 10.0.0.10/24 yes >"$collision_preview_output"
+assert_json "$collision_preview_output" \
+    '.ok == true and .ready == false and .checks.name_available == false and .checks.address_available == false and .message == "Create preview needs attention. Nothing was changed."' \
+    "create preview should report name and address collisions"
+
+newer_preview_output="$test_root/newer-preview.json"
+run_backend preview future 16.0-RELEASE 10.0.0.30/24 yes >"$newer_preview_output"
+assert_json "$newer_preview_output" \
+    '.ok == true and .ready == false and .checks.host_release == "15.0-RELEASE" and .checks.host_compatible == false' \
+    "create preview should flag a jail release newer than the host"
+[ ! -s "$command_log" ] || fail "host-aware previews should remain read-only"
 
 invalid_preview_output="$test_root/invalid-preview.json"
 if run_backend preview 'bad name' 15.0-RELEASE 10.0.0.20 yes >"$invalid_preview_output"; then

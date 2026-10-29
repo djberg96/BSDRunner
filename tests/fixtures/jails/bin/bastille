@@ -2,8 +2,18 @@
 
 set -eu
 
-if [ "${1:-}" = "list" ] && [ "${2:-}" = "-a" ]; then
+if [ "${1:-}" = "list" ] && { [ "${2:-}" = "all" ] || [ "${2:-}" = "-a" ]; }; then
     cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-list.txt"
+    exit 0
+fi
+
+if [ "${1:-}" = "list" ] && [ "${2:-}" = "releases" ]; then
+    cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-releases.txt"
+    exit 0
+fi
+
+if [ "${1:-}" = "config" ] && [ "${2:-}" = "ALL" ] && [ "${3:-}" = "get" ]; then
+    cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-config.txt"
     exit 0
 fi
 

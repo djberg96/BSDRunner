@@ -51,8 +51,15 @@ The snapshot action returns JSON with:
 - `jail_enable` and `bastille_enable` service settings when `sysrc` exists
 - running native jails from `jls -n`
 - configured native jails from `/etc/jail.conf` and `/etc/jail.conf.d/*.conf`
-- Bastille jails from `bastille list -a` when Bastille is installed
+- the host FreeBSD release, Bastille setup readiness, and bootstrapped releases
+- Bastille jail hostname, path, address, release, and boot setting from
+  `bastille config ALL get ...`, with `bastille list all` and the deprecated
+  `bastille list -a` form as compatibility fallbacks
 - the last action result
+
+Some Bastille releases require root even for inventory commands. The backend
+first tries the read directly, then retries it through `mdo` when available.
+These probes only read Bastille state.
 
 Lifecycle actions are deliberately narrow:
 
@@ -73,10 +80,18 @@ or CIDR, and an autostart preference:
 bsdrunner-jails-backend.sh preview web 15.0-RELEASE 10.0.0.20/24 yes
 ```
 
-It returns JSON containing the validated inputs and exact Bastille commands. It
-does not invoke Bastille, download a release, create storage, or write config.
+It returns JSON containing the validated inputs, host checks, and exact Bastille
+commands. It does not invoke a mutating Bastille command, download a release,
+create storage, or write config. The preview checks whether Bastille is set up,
+whether the release is already bootstrapped, whether the jail name or address
+collides with detected jails, and whether the proposed jail release is newer
+than the host. An existing release skips the redundant bootstrap command;
+otherwise the plan includes it.
+
 The current preview deliberately plans a thick service jail. Choosing no
-autostart adds Bastille's `--no-boot` option.
+autostart adds Bastille's `--no-boot` option. A failed readiness check is shown
+as a warning and leaves the generated commands visible for inspection, but the
+UI still never executes them.
 
 If `mdo` is available, lifecycle commands use it for privilege escalation. If it
 is not available, the backend runs the command directly and expects the caller to
@@ -101,9 +116,10 @@ generated `/etc/jail.conf.d/NAME.conf` files.
 
 Bastille is the assumed managed-jail backend, while native FreeBSD jails remain
 the no-dependency baseline. When Bastille is installed, BSDRunner can list its
-jails, call its lifecycle commands, and preview thick-jail creation. When it is
-absent, native jail status still works and creation plans remain available for
-learning or future setup.
+jails with release and boot metadata, call its lifecycle commands, and preview
+thick-jail creation against the current host. When it is absent, native jail
+status still works and creation plans remain available for learning or future
+setup.
 
 This keeps the learning path FreeBSD-native while leaving room for Bastille's
 useful features: bootstrapping releases, templates, cloning, snapshots, and
@@ -112,10 +128,12 @@ resource limits.
 ## Automated Tests
 
 The fixture-backed backend suite runs without FreeBSD jail tools or root access.
-It supplies representative `jls`, `jail.conf`, `sysrc`, and `bastille list`
-results through an isolated test path, then checks snapshot parsing, read-only
-creation plans, demo-mode guards, lifecycle dispatch, validation failures, and
-persisted action status.
+It supplies representative `jls`, `jail.conf`, `sysrc`, `bastille list`,
+`bastille config`, release inventory, and host-release results through an
+isolated test path. The suite checks rich snapshot parsing, bootstrapped and
+missing-release plans, name and address collisions, host compatibility,
+demo-mode guards, lifecycle dispatch, validation failures, and persisted action
+status.
 
 The suite requires `jq`:
 
@@ -148,10 +166,13 @@ On FreeBSD with configured jails:
 ```sh
 jls -n
 service jail onestatus
-bastille list -a
+bastille list all
+bastille list releases
+bastille config ALL get host.hostname,path,ip4.addr,osrelease,boot
 ```
 
 Then open the UI and confirm that the list, details, backend detection, and
 guarded lifecycle actions match the command-line state. Open **Create Preview**,
-generate plans with autostart enabled and disabled, and confirm that no jail or
-state file is created.
+generate plans with autostart enabled and disabled, and confirm that readiness,
+release reuse, and collision warnings match the host without creating a jail or
+state file.
