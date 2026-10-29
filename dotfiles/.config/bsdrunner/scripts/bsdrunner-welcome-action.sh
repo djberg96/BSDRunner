@@ -33,6 +33,9 @@ case "$action" in
     apps)
         exec sh "$home_config/bsdrunner/scripts/bsdrunner-apps-menu.sh"
         ;;
+    keybindings)
+        exec sh "$home_config/waybar/scripts/bsdrunner-keybindings-menu.sh"
+        ;;
     reload)
         exec hyprctl reload
         ;;

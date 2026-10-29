@@ -85,6 +85,11 @@ ShellRoot {
                 "action": "apps"
             },
             {
+                "title": "Key Bindings",
+                "subtitle": "View every desktop key binding",
+                "action": "keybindings"
+            },
+            {
                 "title": "Power Menu",
                 "subtitle": "Open the BSDRunner shutdown menu",
                 "action": "power"
@@ -242,7 +247,7 @@ ShellRoot {
                     }
 
                     Grid {
-                        columns: 3
+                        columns: 4
                         rowSpacing: 14
                         columnSpacing: 14
 
@@ -255,7 +260,7 @@ ShellRoot {
                                 required property var modelData
                                 readonly property color accentColor: root.actionAccent(modelData.action)
 
-                                width: 256
+                                width: 190
                                 height: 96
                                 radius: 18
                                 color: root.palette.cardBackground
@@ -275,7 +280,7 @@ ShellRoot {
                                     }
 
                                     Text {
-                                        width: 220
+                                        width: 158
                                         wrapMode: Text.WordWrap
                                         text: actionCard.modelData.subtitle
                                         color: root.palette.primaryText

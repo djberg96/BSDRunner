@@ -94,6 +94,9 @@ Return to the neutral baseline:
 - `Super+W`: open the optional welcome window
 - `Super+X`: exit Hyprland
 
+The welcome window includes a **Key Bindings** button that opens the full
+desktop binding reference.
+
 ## Validated Apps
 
 The following have been tested in the current FreeBSD/Hyprland bring-up:
