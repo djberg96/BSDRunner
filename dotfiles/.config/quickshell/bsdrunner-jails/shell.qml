@@ -1902,7 +1902,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.selectedBeginner ? root.selectedBeginner.title : "Beginner Map"
+                                        text: "Selected step details"
                                         color: root.palette.primaryText
                                         font.pixelSize: 13
                                         font.bold: true
