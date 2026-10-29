@@ -563,6 +563,7 @@ ShellRoot {
                 Row {
                     width: parent.width
                     height: 104
+                    z: 10
                     spacing: 14
 
                     Rectangle {
@@ -674,8 +675,12 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                id: headerCreatePreviewButton
+                                property bool tooltipVisible: false
+
                                 width: 140
                                 height: 38
+                                z: tooltipVisible ? 30 : 0
                                 radius: 7
                                 color: headerCreatePreviewMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.18)
                                 border.width: 1
@@ -695,7 +700,41 @@ ShellRoot {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
+                                    onEntered: previewTooltipTimer.restart()
+                                    onExited: {
+                                        previewTooltipTimer.stop()
+                                        headerCreatePreviewButton.tooltipVisible = false
+                                    }
                                     onClicked: root.openCreatePreview()
+                                }
+
+                                Timer {
+                                    id: previewTooltipTimer
+                                    interval: 350
+                                    onTriggered: headerCreatePreviewButton.tooltipVisible = true
+                                }
+
+                                Rectangle {
+                                    visible: headerCreatePreviewButton.tooltipVisible
+                                    width: 276
+                                    height: 48
+                                    x: (parent.width - width) / 2
+                                    y: parent.height + 7
+                                    radius: 6
+                                    color: root.palette.cardBackground
+                                    border.width: 1
+                                    border.color: root.palette.accent
+
+                                    Text {
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        text: "Build a read-only Bastille jail plan. No commands will run."
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 11
+                                        wrapMode: Text.WordWrap
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                             }
 
