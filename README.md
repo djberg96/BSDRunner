@@ -198,7 +198,9 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
 Use `--demo` to explore representative native and Bastille jail states without a
 configured FreeBSD jail host. The UI also includes a host-aware, read-only
 Bastille plan plus a guarded **Create Basic Jail** wizard that follows Storage,
-Userland, Config, and Lifecycle. See `docs/jails.md` for backend commands,
+Userland, Config, and Lifecycle. The Storage step can select an existing ZFS
+pool and configure Bastille's conventional `POOL/bastille` hierarchy without
+touching PF or networking. See `docs/jails.md` for backend commands,
 fixture-backed tests, current scope, and the creation model.
 
 ## Scope

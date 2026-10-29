@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -eu
+
+if [ "${1:-}" = "list" ] && [ "${2:-}" = "-H" ] && [ "${3:-}" = "-o" ] && [ "${4:-}" = "name" ]; then
+    case "${5:-}" in
+        tank/bastille)
+            printf 'tank/bastille\n'
+            exit 0
+            ;;
+    esac
+fi
+
+exit 1

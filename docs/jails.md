@@ -54,6 +54,8 @@ The snapshot action returns JSON with:
 - running native jails from `jls -n`
 - configured native jails from `/etc/jail.conf` and `/etc/jail.conf.d/*.conf`
 - the host FreeBSD release, Bastille setup readiness, and bootstrapped releases
+- detected ZFS pools plus Bastille's configured pool, dataset prefix, and
+  initialization state
 - Bastille jail hostname, path, address, release, and boot setting from
   `bastille config ALL get ...`, with `bastille list all` and the deprecated
   `bastille list -a` form as compatibility fallbacks
@@ -63,11 +65,26 @@ Some Bastille releases require root even for inventory commands. The backend
 first tries the read directly, then retries it through `mdo` when available.
 These probes only read Bastille state.
 
-The Storage step considers Bastille ready only when its configured prefix and
-the `jails` and `releases` directories exist. Merely having the package and
-configuration file installed is not enough. When storage is missing, the wizard
-stops at the first step and directs the user to run interactive `bastille setup`
-before refreshing the UI.
+The Storage step distinguishes **configured** storage from **initialized**
+storage. Configured means Bastille has ZFS enabled with a selected pool and
+dataset prefix. Initialized means its installation root plus the `jails` and
+`releases` directories already exist and the release inventory is readable.
+
+When Bastille is installed but storage is unconfigured, the wizard detects
+available pools and previews the conventional `POOL/bastille` target. It then
+requires the selected pool name before running the narrowly scoped action:
+
+```sh
+bsdrunner-jails-backend.sh storage-preview zroot
+bsdrunner-jails-backend.sh storage-setup zroot zroot
+```
+
+The first command is read-only. The second dispatches only `bastille setup
+storage zroot`; it does not run full `bastille setup`, change PF, configure
+interfaces, or modify unrelated datasets. Bastille records the pool at this
+stage. The first release bootstrap creates the `POOL/bastille` dataset hierarchy
+and mounts its installation root. If Bastille already has initialized
+filesystem-backed storage, the backend refuses to convert it implicitly.
 
 Lifecycle actions are deliberately narrow:
 
@@ -110,7 +127,9 @@ bsdrunner-jails-backend.sh create web 15.0-RELEASE 10.0.0.20/24 yes web
 ```
 
 The last argument is an exact confirmation value. Bootstrap is skipped when the
-release already exists. Before creation, the backend checks the release, jail
+release already exists. A configured but empty ZFS installation is allowed to
+bootstrap because that command is what initializes Bastille's dataset hierarchy.
+Before creation, the backend checks the release, jail
 name, address, Bastille availability, and setup state again; it then passes each
 validated value to Bastille as a separate command argument. A successful release
 download followed by a failed create is reported as a partial result instead of
@@ -130,12 +149,12 @@ The UI treats jail creation as four visible concepts:
 4. Lifecycle: once configured, everyday work is start, stop, restart, and console.
 
 The **Create Basic Jail** wizard follows those four concepts directly. Storage
-confirms Bastille readiness, Userland selects or bootstraps a release, Config
-collects the name/address/startup policy, and Lifecycle presents the exact plan
-and typed confirmation. The initial target is deliberately a thick Bastille
-service jail. A future native workflow will need separate validation around
-datasets, release extraction, `devfs`, network settings, and generated
-`/etc/jail.conf.d/NAME.conf` files.
+selects and configures a ZFS pool when necessary, Userland selects or
+bootstraps a release, Config collects the name/address/startup policy, and
+Lifecycle presents the exact plan and typed confirmation. The initial target is
+deliberately a thick Bastille service jail. A future native workflow will need
+separate validation around datasets, release extraction, `devfs`, network
+settings, and generated `/etc/jail.conf.d/NAME.conf` files.
 
 ## Bastille
 
@@ -155,10 +174,12 @@ resource limits.
 The fixture-backed backend suite runs without FreeBSD jail tools or root access.
 It supplies representative `jls`, `jail.conf`, `sysrc`, `bastille list`,
 `bastille config`, release inventory, and host-release results through an
-isolated test path. The suite checks rich snapshot parsing, bootstrapped and
-missing-release plans, name and address collisions, host compatibility,
-demo-mode guards, guarded bootstrap and creation dispatch, typed confirmations,
-last-second validation failures, lifecycle dispatch, and persisted action status.
+isolated test path. The suite checks rich snapshot parsing, ZFS pool discovery,
+storage preview and guarded setup, configured-but-uninitialized bootstrap,
+bootstrapped and missing-release plans, name and address collisions, host
+compatibility, demo-mode guards, guarded bootstrap and creation dispatch, typed
+confirmations, last-second validation failures, lifecycle dispatch, and
+persisted action status.
 
 The suite requires `jq`:
 
@@ -198,7 +219,9 @@ bastille config ALL get host.hostname,path,ip4.addr,osrelease,boot
 
 Then open the UI and confirm that the list, details, backend detection, and
 guarded lifecycle actions match the command-line state. Open **Create Basic
-Jail** and confirm the Storage, Userland, Config,
-and Lifecycle pages match the host. Stop at the typed confirmation unless a test
-jail is genuinely wanted. When exercising creation, use an unused name/address
-and verify the resulting jail appears automatically in the inventory.
+Jail** and confirm the Storage page shows the expected pool and conventional
+`POOL/bastille` target, then verify that the Userland, Config, and Lifecycle
+pages match the host. Stop at either typed confirmation unless storage setup or
+a test jail is genuinely wanted. When exercising creation, use an unused
+name/address and verify the resulting jail appears automatically in the
+inventory.

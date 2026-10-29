@@ -95,8 +95,9 @@ feels trustworthy.
 The first follow-up UI milestone began as a read-only creation preview and now
 drives a guarded `Create Basic Jail` wizard. It teaches Storage, Userland,
 Config, and Lifecycle in sequence, emits an exact Bastille thick-jail plan, and
-requires the jail name to be typed before any root action. Bootstrap and create
-run as separate stages so partial completion remains visible. A future native
+requires the selected pool before storage setup and the jail name before jail
+creation. Storage setup, bootstrap, and create run as separate stages so partial
+completion remains visible. A future native
 mode should add storage and hostname fields plus the generated
 `/etc/jail.conf.d/NAME.conf` content.
 
@@ -127,7 +128,8 @@ Creation should graduate in stages:
 1. host-aware, read-only Bastille thick-jail preview with generated commands,
    release reuse, and collision checks (implemented)
 2. guided Bastille creation through Storage, Userland, Config, and Lifecycle,
-   with typed confirmation and separate bootstrap/create stages (implemented)
+   with conventional `POOL/bastille` storage setup, typed confirmation, and
+   separate storage/bootstrap/create stages (implemented)
 3. native preview with generated config, storage, and userland steps
 4. thin/shared-base and desktop-app jail profiles after service jails are solid
 
@@ -159,22 +161,23 @@ because the display/audio/filesystem integration is the hard part.
 
 ### Jail Storage
 
-Jails should use a dedicated ZFS dataset when ZFS is available. The suggested
-default for a normal BSDRunner install is:
+Managed Bastille jails should use Bastille's conventional dataset hierarchy when
+ZFS is available. For a normal install on `zroot`, the installation root is:
 
 ```text
-zroot/jails
+zroot/bastille
 ```
 
-Use `POOL/jails` as the general pattern when the primary pool is not named
-`zroot`. This should be a dataset created inside an existing pool, not a new
-pool created from an existing pool.
+Use `POOL/bastille` as the general pattern. Bastille creates child datasets for
+releases, jails, cache, backups, templates, and logs as its commands need them.
+The Jails UI selects only an existing pool; it never creates a pool or adopts an
+unrelated dataset automatically.
 
-The Jails app should eventually detect whether a dedicated ZFS-backed storage
-location exists. Creating that dataset belongs in the ZFS GUI `Create Dataset`
-workflow, not in Jails V1. The ZFS GUI should support ordinary nested dataset
-paths such as `jails/postgres` or `jails/firefox` without making jails-specific
-assumptions.
+The Jails app detects pools and configures the standard Bastille storage target
+through `bastille setup storage POOL`. It deliberately keeps this separate from
+full Bastille setup so storage configuration cannot silently modify PF or
+network interfaces. The ZFS GUI remains responsible for general-purpose dataset
+creation and should not make jails-specific assumptions.
 
 ### Bastille Role
 

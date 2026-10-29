@@ -90,9 +90,105 @@ bastille_prefix_value() {
     ' "$bastille_config_file"
 }
 
+bastille_config_value() {
+    key="$1"
+    [ -r "$bastille_config_file" ] || return 1
+    awk -F '=' -v key="$key" '
+        $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+            value = substr($0, index($0, "=") + 1)
+            sub(/[[:space:]]*##.*$/, "", value)
+            gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, "", value)
+            print value
+            exit
+        }
+    ' "$bastille_config_file"
+}
+
 bastille_storage_ready() {
     prefix="$(bastille_prefix_value 2>/dev/null || true)"
     [ -n "$prefix" ] && [ -d "$prefix" ] && [ -d "$prefix/jails" ] && [ -d "$prefix/releases" ]
+}
+
+bastille_zfs_configured() {
+    configured_zfs_enabled="$(bastille_config_value bastille_zfs_enable 2>/dev/null || true)"
+    configured_zfs_pool="$(bastille_config_value bastille_zfs_zpool 2>/dev/null || true)"
+    configured_zfs_prefix="$(bastille_config_value bastille_zfs_prefix 2>/dev/null || true)"
+    case "$configured_zfs_enabled" in
+        YES|yes|Yes|Y|y)
+            [ -n "$configured_zfs_pool" ] && [ -n "$configured_zfs_prefix" ]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+bastille_storage_configured() {
+    bastille_storage_ready || bastille_zfs_configured
+}
+
+valid_pool() {
+    case "${1:-}" in
+        ""|*[!A-Za-z0-9_.-]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+zfs_pool_exists() {
+    target="$1"
+    command -v zpool >/dev/null 2>&1 || return 1
+    zpool list -H -o name 2>/dev/null | awk -v target="$target" '$1 == target { found = 1 } END { exit found ? 0 : 1 }'
+}
+
+zfs_pools_json() {
+    if ! command -v zpool >/dev/null 2>&1; then
+        printf '[]'
+        return
+    fi
+    zpool list -H -o name 2>/dev/null |
+    awk '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        BEGIN { printf "["; first = 1 }
+        NF > 0 {
+            if (!first) printf ","
+            first = 0
+            printf "\"%s\"", esc($1)
+        }
+        END { printf "]" }
+    '
+}
+
+emit_storage_snapshot() {
+    prefix="$(bastille_prefix_value 2>/dev/null || true)"
+    [ -n "$prefix" ] || prefix="/usr/local/bastille"
+    zfs_pool="$(bastille_config_value bastille_zfs_zpool 2>/dev/null || true)"
+    zfs_prefix="$(bastille_config_value bastille_zfs_prefix 2>/dev/null || true)"
+    [ -n "$zfs_prefix" ] || zfs_prefix="bastille"
+    configured=false
+    initialized=false
+    bastille_zfs_configured && configured=true
+    bastille_storage_ready && initialized=true
+    [ "$initialized" = true ] && configured=true
+
+    target_dataset=""
+    [ -n "$zfs_pool" ] && target_dataset="${zfs_pool}/${zfs_prefix}"
+
+    printf '{"configured":%s,"initialized":%s,' "$configured" "$initialized"
+    printf '"prefix":"%s","zfs_pool":"%s","zfs_prefix":"%s","target_dataset":"%s","pools":' \
+        "$(printf '%s' "$prefix" | json_escape)" \
+        "$(printf '%s' "$zfs_pool" | json_escape)" \
+        "$(printf '%s' "$zfs_prefix" | json_escape)" \
+        "$(printf '%s' "$target_dataset" | json_escape)"
+    zfs_pools_json
+    printf '}'
 }
 
 valid_name() {
@@ -550,6 +646,9 @@ emit_snapshot() {
         "$bastille_setup"
     printf '%s\n' "$bastille_release_output" | bastille_releases_json
     printf ','
+    printf '"storage":'
+    emit_storage_snapshot
+    printf ','
     printf '"running":'
     running_jails_json
     printf ',"configured":'
@@ -708,6 +807,7 @@ do_preview() {
 
     bastille_installed=false
     bastille_setup=false
+    storage_configured=false
     release_bootstrapped=false
     name_available=true
     address_available=true
@@ -717,6 +817,9 @@ do_preview() {
 
     if command -v bastille >/dev/null 2>&1; then
         bastille_installed=true
+        if bastille_storage_configured; then
+            storage_configured=true
+        fi
         if bastille_storage_ready && release_output="$(run_bastille_read list releases 2>/dev/null)"; then
             bastille_setup=true
         fi
@@ -734,7 +837,7 @@ do_preview() {
     fi
 
     ready=true
-    if [ "$bastille_installed" != true ] || [ "$bastille_setup" != true ] || \
+    if [ "$bastille_installed" != true ] || [ "$storage_configured" != true ] || \
        [ "$name_available" != true ] || [ "$address_available" != true ] || \
        [ "$host_compatible" != true ]; then
         ready=false
@@ -749,6 +852,8 @@ do_preview() {
 
     if [ "$bastille_installed" = true ] && [ "$bastille_setup" = true ]; then
         availability_note="Bastille is installed and its release inventory is readable."
+    elif [ "$bastille_installed" = true ] && [ "$storage_configured" = true ]; then
+        availability_note="Bastille storage is configured; the first release bootstrap will initialize its dataset hierarchy."
     elif [ "$bastille_installed" = true ]; then
         availability_note="Bastille is installed, but setup or privileged read access is still required."
     else
@@ -785,8 +890,8 @@ do_preview() {
         "$(printf '%s' "$release" | json_escape)" \
         "$(printf '%s' "$address" | json_escape)" \
         "$autostart"
-    printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"host_release":"%s","host_compatible":%s},' \
-        "$bastille_installed" "$bastille_setup" "$release_bootstrapped" "$name_available" "$address_available" \
+    printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"storage_configured":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"host_release":"%s","host_compatible":%s},' \
+        "$bastille_installed" "$bastille_setup" "$storage_configured" "$release_bootstrapped" "$name_available" "$address_available" \
         "$(printf '%s' "$host_release" | json_escape)" "$host_compatible"
     printf '"commands":['
     if [ "$release_bootstrapped" != true ]; then
@@ -799,6 +904,87 @@ do_preview() {
         "$(printf '%s' "$collision_note" | json_escape)" \
         "$(printf '%s' "$host_note" | json_escape)"
     printf '}\n'
+}
+
+do_storage_preview() {
+    pool="${1:-}"
+
+    valid_pool "$pool" || {
+        emit_action_result false "Invalid ZFS pool name." "Choose a detected pool."
+        exit 1
+    }
+    command -v bastille >/dev/null 2>&1 || {
+        emit_action_result false "Bastille is unavailable." "Install Bastille before configuring its storage."
+        exit 1
+    }
+    zfs_pool_exists "$pool" || {
+        emit_action_result false "The selected ZFS pool is unavailable." "$pool"
+        exit 1
+    }
+
+    prefix="$(bastille_prefix_value 2>/dev/null || true)"
+    [ -n "$prefix" ] || prefix="/usr/local/bastille"
+    zfs_prefix="$(bastille_config_value bastille_zfs_prefix 2>/dev/null || true)"
+    [ -n "$zfs_prefix" ] || zfs_prefix="bastille"
+    target_dataset="${pool}/${zfs_prefix}"
+    target_exists=false
+    if command -v zfs >/dev/null 2>&1 && zfs list -H -o name "$target_dataset" >/dev/null 2>&1; then
+        target_exists=true
+    fi
+
+    printf '{"ok":true,"mutates":false,"ready":true,'
+    printf '"pool":"%s","prefix":"%s","target_dataset":"%s","target_exists":%s,' \
+        "$(printf '%s' "$pool" | json_escape)" \
+        "$(printf '%s' "$prefix" | json_escape)" \
+        "$(printf '%s' "$target_dataset" | json_escape)" \
+        "$target_exists"
+    printf '"command":"bastille setup storage %s",' "$(printf '%s' "$pool" | json_escape)"
+    printf '"notes":["This configures Bastille storage only; it does not change PF or networking.","The dataset hierarchy is created by the first Bastille release bootstrap.","Unrelated datasets are left untouched."]}\n'
+}
+
+do_storage_setup() {
+    pool="${1:-}"
+    confirmation="${2:-}"
+
+    valid_pool "$pool" || {
+        emit_action_result false "Invalid ZFS pool name." "Choose a detected pool."
+        exit 1
+    }
+    [ "$confirmation" = "$pool" ] || {
+        emit_action_result false "Storage confirmation did not match." "Type the selected pool name exactly."
+        exit 1
+    }
+    command -v bastille >/dev/null 2>&1 || {
+        emit_action_result false "Bastille is unavailable." "Install Bastille before configuring its storage."
+        exit 1
+    }
+    zfs_pool_exists "$pool" || {
+        emit_action_result false "The selected ZFS pool is unavailable." "$pool"
+        exit 1
+    }
+
+    configured_pool="$(bastille_config_value bastille_zfs_zpool 2>/dev/null || true)"
+    if bastille_zfs_configured; then
+        if [ "$configured_pool" = "$pool" ]; then
+            emit_action_result true "Bastille storage already uses ${pool}." "No configuration change was needed."
+            return
+        fi
+        emit_action_result false "Bastille storage already uses another pool." "Configured pool: ${configured_pool}"
+        exit 1
+    fi
+    if bastille_storage_ready; then
+        emit_action_result false "Bastille storage is already initialized." "The UI will not convert an existing filesystem-backed installation to ZFS."
+        exit 1
+    fi
+
+    if output="$(run_privileged bastille setup storage "$pool" 2>&1)"; then
+        write_last_result "success" "Configured Bastille storage on ${pool}."
+        emit_action_result true "Configured Bastille storage on ${pool}." "$output"
+    else
+        write_last_result "error" "Unable to configure Bastille storage on ${pool}."
+        emit_action_result false "Unable to configure Bastille storage on ${pool}." "$output"
+        exit 1
+    fi
 }
 
 do_bootstrap() {
@@ -817,17 +1003,19 @@ do_bootstrap() {
         emit_action_result false "Bastille is unavailable." "Install and configure Bastille before bootstrapping a release."
         exit 1
     }
-    bastille_storage_ready || {
-        emit_action_result false "Bastille storage is not set up." "Run bastille setup before bootstrapping a release."
+    bastille_storage_configured || {
+        emit_action_result false "Bastille storage is not configured." "Choose a ZFS pool in the Storage step first."
         exit 1
     }
-    if ! release_output="$(run_bastille_read list releases 2>/dev/null)"; then
-        emit_action_result false "Bastille setup is not ready." "Run bastille setup and make sure privileged inventory reads work."
-        exit 1
-    fi
-    if printf '%s\n' "$release_output" | release_is_bootstrapped "$release"; then
-        emit_action_result true "${release} is already bootstrapped." "No download was needed."
-        return
+    if bastille_storage_ready; then
+        if ! release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+            emit_action_result false "Bastille setup is not ready." "Make sure privileged inventory reads work."
+            exit 1
+        fi
+        if printf '%s\n' "$release_output" | release_is_bootstrapped "$release"; then
+            emit_action_result true "${release} is already bootstrapped." "No download was needed."
+            return
+        fi
     fi
     host_release="$(host_release_value | awk 'NF { print; exit }')"
     if ! release_is_host_compatible "$host_release" "$release"; then
@@ -936,7 +1124,7 @@ if [ -n "$fixture_file" ]; then
             cat "$fixture_file"
             exit 0
             ;;
-        preview)
+        preview|storage-preview)
             ;;
         *)
             emit_action_result false "Actions are disabled in demo mode." "Restart Jails normally to manage real jails."
@@ -957,6 +1145,12 @@ case "$action" in
         ;;
     preview)
         do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}"
+        ;;
+    storage-preview)
+        do_storage_preview "${2:-}"
+        ;;
+    storage-setup)
+        do_storage_setup "${2:-}" "${3:-}"
         ;;
     bootstrap)
         do_bootstrap "${2:-}" "${3:-}"

@@ -39,6 +39,7 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_STATE_DIR="$state_dir" \
     BSDRUNNER_JAILS_TEST_FIXTURES="$fixtures" \
     BSDRUNNER_JAILS_TEST_LOG="$command_log" \
+    BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG="${BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG:-$fixtures/etc/bastille/bastille.conf}" \
     BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="${BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX:-$fixtures/etc/bastille-root}" \
     sh "$backend" "$@"
 }
@@ -95,6 +96,9 @@ assert_json "$snapshot_output" \
     '.host_release == "15.0-RELEASE" and .bastille_setup == true and .bastille_releases == ["14.3-RELEASE","15.0-RELEASE"]' \
     "snapshot should report host and Bastille release readiness"
 assert_json "$snapshot_output" \
+    '.storage.configured == true and .storage.initialized == true and (.storage.prefix | endswith("/tests/fixtures/jails/etc/bastille-root")) and .storage.zfs_prefix == "bastille" and .storage.pools == ["zroot","tank"]' \
+    "snapshot should report Bastille storage and detected pools"
+assert_json "$snapshot_output" \
     '(.running | length) == 2 and .running[0].name == "api" and .running[1].ipv6 == "none"' \
     "snapshot should parse jls output"
 assert_json "$snapshot_output" \
@@ -110,7 +114,7 @@ mkdir -p "$unready_prefix"
 unready_snapshot="$test_root/unready-snapshot.json"
 BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="$unready_prefix" run_backend snapshot >"$unready_snapshot"
 assert_json "$unready_snapshot" \
-    '.ok == true and .tools.bastille == true and .bastille_setup == false and .bastille_releases == []' \
+    '.ok == true and .tools.bastille == true and .bastille_setup == false and .bastille_releases == [] and .storage.configured == false and .storage.initialized == false' \
     "an installed Bastille without initialized storage should not be reported ready"
 : >"$command_log"
 unready_bootstrap="$test_root/unready-bootstrap.json"
@@ -118,16 +122,63 @@ if BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="$unready_prefix" run_backend bootstrap 
     fail "release bootstrap should require initialized Bastille storage"
 fi
 assert_json "$unready_bootstrap" \
-    '.ok == false and .message == "Bastille storage is not set up."' \
+    '.ok == false and .message == "Bastille storage is not configured."' \
     "release bootstrap should explain missing Bastille storage"
 [ ! -s "$command_log" ] || fail "missing Bastille storage should block mutation commands"
 pass "Bastille storage readiness is checked before provisioning"
 
 : >"$command_log"
+storage_preview="$test_root/storage-preview.json"
+run_backend storage-preview zroot >"$storage_preview"
+assert_json "$storage_preview" \
+    '.ok == true and .mutates == false and .pool == "zroot" and (.prefix | endswith("/tests/fixtures/jails/etc/bastille-root")) and .target_dataset == "zroot/bastille" and .target_exists == false and .command == "bastille setup storage zroot"' \
+    "storage preview should describe the conventional Bastille dataset"
+[ ! -s "$command_log" ] || fail "storage preview should not execute Bastille"
+
+run_backend storage-preview tank >"$storage_preview"
+assert_json "$storage_preview" \
+    '.target_dataset == "tank/bastille" and .target_exists == true' \
+    "storage preview should report an existing conventional dataset"
+
+storage_setup="$test_root/storage-setup.json"
+if BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="$unready_prefix" run_backend storage-setup zroot wrong >"$storage_setup"; then
+    fail "storage setup should require exact pool confirmation"
+fi
+assert_json "$storage_setup" \
+    '.ok == false and .message == "Storage confirmation did not match."' \
+    "storage setup should explain a mismatched confirmation"
+[ ! -s "$command_log" ] || fail "rejected storage setup should not execute Bastille"
+
+BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="$unready_prefix" run_backend storage-setup zroot zroot >"$storage_setup"
+assert_json "$storage_setup" \
+    '.ok == true and .message == "Configured Bastille storage on zroot." and .details == "Bastille action completed."' \
+    "storage setup should return structured success"
+grep -Fx 'mdo bastille setup storage zroot' "$command_log" >/dev/null || fail "storage setup should use mdo"
+grep -Fx 'bastille setup storage zroot' "$command_log" >/dev/null || fail "storage setup should call only the Bastille storage subcommand"
+pass "storage setup is previewed, confirmed, and narrowly dispatched"
+
+: >"$command_log"
+configured_only_config="$test_root/configured-bastille.conf"
+printf '%s\n' \
+    'bastille_prefix="/usr/local/bastille"' \
+    'bastille_zfs_enable="YES"' \
+    'bastille_zfs_zpool="zroot"' \
+    'bastille_zfs_prefix="bastille"' >"$configured_only_config"
+configured_bootstrap="$test_root/configured-bootstrap.json"
+BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG="$configured_only_config" \
+BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="$unready_prefix" \
+run_backend bootstrap 14.4-RELEASE 14.4-RELEASE >"$configured_bootstrap"
+assert_json "$configured_bootstrap" \
+    '.ok == true and .message == "Bootstrapped 14.4-RELEASE."' \
+    "a configured pool should allow the first bootstrap to initialize storage"
+grep -Fx 'mdo bastille bootstrap --update 14.4-RELEASE' "$command_log" >/dev/null || fail "first bootstrap should run through mdo"
+pass "configured ZFS storage can be initialized by the first bootstrap"
+
+: >"$command_log"
 preview_output="$test_root/preview.json"
 run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$preview_output"
 assert_json "$preview_output" \
-    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands == ["bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
+    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"storage_configured":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands == ["bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
     "create preview should return an exact non-mutating Bastille plan"
 [ ! -s "$command_log" ] || fail "create preview should not execute Bastille"
 

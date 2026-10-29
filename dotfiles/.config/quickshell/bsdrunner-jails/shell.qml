@@ -20,6 +20,19 @@ ShellRoot {
     property int wizardStep: 0
     property bool demoMode: false
     property bool creationRunning: false
+    property bool storageSetupRunning: false
+    property string storageSetupStage: "idle"
+    property string storageSetupMessage: ""
+    property string storageSetupDetails: ""
+    property string storageConfirmation: ""
+    property string selectedStoragePool: ""
+    property var storageInfo: ({"configured": false, "initialized": false, "prefix": "/usr/local/bastille", "zfs_pool": "", "zfs_prefix": "bastille", "target_dataset": "", "pools": []})
+    property string storageStdoutText: ""
+    property string storageStderrText: ""
+    property int storageExitCode: 0
+    property bool storageExited: false
+    property bool storageStdoutFinished: false
+    property bool storageStderrFinished: false
     property string creationStage: "idle"
     property string creationMessage: ""
     property string creationError: ""
@@ -85,14 +98,14 @@ ShellRoot {
 
     readonly property var jails: mergedJails()
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
-    readonly property bool wizardBusy: createPreviewLoading || creationRunning
+    readonly property bool wizardBusy: createPreviewLoading || creationRunning || storageSetupRunning
     readonly property var wizardSteps: ["Storage", "Userland", "Config", "Lifecycle"]
     readonly property var beginnerTopics: [
         {
             "id": "storage",
             "title": "1. Storage",
             "body": "A jail needs a filesystem root. ZFS datasets are the cleanest place to keep those roots.",
-            "detail": "Start by deciding where jail roots live. On a ZFS machine, a dataset like zroot/jails keeps jail files separate and makes snapshots, quotas, and cleanup easier to reason about."
+            "detail": "Start by deciding where jail roots live. Bastille conventionally uses POOL/bastille, then creates child datasets for releases, jails, cache, backups, and templates."
         },
         {
             "id": "userland",
@@ -327,6 +340,11 @@ ShellRoot {
         creationError = ""
         creationConfirmation = ""
         creationBootstrapped = false
+        storageConfirmation = ""
+        storageSetupStage = "idle"
+        storageSetupMessage = ""
+        storageSetupDetails = ""
+        chooseDefaultStoragePool()
     }
 
     function closeCreatePreview() {
@@ -344,11 +362,99 @@ ShellRoot {
         creationError = ""
     }
 
+    function storagePools() {
+        return storageInfo && storageInfo.pools ? storageInfo.pools : []
+    }
+
+    function storageReady() {
+        return bastilleSetup || (storageInfo && storageInfo.configured)
+    }
+
+    function chooseDefaultStoragePool() {
+        var pools = storagePools()
+        if (storageInfo && storageInfo.zfs_pool && storageInfo.zfs_pool.length > 0) {
+            selectedStoragePool = storageInfo.zfs_pool
+            return
+        }
+        if (selectedStoragePool.length > 0 && pools.indexOf(selectedStoragePool) >= 0)
+            return
+        selectedStoragePool = pools.length > 0 ? pools[0] : ""
+    }
+
+    function cycleStoragePool() {
+        if (storageSetupRunning)
+            return
+        var pools = storagePools()
+        if (pools.length < 2)
+            return
+        var index = pools.indexOf(selectedStoragePool)
+        selectedStoragePool = pools[(index + 1) % pools.length]
+        storageConfirmation = ""
+        storageSetupStage = "idle"
+        storageSetupMessage = ""
+        storageSetupDetails = ""
+    }
+
+    function storageTargetDataset() {
+        if (storageInfo && storageInfo.target_dataset && storageInfo.target_dataset.length > 0)
+            return storageInfo.target_dataset
+        if (selectedStoragePool.length === 0)
+            return "No target available"
+        var prefix = storageInfo && storageInfo.zfs_prefix ? storageInfo.zfs_prefix : "bastille"
+        return selectedStoragePool + "/" + prefix
+    }
+
+    function canConfigureStorage() {
+        return !demoMode && tools.bastille && !storageReady() && !storageSetupRunning && selectedStoragePool.length > 0 && storageConfirmation === selectedStoragePool
+    }
+
+    function startStorageSetup() {
+        if (!canConfigureStorage())
+            return
+        storageSetupRunning = true
+        storageSetupStage = "configuring"
+        storageSetupMessage = "Configuring Bastille storage on " + selectedStoragePool + "…"
+        storageSetupDetails = ""
+        storageStdoutText = ""
+        storageStderrText = ""
+        storageExitCode = 0
+        storageExited = false
+        storageStdoutFinished = false
+        storageStderrFinished = false
+        storageSetupProcess.running = true
+    }
+
+    function maybeFinalizeStorageSetup() {
+        if (!storageExited || !storageStdoutFinished || !storageStderrFinished)
+            return
+        storageSetupRunning = false
+        var payload = null
+        try {
+            payload = JSON.parse(storageStdoutText || "{}")
+        } catch (error) {
+            payload = null
+        }
+        if (storageExitCode !== 0 || !payload || !payload.ok) {
+            storageSetupStage = "failed"
+            storageSetupMessage = payload ? payload.message || "Storage setup failed." : "The Jails backend returned invalid storage data."
+            storageSetupDetails = payload ? payload.details || storageStderrText : storageStderrText
+            return
+        }
+        storageSetupStage = "complete"
+        storageSetupMessage = payload.message || "Configured Bastille storage."
+        storageSetupDetails = payload.details || ""
+        storageConfirmation = ""
+        statusTone = "success"
+        statusMessage = storageSetupMessage
+        actionDetails = storageSetupDetails
+        refreshSnapshot()
+    }
+
     function wizardCanContinue() {
         if (wizardBusy)
             return false
         if (wizardStep === 0)
-            return tools.bastille && bastilleSetup
+            return tools.bastille && storageReady()
         if (wizardStep === 1)
             return previewRelease.length > 0
         if (wizardStep === 2)
@@ -472,8 +578,32 @@ ShellRoot {
     }
 
     function wizardDetailText() {
-        if (wizardStep === 0)
-            return "STORAGE\n\nBastille will create a thick jail under its configured jail root. A thick jail has its own complete userland, which is the simplest model to inspect, update, and remove.\n\n" + (bastilleSetup ? "[ok] Bastille storage and inventory are ready." : "[!] Bastille storage has not been initialized. Run `mdo bastille setup` in a terminal, answer its storage/network prompts, then return here and Refresh.")
+        if (wizardStep === 0) {
+            var storageLines = ["STORAGE", "", "Bastille keeps releases, jail roots, cache, backups, and templates beneath one installation root.", ""]
+            if (storageReady()) {
+                storageLines.push("[ok] Bastille storage is " + (storageInfo.initialized || bastilleSetup ? "initialized." : "configured."))
+                storageLines.push("Pool: " + (storageInfo.zfs_pool || "filesystem-backed"))
+                storageLines.push("Dataset: " + (storageInfo.target_dataset || "managed beneath " + (storageInfo.prefix || "/usr/local/bastille")))
+                if (!storageInfo.initialized && !bastilleSetup)
+                    storageLines.push("The first release bootstrap will create the dataset hierarchy.")
+            } else {
+                storageLines.push("SELECTED PLAN")
+                storageLines.push("Pool: " + (selectedStoragePool || "No ZFS pool detected"))
+                storageLines.push("Dataset: " + storageTargetDataset())
+                storageLines.push("Mount root: " + (storageInfo.prefix || "/usr/local/bastille"))
+                storageLines.push("Command: bastille setup storage " + (selectedStoragePool || "<pool>"))
+                storageLines.push("")
+                storageLines.push("This command configures storage only. It does not modify PF, interfaces, or jail networking.")
+                storageLines.push("The first release bootstrap creates the conventional dataset hierarchy. Existing unrelated datasets are untouched.")
+            }
+            if (storageSetupStage === "failed") {
+                storageLines.push("")
+                storageLines.push("[!] " + storageSetupMessage)
+                if (storageSetupDetails.length > 0)
+                    storageLines.push(storageSetupDetails)
+            }
+            return storageLines.join("\n")
+        }
         if (wizardStep === 1)
             return "USERLAND\n\nChoose a FreeBSD release no newer than the host. The jail shares the host kernel but needs its own /bin, /etc, and /usr.\n\nHost: " + (hostRelease || "Unknown") + "\nBootstrapped: " + (bastilleReleases.length > 0 ? bastilleReleases.join(", ") : "None; the selected release will be downloaded.")
         if (wizardStep === 2)
@@ -518,7 +648,8 @@ ShellRoot {
         var checks = previewPayload.checks || {}
         var lines = ["READINESS"]
         lines.push((checks.bastille_installed ? "[ok] " : "[!] ") + "Bastille installed")
-        lines.push((checks.bastille_setup ? "[ok] " : "[!] ") + "Bastille setup and inventory readable")
+        lines.push((checks.storage_configured ? "[ok] " : "[!] ") + "Bastille storage configured")
+        lines.push((checks.bastille_setup ? "[ok] " : "[plan] ") + "Bastille inventory " + (checks.bastille_setup ? "readable" : "will initialize during bootstrap"))
         lines.push((checks.name_available ? "[ok] " : "[!] ") + "Jail name available")
         lines.push((checks.address_available ? "[ok] " : "[!] ") + "IP address available")
         lines.push((checks.host_compatible ? "[ok] " : "[!] ") + "Host release compatible" + (checks.host_release ? " (" + checks.host_release + ")" : ""))
@@ -585,6 +716,8 @@ ShellRoot {
         demoMode = payload.demo || false
         bastilleReleases = payload.bastille_releases || []
         bastilleSetup = payload.bastille_setup || false
+        storageInfo = payload.storage || {"configured": bastilleSetup, "initialized": bastilleSetup, "prefix": "/usr/local/bastille", "zfs_pool": "", "zfs_prefix": "bastille", "target_dataset": "", "pools": []}
+        chooseDefaultStoragePool()
         hostRelease = payload.host_release || ""
         if (!previewReleaseCustomized && bastilleReleases.length > 0)
             previewRelease = bastilleReleases[bastilleReleases.length - 1]
@@ -717,6 +850,34 @@ ShellRoot {
             createPreviewProcess.controller.previewExitCode = exitCode
             createPreviewProcess.controller.previewExited = true
             createPreviewProcess.controller.maybeFinalizeCreatePreview()
+        }
+    }
+
+    Process {
+        id: storageSetupProcess
+        property var controller: root
+
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "storage-setup", root.selectedStoragePool, root.storageConfirmation]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                storageSetupProcess.controller.storageStdoutText = text
+                storageSetupProcess.controller.storageStdoutFinished = true
+                storageSetupProcess.controller.maybeFinalizeStorageSetup()
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                storageSetupProcess.controller.storageStderrText = text
+                storageSetupProcess.controller.storageStderrFinished = true
+                storageSetupProcess.controller.maybeFinalizeStorageSetup()
+            }
+        }
+        onExited: function (exitCode) {
+            storageSetupProcess.controller.storageExitCode = exitCode
+            storageSetupProcess.controller.storageExited = true
+            storageSetupProcess.controller.maybeFinalizeStorageSetup()
         }
     }
 
@@ -1756,20 +1917,20 @@ ShellRoot {
                                     Rectangle {
                                         visible: root.wizardStep === 0
                                         width: parent.width
-                                        height: 150
+                                        height: root.storageReady() ? 190 : 330
                                         radius: 7
                                         color: root.palette.cardBackground
                                         border.width: 1
-                                        border.color: root.bastilleSetup ? root.palette.success : root.palette.warning
+                                        border.color: root.storageReady() ? root.palette.success : root.storageSetupStage === "failed" ? root.palette.danger : root.palette.warning
 
                                         Column {
                                             anchors.fill: parent
                                             anchors.margins: 12
-                                            spacing: 7
+                                            spacing: 8
 
                                             Text {
                                                 width: parent.width
-                                                text: "Bastille thick jail"
+                                                text: root.storageReady() ? "Bastille storage ready" : "Choose a ZFS pool"
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 14
                                                 font.bold: true
@@ -1777,19 +1938,155 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: "Bastille owns the jail root and configuration. A thick jail gets a complete, independent FreeBSD userland."
+                                                text: root.storageReady() ? "Bastille will own the release and jail datasets beneath its installation root." : "Bastille will use its conventional “bastille” dataset. Other datasets are left alone."
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: 11
                                                 wrapMode: Text.WordWrap
                                             }
 
                                             Text {
+                                                visible: root.storageReady()
                                                 width: parent.width
-                                                text: root.bastilleSetup ? "✓ Storage and inventory are ready" : "Run mdo bastille setup, then Refresh"
-                                                color: root.bastilleSetup ? root.palette.success : root.palette.warning
+                                                text: "✓ " + (root.storageInfo.target_dataset || root.storageInfo.prefix || "/usr/local/bastille")
+                                                color: root.palette.success
                                                 font.pixelSize: 11
                                                 font.bold: true
                                                 wrapMode: Text.WordWrap
+                                            }
+
+                                            Text {
+                                                visible: root.storageReady()
+                                                width: parent.width
+                                                text: root.storageInfo.initialized || root.bastilleSetup ? "Dataset hierarchy initialized" : "The Userland step will initialize the hierarchy"
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 10
+                                                wrapMode: Text.WordWrap
+                                            }
+
+                                            Rectangle {
+                                                visible: !root.storageReady()
+                                                width: parent.width
+                                                height: 42
+                                                radius: 6
+                                                color: storagePoolMouse.containsMouse && root.storagePools().length > 1 ? root.palette.cardHover : root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: root.selectedStoragePool.length > 0 ? root.palette.accent : root.palette.danger
+
+                                                Row {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 10
+
+                                                    Text {
+                                                        width: parent.width - 58
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: root.selectedStoragePool.length > 0 ? "Pool: " + root.selectedStoragePool : "No ZFS pool detected"
+                                                        color: root.palette.primaryText
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Text {
+                                                        width: 58
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        horizontalAlignment: Text.AlignRight
+                                                        text: root.storagePools().length > 1 ? "Next ›" : ""
+                                                        color: root.palette.accent
+                                                        font.pixelSize: 10
+                                                        font.bold: true
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: storagePoolMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: root.storagePools().length > 1 && !root.storageSetupRunning
+                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                    onClicked: root.cycleStoragePool()
+                                                }
+                                            }
+
+                                            Text {
+                                                visible: !root.storageReady()
+                                                width: parent.width
+                                                text: "Target: " + root.storageTargetDataset()
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 10
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                visible: !root.storageReady()
+                                                width: parent.width
+                                                text: "Type “" + root.selectedStoragePool + "” to confirm"
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Rectangle {
+                                                visible: !root.storageReady()
+                                                width: parent.width
+                                                height: 38
+                                                radius: 6
+                                                color: root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === root.selectedStoragePool && root.selectedStoragePool.length > 0 ? root.palette.success : root.palette.panelBorder
+
+                                                TextInput {
+                                                    id: storageConfirmationInput
+                                                    anchors.fill: parent
+                                                    anchors.margins: 10
+                                                    text: root.storageConfirmation
+                                                    enabled: !root.storageSetupRunning && root.selectedStoragePool.length > 0
+                                                    color: root.palette.primaryText
+                                                    selectionColor: root.palette.accent
+                                                    selectedTextColor: root.palette.panelBackground
+                                                    font.pixelSize: 12
+                                                    verticalAlignment: TextInput.AlignVCenter
+                                                    clip: true
+                                                    onTextEdited: root.storageConfirmation = text
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                visible: !root.storageReady()
+                                                width: parent.width
+                                                height: 42
+                                                radius: 7
+                                                color: storageSetupMouse.enabled ? (storageSetupMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.18)) : root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: storageSetupMouse.enabled ? root.palette.success : root.palette.panelBorder
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: root.demoMode ? "Setup Disabled in Demo" : root.storageSetupRunning ? "Configuring Storage…" : "Configure Bastille Storage"
+                                                    color: storageSetupMouse.enabled ? root.palette.success : root.palette.mutedText
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    id: storageSetupMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: root.canConfigureStorage()
+                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                    onClicked: root.startStorageSetup()
+                                                }
+                                            }
+
+                                            Text {
+                                                visible: !root.storageReady() && root.storageSetupMessage.length > 0
+                                                width: parent.width
+                                                text: root.storageSetupMessage
+                                                color: root.storageSetupStage === "failed" ? root.palette.danger : root.palette.accent
+                                                font.pixelSize: 9
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }
@@ -2107,8 +2404,8 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.tools.bastille ? "Bastille is not detected; install it before creating a jail." : root.bastilleSetup ? "Bastille inventory is readable" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "") : "Bastille is installed, but setup or read access needs attention."
-                                        color: !root.demoMode && root.tools.bastille && root.bastilleSetup ? root.palette.success : root.palette.warning
+                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.tools.bastille ? "Bastille is not detected; install it before creating a jail." : root.storageReady() ? (root.bastilleSetup ? "Bastille inventory is readable" : "Storage configured; bootstrap will initialize it") + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "") : root.storagePools().length > 0 ? "Select a pool and configure Bastille storage." : "Bastille is installed, but no ZFS pool was detected."
+                                        color: !root.demoMode && root.tools.bastille && root.storageReady() ? root.palette.success : root.palette.warning
                                         font.pixelSize: 10
                                         wrapMode: Text.WordWrap
                                     }

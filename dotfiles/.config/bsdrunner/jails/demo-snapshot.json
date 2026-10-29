@@ -15,6 +15,17 @@
   },
   "host_release": "15.0-RELEASE",
   "bastille_setup": true,
+  "storage": {
+    "configured": true,
+    "initialized": true,
+    "prefix": "/usr/local/bastille",
+    "zfs_pool": "zroot",
+    "zfs_prefix": "bastille",
+    "target_dataset": "zroot/bastille",
+    "pools": [
+      "zroot"
+    ]
+  },
   "bastille_releases": [
     "14.3-RELEASE",
     "15.0-RELEASE"
