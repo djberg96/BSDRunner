@@ -17,6 +17,22 @@ ShellRoot {
     property bool beginnerMapVisible: true
     property bool createPreviewVisible: false
     property bool createPreviewLoading: false
+    property int wizardStep: 0
+    property bool demoMode: false
+    property bool creationRunning: false
+    property string creationStage: "idle"
+    property string creationMessage: ""
+    property string creationError: ""
+    property string creationConfirmation: ""
+    property bool creationBootstrapped: false
+    property string provisionAction: ""
+    property string provisionNextAction: ""
+    property string provisionStdoutText: ""
+    property string provisionStderrText: ""
+    property int provisionExitCode: 0
+    property bool provisionExited: false
+    property bool provisionStdoutFinished: false
+    property bool provisionStderrFinished: false
     property string statusTone: "info"
     property string statusMessage: "Loading jail status..."
     property string actionDetails: ""
@@ -69,6 +85,8 @@ ShellRoot {
 
     readonly property var jails: mergedJails()
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
+    readonly property bool wizardBusy: createPreviewLoading || creationRunning
+    readonly property var wizardSteps: ["Storage", "Userland", "Config", "Lifecycle"]
     readonly property var beginnerTopics: [
         {
             "id": "storage",
@@ -301,14 +319,76 @@ ShellRoot {
 
     function openCreatePreview() {
         createPreviewVisible = true
+        wizardStep = 0
         previewPayload = null
         previewError = ""
+        creationStage = "idle"
+        creationMessage = ""
+        creationError = ""
+        creationConfirmation = ""
+        creationBootstrapped = false
     }
 
     function closeCreatePreview() {
-        if (createPreviewLoading)
+        if (wizardBusy)
             return
         createPreviewVisible = false
+    }
+
+    function invalidateCreatePlan() {
+        previewPayload = null
+        previewError = ""
+        creationConfirmation = ""
+        creationStage = "idle"
+        creationMessage = ""
+        creationError = ""
+    }
+
+    function wizardCanContinue() {
+        if (wizardBusy)
+            return false
+        if (wizardStep === 0)
+            return tools.bastille && bastilleSetup
+        if (wizardStep === 1)
+            return previewRelease.length > 0
+        if (wizardStep === 2)
+            return previewName.length > 0 && previewAddress.length > 0
+        return false
+    }
+
+    function previousWizardStep() {
+        if (!wizardBusy && wizardStep > 0) {
+            wizardStep -= 1
+            creationConfirmation = ""
+            creationStage = "idle"
+            creationMessage = ""
+            creationError = ""
+        }
+    }
+
+    function nextWizardStep() {
+        if (!wizardCanContinue())
+            return
+        if (wizardStep < 2) {
+            wizardStep += 1
+            return
+        }
+        wizardStep = 3
+        creationConfirmation = ""
+        creationStage = "idle"
+        creationMessage = ""
+        creationError = ""
+        runCreatePreview()
+    }
+
+    function selectWizardStep(step) {
+        if (wizardBusy || step < 0 || step >= wizardStep || creationStage === "complete")
+            return
+        wizardStep = step
+        creationConfirmation = ""
+        creationStage = "idle"
+        creationMessage = ""
+        creationError = ""
     }
 
     function runCreatePreview() {
@@ -324,6 +404,91 @@ ShellRoot {
         previewStdoutFinished = false
         previewStderrFinished = false
         createPreviewProcess.running = true
+    }
+
+    function startGuidedCreation() {
+        if (wizardBusy || demoMode || !previewPayload || !previewPayload.ready || creationConfirmation !== previewName)
+            return
+        creationRunning = true
+        creationError = ""
+        creationMessage = ""
+        creationBootstrapped = false
+        if (previewPayload.checks && !previewPayload.checks.release_bootstrapped) {
+            creationStage = "bootstrapping"
+            creationMessage = "Downloading and preparing " + previewRelease + "…"
+            startProvisionAction("bootstrap")
+        } else {
+            creationStage = "creating"
+            creationMessage = "Creating " + previewName + "…"
+            startProvisionAction("create")
+        }
+    }
+
+    function startProvisionAction(actionId) {
+        provisionAction = actionId
+        provisionStdoutText = ""
+        provisionStderrText = ""
+        provisionExitCode = 0
+        provisionExited = false
+        provisionStdoutFinished = false
+        provisionStderrFinished = false
+        provisionProcess.running = true
+    }
+
+    function maybeFinalizeProvision() {
+        if (!provisionExited || !provisionStdoutFinished || !provisionStderrFinished)
+            return
+        var payload = null
+        try {
+            payload = JSON.parse(provisionStdoutText || "{}")
+        } catch (error) {
+            payload = null
+        }
+        if (provisionExitCode !== 0 || !payload || !payload.ok) {
+            creationRunning = false
+            creationStage = "failed"
+            creationError = payload ? payload.message || "Jail creation failed." : "The Jails backend returned invalid creation data."
+            creationMessage = payload ? payload.details || provisionStderrText : provisionStderrText
+            return
+        }
+        if (provisionAction === "bootstrap") {
+            creationBootstrapped = true
+            creationStage = "creating"
+            creationMessage = "Release ready. Creating " + previewName + "…"
+            provisionNextAction = "create"
+            provisionContinueTimer.restart()
+            return
+        }
+        creationRunning = false
+        creationStage = "complete"
+        creationMessage = payload.message || "Created " + previewName + "."
+        creationError = ""
+        statusTone = "success"
+        statusMessage = creationMessage
+        actionDetails = payload.details || ""
+        selectedJailName = previewName
+        selectedJailBackend = "bastille"
+        refreshSnapshot()
+    }
+
+    function wizardDetailText() {
+        if (wizardStep === 0)
+            return "STORAGE\n\nBastille will create a thick jail under its configured jail root. A thick jail has its own complete userland, which is the simplest model to inspect, update, and remove.\n\n" + (bastilleSetup ? "[ok] Bastille storage and inventory are ready." : "[!] Bastille storage has not been initialized. Run `mdo bastille setup` in a terminal, answer its storage/network prompts, then return here and Refresh.")
+        if (wizardStep === 1)
+            return "USERLAND\n\nChoose a FreeBSD release no newer than the host. The jail shares the host kernel but needs its own /bin, /etc, and /usr.\n\nHost: " + (hostRelease || "Unknown") + "\nBootstrapped: " + (bastilleReleases.length > 0 ? bastilleReleases.join(", ") : "None; the selected release will be downloaded.")
+        if (wizardStep === 2)
+            return "CONFIG\n\nGive the jail a unique name and IP address. Start at boot controls whether Bastille marks it for automatic startup. The backend will recheck these values immediately before creation."
+
+        var progress = ""
+        if (creationStage === "bootstrapping")
+            progress = "PROGRESS\n[>] Bootstrapping " + previewRelease + "\n[ ] Creating " + previewName + "\n\n"
+        else if (creationStage === "creating")
+            progress = "PROGRESS\n" + (creationBootstrapped ? "[ok] Release bootstrapped\n" : "[ok] Release already available\n") + "[>] Creating " + previewName + "\n\n"
+        else if (creationStage === "complete")
+            progress = "COMPLETE\n[ok] " + creationMessage + "\n\n"
+        else if (creationStage === "failed")
+            progress = "NEEDS ATTENTION\n[!] " + creationError + "\n" + creationMessage + "\n\n"
+        return progress + createPreviewText()
     }
 
     function maybeFinalizeCreatePreview() {
@@ -417,6 +582,7 @@ ShellRoot {
 
         tools = payload.tools || {}
         services = payload.services || {}
+        demoMode = payload.demo || false
         bastilleReleases = payload.bastille_releases || []
         bastilleSetup = payload.bastille_setup || false
         hostRelease = payload.host_release || ""
@@ -551,6 +717,48 @@ ShellRoot {
             createPreviewProcess.controller.previewExitCode = exitCode
             createPreviewProcess.controller.previewExited = true
             createPreviewProcess.controller.maybeFinalizeCreatePreview()
+        }
+    }
+
+    Process {
+        id: provisionProcess
+        property var controller: root
+
+        command: root.provisionAction === "bootstrap"
+            ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "bootstrap", root.previewRelease, root.previewRelease]
+            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "create", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                provisionProcess.controller.provisionStdoutText = text
+                provisionProcess.controller.provisionStdoutFinished = true
+                provisionProcess.controller.maybeFinalizeProvision()
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                provisionProcess.controller.provisionStderrText = text
+                provisionProcess.controller.provisionStderrFinished = true
+                provisionProcess.controller.maybeFinalizeProvision()
+            }
+        }
+        onExited: function (exitCode) {
+            provisionProcess.controller.provisionExitCode = exitCode
+            provisionProcess.controller.provisionExited = true
+            provisionProcess.controller.maybeFinalizeProvision()
+        }
+    }
+
+    Timer {
+        id: provisionContinueTimer
+        interval: 20
+        onTriggered: {
+            if (root.provisionNextAction.length === 0)
+                return
+            var nextAction = root.provisionNextAction
+            root.provisionNextAction = ""
+            root.startProvisionAction(nextAction)
         }
     }
 
@@ -707,7 +915,7 @@ ShellRoot {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Create Preview"
+                                    text: "Create Basic Jail"
                                     color: root.palette.primaryText
                                     font.pixelSize: 13
                                     font.bold: true
@@ -746,7 +954,7 @@ ShellRoot {
                                     Text {
                                         anchors.fill: parent
                                         anchors.margins: 8
-                                        text: "Build a read-only Bastille jail plan. No commands will run."
+                                        text: "Walk through storage, userland, config, and creation with Bastille."
                                         color: root.palette.primaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -1331,7 +1539,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 86
+                                height: 112
                                 radius: 8
                                 color: root.tools.bastille ? Qt.alpha(root.palette.success, 0.12) : root.palette.panelBackground
                                 border.width: 1
@@ -1383,11 +1591,17 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Create Preview now builds a read-only Bastille plan. It validates the inputs and shows exact commands without running them."
+                                        text: "Start a guided basic-jail flow through Storage, Userland, Config, and Lifecycle. Nothing changes until the final typed confirmation."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
                                     }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.openCreatePreview()
                                 }
                             }
                             }
@@ -1407,8 +1621,8 @@ ShellRoot {
                 }
 
                 Rectangle {
-                    width: 920
-                    height: 570
+                    width: 960
+                    height: 610
                     anchors.centerIn: parent
                     radius: 10
                     color: root.palette.cardBackground
@@ -1431,7 +1645,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Create Jail Preview"
+                                    text: "Create Basic Jail"
                                     color: root.palette.primaryText
                                     font.pixelSize: 22
                                     font.bold: true
@@ -1439,7 +1653,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Bastille thick-jail plan • read-only • no commands are executed"
+                                    text: "Guided thick jail • nothing changes until final confirmation"
                                     color: root.palette.accent
                                     font.pixelSize: 12
                                     font.bold: true
@@ -1466,7 +1680,7 @@ ShellRoot {
                                     id: closePreviewMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    enabled: !root.createPreviewLoading
+                                    enabled: !root.wizardBusy
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: root.closeCreatePreview()
                                 }
@@ -1475,7 +1689,47 @@ ShellRoot {
 
                         Row {
                             width: parent.width
-                            height: parent.height - 54
+                            height: 46
+                            spacing: 8
+
+                            Repeater {
+                                model: root.wizardSteps
+
+                                Rectangle {
+                                    id: wizardStepCard
+                                    required property string modelData
+                                    required property int index
+                                    readonly property bool active: root.wizardStep === index
+                                    readonly property bool complete: root.wizardStep > index || root.creationStage === "complete"
+
+                                    width: (parent.width - 24) / 4
+                                    height: 46
+                                    radius: 7
+                                    color: active ? Qt.alpha(root.palette.accent, 0.18) : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: active ? root.palette.accent : complete ? root.palette.success : root.palette.panelBorder
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (wizardStepCard.complete ? "✓ " : (wizardStepCard.index + 1) + ". ") + wizardStepCard.modelData
+                                        color: wizardStepCard.active ? root.palette.accent : wizardStepCard.complete ? root.palette.success : root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: wizardStepCard.index < root.wizardStep && !root.wizardBusy
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: root.selectWizardStep(wizardStepCard.index)
+                                    }
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            height: parent.height - 112
                             spacing: 14
 
                             Rectangle {
@@ -1493,13 +1747,55 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Proposed service jail"
+                                        text: (root.wizardStep + 1) + ". " + root.wizardSteps[root.wizardStep]
                                         color: root.palette.accent
                                         font.pixelSize: 14
                                         font.bold: true
                                     }
 
+                                    Rectangle {
+                                        visible: root.wizardStep === 0
+                                        width: parent.width
+                                        height: 150
+                                        radius: 7
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.bastilleSetup ? root.palette.success : root.palette.warning
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 12
+                                            spacing: 7
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Bastille thick jail"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Bastille owns the jail root and configuration. A thick jail gets a complete, independent FreeBSD userland."
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.bastilleSetup ? "✓ Storage and inventory are ready" : "Run mdo bastille setup, then Refresh"
+                                                color: root.bastilleSetup ? root.palette.success : root.palette.warning
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                                wrapMode: Text.WordWrap
+                                            }
+                                        }
+                                    }
+
                                     Text {
+                                        visible: root.wizardStep === 2
                                         width: parent.width
                                         text: "Jail name"
                                         color: root.palette.secondaryText
@@ -1508,6 +1804,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
+                                        visible: root.wizardStep === 2
                                         width: parent.width
                                         height: 40
                                         radius: 6
@@ -1526,11 +1823,15 @@ ShellRoot {
                                             font.pixelSize: 13
                                             verticalAlignment: TextInput.AlignVCenter
                                             clip: true
-                                            onTextEdited: root.previewName = text
+                                            onTextEdited: {
+                                                root.previewName = text
+                                                root.invalidateCreatePlan()
+                                            }
                                         }
                                     }
 
                                     Text {
+                                        visible: root.wizardStep === 1
                                         width: parent.width
                                         text: "FreeBSD release"
                                         color: root.palette.secondaryText
@@ -1539,6 +1840,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
+                                        visible: root.wizardStep === 1
                                         width: parent.width
                                         height: 40
                                         radius: 6
@@ -1560,11 +1862,13 @@ ShellRoot {
                                             onTextEdited: {
                                                 root.previewRelease = text
                                                 root.previewReleaseCustomized = true
+                                                root.invalidateCreatePlan()
                                             }
                                         }
                                     }
 
                                     Text {
+                                        visible: root.wizardStep === 1
                                         width: parent.width
                                         text: root.bastilleReleases.length > 0 ? "Bootstrapped: " + root.bastilleReleases.join(", ") : "No bootstrapped releases detected."
                                         color: root.bastilleReleases.length > 0 ? root.palette.mutedText : root.palette.warning
@@ -1573,6 +1877,7 @@ ShellRoot {
                                     }
 
                                     Text {
+                                        visible: root.wizardStep === 2
                                         width: parent.width
                                         text: "IP address / CIDR"
                                         color: root.palette.secondaryText
@@ -1581,6 +1886,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
+                                        visible: root.wizardStep === 2
                                         width: parent.width
                                         height: 40
                                         radius: 6
@@ -1599,11 +1905,15 @@ ShellRoot {
                                             font.pixelSize: 13
                                             verticalAlignment: TextInput.AlignVCenter
                                             clip: true
-                                            onTextEdited: root.previewAddress = text
+                                            onTextEdited: {
+                                                root.previewAddress = text
+                                                root.invalidateCreatePlan()
+                                            }
                                         }
                                     }
 
                                     Row {
+                                        visible: root.wizardStep === 2
                                         width: parent.width
                                         height: 44
                                         spacing: 10
@@ -1649,12 +1959,100 @@ ShellRoot {
                                             MouseArea {
                                                 anchors.fill: parent
                                                 cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.previewAutostart = !root.previewAutostart
+                                                onClicked: {
+                                                    root.previewAutostart = !root.previewAutostart
+                                                    root.invalidateCreatePlan()
+                                                }
                                             }
                                         }
                                     }
 
                                     Rectangle {
+                                        visible: root.wizardStep === 3
+                                        width: parent.width
+                                        height: 104
+                                        radius: 7
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.creationConfirmation === root.previewName ? root.palette.success : root.palette.panelBorder
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 6
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Type “" + root.previewName + "” to confirm"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Rectangle {
+                                                width: parent.width
+                                                height: 40
+                                                radius: 6
+                                                color: root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: creationConfirmationInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                                TextInput {
+                                                    id: creationConfirmationInput
+                                                    anchors.fill: parent
+                                                    anchors.margins: 10
+                                                    text: root.creationConfirmation
+                                                    enabled: !root.wizardBusy && root.creationStage !== "complete"
+                                                    color: root.palette.primaryText
+                                                    selectionColor: root.palette.accent
+                                                    selectedTextColor: root.palette.panelBackground
+                                                    font.pixelSize: 13
+                                                    verticalAlignment: TextInput.AlignVCenter
+                                                    clip: true
+                                                    onTextEdited: root.creationConfirmation = text
+                                                }
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Creation may download a release and write jail storage/configuration."
+                                                color: root.palette.warning
+                                                font.pixelSize: 9
+                                                wrapMode: Text.WordWrap
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: root.wizardStep > 0 && root.creationStage !== "complete"
+                                        width: parent.width
+                                        height: 32
+                                        radius: 6
+                                        color: backWizardMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.panelBorder
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Back"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: backWizardMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: !root.wizardBusy
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.previousWizardStep()
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: root.wizardStep < 3
                                         width: parent.width
                                         height: 46
                                         radius: 7
@@ -1664,7 +2062,7 @@ ShellRoot {
 
                                         Text {
                                             anchors.centerIn: parent
-                                            text: root.createPreviewLoading ? "Building Preview…" : "Generate Read-Only Plan"
+                                            text: root.wizardStep === 0 ? "Continue to Userland" : root.wizardStep === 1 ? "Continue to Config" : "Review Creation Plan"
                                             color: root.palette.primaryText
                                             font.pixelSize: 13
                                             font.bold: true
@@ -1674,16 +2072,43 @@ ShellRoot {
                                             id: generatePreviewMouse
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            enabled: !root.createPreviewLoading
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.runCreatePreview()
+                                            enabled: root.wizardCanContinue()
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.nextWizardStep()
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: root.wizardStep === 3
+                                        width: parent.width
+                                        height: 46
+                                        radius: 7
+                                        color: createJailMouse.enabled ? (createJailMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.18)) : root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: createJailMouse.enabled ? root.palette.success : root.palette.panelBorder
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.demoMode ? "Creation Disabled in Demo" : root.creationStage === "complete" ? "Jail Created" : root.creationRunning ? (root.creationStage === "bootstrapping" ? "Bootstrapping Release…" : "Creating Jail…") : "Create Jail"
+                                            color: createJailMouse.enabled ? root.palette.success : root.palette.mutedText
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: createJailMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: !root.demoMode && !root.wizardBusy && root.creationStage !== "complete" && root.previewPayload && root.previewPayload.ready && root.creationConfirmation === root.previewName
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.startGuidedCreation()
                                         }
                                     }
 
                                     Text {
                                         width: parent.width
-                                        text: !root.tools.bastille ? "Bastille is not detected; preview still works for planning." : root.bastilleSetup ? "Bastille inventory is readable" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "") : "Bastille is installed, but setup or read access needs attention."
-                                        color: root.tools.bastille && root.bastilleSetup ? root.palette.success : root.palette.warning
+                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.tools.bastille ? "Bastille is not detected; install it before creating a jail." : root.bastilleSetup ? "Bastille inventory is readable" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "") : "Bastille is installed, but setup or read access needs attention."
+                                        color: !root.demoMode && root.tools.bastille && root.bastilleSetup ? root.palette.success : root.palette.warning
                                         font.pixelSize: 10
                                         wrapMode: Text.WordWrap
                                     }
@@ -1696,7 +2121,7 @@ ShellRoot {
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.frameBorder
+                                border.color: root.creationStage === "complete" ? root.palette.success : root.creationStage === "failed" || root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.frameBorder
 
                                 Column {
                                     anchors.fill: parent
@@ -1705,8 +2130,8 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.previewPayload ? root.previewPayload.message : "Provisioning plan"
-                                        color: root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.accent
+                                        text: root.wizardStep < 3 ? root.wizardSteps[root.wizardStep] + " explained" : root.creationStage === "complete" ? "Jail created" : root.creationStage === "failed" ? "Creation needs attention" : root.previewPayload ? root.previewPayload.message : "Checking creation plan…"
+                                        color: root.creationStage === "complete" ? root.palette.success : root.creationStage === "failed" || root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.accent
                                         font.pixelSize: 14
                                         font.bold: true
                                         elide: Text.ElideRight
@@ -1731,12 +2156,12 @@ ShellRoot {
                                                 id: previewPlanText
                                                 width: parent.width
                                                 height: Math.max(parent.height, contentHeight)
-                                                text: root.createPreviewText()
+                                                text: root.wizardDetailText()
                                                 readOnly: true
                                                 selectByMouse: true
                                                 wrapMode: TextEdit.Wrap
                                                 textFormat: TextEdit.PlainText
-                                                color: root.previewError.length > 0 ? root.palette.danger : root.palette.primaryText
+                                                color: root.creationStage === "failed" || root.previewError.length > 0 ? root.palette.danger : root.palette.primaryText
                                                 selectionColor: root.palette.accent
                                                 selectedTextColor: root.palette.panelBackground
                                                 font.family: "monospace"

@@ -39,6 +39,7 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_STATE_DIR="$state_dir" \
     BSDRUNNER_JAILS_TEST_FIXTURES="$fixtures" \
     BSDRUNNER_JAILS_TEST_LOG="$command_log" \
+    BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="${BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX:-$fixtures/etc/bastille-root}" \
     sh "$backend" "$@"
 }
 
@@ -49,7 +50,7 @@ BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
 export BSDRUNNER_JAILS_FIXTURE
 run_backend snapshot >"$demo_output"
 assert_json "$demo_output" \
-    '.ok == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1' \
+    '.ok == true and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1' \
     "demo fixture should satisfy the snapshot contract"
 pass "demo fixture satisfies the snapshot contract"
 
@@ -104,6 +105,24 @@ assert_json "$snapshot_output" \
     "snapshot should parse rich Bastille metadata"
 pass "snapshot parses native and Bastille fixtures"
 
+unready_prefix="$test_root/unready-bastille"
+mkdir -p "$unready_prefix"
+unready_snapshot="$test_root/unready-snapshot.json"
+BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="$unready_prefix" run_backend snapshot >"$unready_snapshot"
+assert_json "$unready_snapshot" \
+    '.ok == true and .tools.bastille == true and .bastille_setup == false and .bastille_releases == []' \
+    "an installed Bastille without initialized storage should not be reported ready"
+: >"$command_log"
+unready_bootstrap="$test_root/unready-bootstrap.json"
+if BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="$unready_prefix" run_backend bootstrap 15.0-RELEASE 15.0-RELEASE >"$unready_bootstrap"; then
+    fail "release bootstrap should require initialized Bastille storage"
+fi
+assert_json "$unready_bootstrap" \
+    '.ok == false and .message == "Bastille storage is not set up."' \
+    "release bootstrap should explain missing Bastille storage"
+[ ! -s "$command_log" ] || fail "missing Bastille storage should block mutation commands"
+pass "Bastille storage readiness is checked before provisioning"
+
 : >"$command_log"
 preview_output="$test_root/preview.json"
 run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$preview_output"
@@ -145,6 +164,49 @@ assert_json "$invalid_preview_output" \
     '.ok == false and .message == "Invalid jail address."' \
     "create preview should reject unsafe address characters"
 pass "create preview is exact, read-only, and validated"
+
+: >"$command_log"
+bootstrap_output="$test_root/bootstrap.json"
+run_backend bootstrap 14.4-RELEASE 14.4-RELEASE >"$bootstrap_output"
+assert_json "$bootstrap_output" \
+    '.ok == true and .message == "Bootstrapped 14.4-RELEASE." and .details == "Bastille action completed."' \
+    "release bootstrap should return a structured success"
+grep -Fx 'mdo bastille bootstrap --update 14.4-RELEASE' "$command_log" >/dev/null || fail "release bootstrap should use mdo"
+grep -Fx 'bastille bootstrap --update 14.4-RELEASE' "$command_log" >/dev/null || fail "release bootstrap should call Bastille"
+pass "release bootstrap uses the guarded command path"
+
+: >"$command_log"
+create_output="$test_root/create.json"
+run_backend create basic 15.0-RELEASE 10.0.0.30/24 no basic >"$create_output"
+assert_json "$create_output" \
+    '.ok == true and .message == "Created basic." and .details == "Bastille action completed."' \
+    "basic jail creation should return a structured success"
+grep -Fx 'mdo bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24' "$command_log" >/dev/null || fail "jail creation should use mdo"
+grep -Fx 'bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24' "$command_log" >/dev/null || fail "jail creation should call Bastille with exact arguments"
+pass "basic jail creation uses the guarded command path"
+
+: >"$command_log"
+guarded_create_output="$test_root/guarded-create.json"
+if run_backend create basic 15.0-RELEASE 10.0.0.30/24 yes wrong >"$guarded_create_output"; then
+    fail "jail creation should require an exact name confirmation"
+fi
+assert_json "$guarded_create_output" \
+    '.ok == false and .message == "Jail confirmation did not match."' \
+    "jail creation should explain a mismatched confirmation"
+if run_backend create future 14.4-RELEASE 10.0.0.31/24 yes future >"$guarded_create_output"; then
+    fail "jail creation should require a bootstrapped release"
+fi
+assert_json "$guarded_create_output" \
+    '.ok == false and .message == "The selected release is not bootstrapped."' \
+    "jail creation should reject a missing release"
+if run_backend create cache 15.0-RELEASE 10.0.0.31/24 yes cache >"$guarded_create_output"; then
+    fail "jail creation should reject an existing name"
+fi
+assert_json "$guarded_create_output" \
+    '.ok == false and .message == "The jail name is already in use."' \
+    "jail creation should reject a last-minute collision"
+[ ! -s "$command_log" ] || fail "rejected jail creation should not execute mutating commands"
+pass "jail creation revalidates confirmation, release, and collisions"
 
 empty_bin="$test_root/empty-bin"
 mkdir -p "$empty_bin"

@@ -7,10 +7,14 @@ if [ "$test_mode" = "1" ]; then
     PATH="${BSDRUNNER_JAILS_TEST_PATH:-/usr/bin:/bin}"
     etc_dir="${BSDRUNNER_JAILS_TEST_ETC_DIR:-/etc}"
     state_dir="${BSDRUNNER_JAILS_TEST_STATE_DIR:-${TMPDIR:-/tmp}/bsdrunner-jails-test-state}"
+    bastille_config_file="${BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG:-$etc_dir/bastille/bastille.conf}"
+    bastille_test_prefix="${BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX:-$etc_dir/bastille-root}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
     state_dir="${HOME}/.config/bsdrunner/jails"
+    bastille_config_file="/usr/local/etc/bastille/bastille.conf"
+    bastille_test_prefix=""
 fi
 export PATH
 
@@ -67,6 +71,28 @@ host_release_value() {
     elif command -v uname >/dev/null 2>&1; then
         uname -r 2>/dev/null || true
     fi
+}
+
+bastille_prefix_value() {
+    if [ "$test_mode" = "1" ]; then
+        printf '%s\n' "$bastille_test_prefix"
+        return
+    fi
+    [ -r "$bastille_config_file" ] || return 1
+    awk -F '=' '
+        /^[[:space:]]*bastille_prefix[[:space:]]*=/ {
+            value = substr($0, index($0, "=") + 1)
+            sub(/[[:space:]]*##.*$/, "", value)
+            gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, "", value)
+            if (value ~ /^\//) print value
+            exit
+        }
+    ' "$bastille_config_file"
+}
+
+bastille_storage_ready() {
+    prefix="$(bastille_prefix_value 2>/dev/null || true)"
+    [ -n "$prefix" ] && [ -d "$prefix" ] && [ -d "$prefix/jails" ] && [ -d "$prefix/releases" ]
 }
 
 valid_name() {
@@ -419,6 +445,67 @@ release_is_bootstrapped() {
     '
 }
 
+collect_jail_conflicts() {
+    proposed_name="$1"
+    proposed_address="$2"
+    conflict_name_available=true
+    conflict_address_available=true
+    inventory=""
+
+    if command -v bastille >/dev/null 2>&1; then
+        inventory="$(bastille_inventory 2>/dev/null || true)"
+    fi
+    native_rows="$(native_inventory 2>/dev/null || true)"
+    if [ -n "$native_rows" ]; then
+        inventory="${inventory}${inventory:+
+}${native_rows}"
+    fi
+
+    old_ifs="$IFS"
+    IFS='
+'
+    for row in $inventory; do
+        IFS="$old_ifs"
+        set -- $row
+        existing_name="${1:-}"
+        existing_address="${2:-}"
+        if [ "$existing_name" = "$proposed_name" ]; then
+            conflict_name_available=false
+        fi
+        if [ "$proposed_address" != "inherit" ] && [ -n "$existing_address" ]; then
+            normalized_proposed="${proposed_address##*|}"
+            normalized_proposed="${normalized_proposed%%/*}"
+            normalized_existing="${existing_address##*|}"
+            normalized_existing="${normalized_existing%%/*}"
+            if [ "$normalized_existing" = "$normalized_proposed" ]; then
+                conflict_address_available=false
+            fi
+        fi
+        IFS='
+'
+    done
+    IFS="$old_ifs"
+    if configured_name_exists "$proposed_name"; then
+        conflict_name_available=false
+    fi
+}
+
+release_is_host_compatible() {
+    host="$1"
+    jail="$2"
+    awk -v host="$host" -v jail="$jail" '
+        BEGIN {
+            if (host !~ /^[0-9]+\.[0-9]+/ || jail !~ /^[0-9]+\.[0-9]+/)
+                exit 0
+            split(host, host_parts, ".")
+            split(jail, jail_parts, ".")
+            if (jail_parts[1] < host_parts[1] || (jail_parts[1] == host_parts[1] && jail_parts[2] <= host_parts[2]))
+                exit 0
+            exit 1
+        }
+    '
+}
+
 service_enabled() {
     name="$1"
     if command -v sysrc >/dev/null 2>&1; then
@@ -440,7 +527,7 @@ emit_snapshot() {
     host_release="$(host_release_value | awk 'NF { print; exit }')"
     bastille_setup=false
     bastille_release_output=""
-    if command -v bastille >/dev/null 2>&1; then
+    if command -v bastille >/dev/null 2>&1 && bastille_storage_ready; then
         if bastille_release_output="$(run_bastille_read list releases 2>/dev/null)"; then
             bastille_setup=true
         fi
@@ -627,59 +714,22 @@ do_preview() {
     host_compatible=true
     host_release="$(host_release_value | awk 'NF { print; exit }')"
     release_output=""
-    inventory=""
 
     if command -v bastille >/dev/null 2>&1; then
         bastille_installed=true
-        if release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+        if bastille_storage_ready && release_output="$(run_bastille_read list releases 2>/dev/null)"; then
             bastille_setup=true
         fi
         if printf '%s\n' "$release_output" | release_is_bootstrapped "$release"; then
             release_bootstrapped=true
         fi
-        inventory="$(bastille_inventory 2>/dev/null || true)"
-    fi
-    native_rows="$(native_inventory 2>/dev/null || true)"
-    if [ -n "$native_rows" ]; then
-        inventory="${inventory}${inventory:+
-}${native_rows}"
     fi
 
-    old_ifs="$IFS"
-    IFS='
-'
-    for row in $inventory; do
-        IFS="$old_ifs"
-        set -- $row
-        existing_name="${1:-}"
-        existing_address="${2:-}"
-        [ "$existing_name" = "$name" ] && name_available=false
-        if [ "$address" != "inherit" ] && [ -n "$existing_address" ]; then
-            proposed_address="${address##*|}"
-            proposed_address="${proposed_address%%/*}"
-            existing_address="${existing_address##*|}"
-            existing_address="${existing_address%%/*}"
-            [ "$existing_address" = "$proposed_address" ] && address_available=false
-        fi
-        IFS='
-'
-    done
-    IFS="$old_ifs"
-    if configured_name_exists "$name"; then
-        name_available=false
-    fi
+    collect_jail_conflicts "$name" "$address"
+    name_available="$conflict_name_available"
+    address_available="$conflict_address_available"
 
-    if ! awk -v host="$host_release" -v jail="$release" '
-        BEGIN {
-            if (host !~ /^[0-9]+\.[0-9]+/ || jail !~ /^[0-9]+\.[0-9]+/)
-                exit 0
-            split(host, host_parts, ".")
-            split(jail, jail_parts, ".")
-            if (jail_parts[1] < host_parts[1] || (jail_parts[1] == host_parts[1] && jail_parts[2] <= host_parts[2]))
-                exit 0
-            exit 1
-        }
-    '; then
+    if ! release_is_host_compatible "$host_release" "$release"; then
         host_compatible=false
     fi
 
@@ -751,6 +801,131 @@ do_preview() {
     printf '}\n'
 }
 
+do_bootstrap() {
+    release="${1:-}"
+    confirmation="${2:-}"
+
+    valid_release "$release" || {
+        emit_action_result false "Invalid FreeBSD release." "Use a release such as 15.0-RELEASE."
+        exit 1
+    }
+    [ "$confirmation" = "$release" ] || {
+        emit_action_result false "Release confirmation did not match." "Return to the review step and confirm the selected release."
+        exit 1
+    }
+    command -v bastille >/dev/null 2>&1 || {
+        emit_action_result false "Bastille is unavailable." "Install and configure Bastille before bootstrapping a release."
+        exit 1
+    }
+    bastille_storage_ready || {
+        emit_action_result false "Bastille storage is not set up." "Run bastille setup before bootstrapping a release."
+        exit 1
+    }
+    if ! release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+        emit_action_result false "Bastille setup is not ready." "Run bastille setup and make sure privileged inventory reads work."
+        exit 1
+    fi
+    if printf '%s\n' "$release_output" | release_is_bootstrapped "$release"; then
+        emit_action_result true "${release} is already bootstrapped." "No download was needed."
+        return
+    fi
+    host_release="$(host_release_value | awk 'NF { print; exit }')"
+    if ! release_is_host_compatible "$host_release" "$release"; then
+        emit_action_result false "The jail release is newer than the host." "Choose a release compatible with ${host_release:-the host}."
+        exit 1
+    fi
+
+    if output="$(run_privileged bastille bootstrap --update "$release" 2>&1)"; then
+        write_last_result "success" "Bootstrapped ${release}."
+        emit_action_result true "Bootstrapped ${release}." "$output"
+    else
+        write_last_result "error" "Unable to bootstrap ${release}."
+        emit_action_result false "Unable to bootstrap ${release}." "$output"
+        exit 1
+    fi
+}
+
+do_create() {
+    name="${1:-}"
+    release="${2:-}"
+    address="${3:-}"
+    autostart="${4:-yes}"
+    confirmation="${5:-}"
+
+    valid_name "$name" || {
+        emit_action_result false "Invalid jail name." "Use letters, numbers, dots, underscores, or hyphens."
+        exit 1
+    }
+    valid_release "$release" || {
+        emit_action_result false "Invalid FreeBSD release." "Use a release such as 15.0-RELEASE."
+        exit 1
+    }
+    valid_address "$address" || {
+        emit_action_result false "Invalid jail address." "Use an IPv4 or IPv6 address with an optional CIDR prefix."
+        exit 1
+    }
+    case "$autostart" in
+        yes|no)
+            ;;
+        *)
+            emit_action_result false "Invalid autostart preference." "Choose yes or no."
+            exit 1
+            ;;
+    esac
+    [ "$confirmation" = "$name" ] || {
+        emit_action_result false "Jail confirmation did not match." "Return to the review step and confirm the jail name."
+        exit 1
+    }
+    command -v bastille >/dev/null 2>&1 || {
+        emit_action_result false "Bastille is unavailable." "Install and configure Bastille before creating a jail."
+        exit 1
+    }
+    bastille_storage_ready || {
+        emit_action_result false "Bastille storage is not set up." "Run bastille setup before creating a jail."
+        exit 1
+    }
+    if ! release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+        emit_action_result false "Bastille setup is not ready." "Run bastille setup and make sure privileged inventory reads work."
+        exit 1
+    fi
+    if ! printf '%s\n' "$release_output" | release_is_bootstrapped "$release"; then
+        emit_action_result false "The selected release is not bootstrapped." "Bootstrap ${release} before creating the jail."
+        exit 1
+    fi
+    collect_jail_conflicts "$name" "$address"
+    if [ "$conflict_name_available" != true ]; then
+        emit_action_result false "The jail name is already in use." "$name"
+        exit 1
+    fi
+    if [ "$conflict_address_available" != true ]; then
+        emit_action_result false "The jail address is already in use." "$address"
+        exit 1
+    fi
+
+    if [ "$autostart" = "no" ]; then
+        if output="$(run_privileged bastille create --thick --no-boot "$name" "$release" "$address" 2>&1)"; then
+            create_ok=true
+        else
+            create_ok=false
+        fi
+    else
+        if output="$(run_privileged bastille create --thick "$name" "$release" "$address" 2>&1)"; then
+            create_ok=true
+        else
+            create_ok=false
+        fi
+    fi
+
+    if [ "$create_ok" = true ]; then
+        write_last_result "success" "Created ${name}."
+        emit_action_result true "Created ${name}." "$output"
+    else
+        write_last_result "error" "Unable to create ${name}."
+        emit_action_result false "Unable to create ${name}." "$output"
+        exit 1
+    fi
+}
+
 if [ -n "$fixture_file" ]; then
     case "$action" in
         snapshot)
@@ -782,6 +957,12 @@ case "$action" in
         ;;
     preview)
         do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}"
+        ;;
+    bootstrap)
+        do_bootstrap "${2:-}" "${3:-}"
+        ;;
+    create)
+        do_create "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"

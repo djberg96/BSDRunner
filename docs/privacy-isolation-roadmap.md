@@ -92,20 +92,20 @@ V1 should not deeply edit jail networking, template systems, or desktop app
 permissions. Those are later features once the status and lifecycle workflow
 feels trustworthy.
 
-The first follow-up UI milestone is now a read-only `Create Jail Preview`. It
-behaves like a guided planning wizard, not a mutating workflow. The current
-version collects the jail name, release, network address, and autostart
-preference, then emits an exact Bastille thick-jail plan. A future native mode
-should add storage and hostname fields plus the generated
-`/etc/jail.conf.d/NAME.conf` content. The preview teaches the provisioning model
-and exposes risk before any root action exists.
+The first follow-up UI milestone began as a read-only creation preview and now
+drives a guarded `Create Basic Jail` wizard. It teaches Storage, Userland,
+Config, and Lifecycle in sequence, emits an exact Bastille thick-jail plan, and
+requires the jail name to be typed before any root action. Bootstrap and create
+run as separate stages so partial completion remains visible. A future native
+mode should add storage and hostname fields plus the generated
+`/etc/jail.conf.d/NAME.conf` content.
 
 ### Provisioning Model
 
 Plain jails share the host kernel but still need a provisioned userland root.
-BSDRunner should make this explicit in the UI. A future `Create Jail` workflow
-should visibly perform the provisioning steps rather than implying that
-`jail(8)` creates a filesystem automatically.
+BSDRunner makes this explicit in the guided Bastille workflow. A future native
+workflow should preserve the same visible provisioning steps rather than
+implying that `jail(8)` creates a filesystem automatically.
 
 For the first creation workflow, prefer a thick jail because it is easiest to
 understand:
@@ -126,8 +126,9 @@ Creation should graduate in stages:
 
 1. host-aware, read-only Bastille thick-jail preview with generated commands,
    release reuse, and collision checks (implemented)
-2. native preview with generated config, storage, and userland steps
-3. mutating creation with strong confirmation gates and clean Bastille metadata
+2. guided Bastille creation through Storage, Userland, Config, and Lifecycle,
+   with typed confirmation and separate bootstrap/create stages (implemented)
+3. native preview with generated config, storage, and userland steps
 4. thin/shared-base and desktop-app jail profiles after service jails are solid
 
 ### Jail Types

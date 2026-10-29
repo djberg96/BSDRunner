@@ -1,5 +1,6 @@
 {
   "ok": true,
+  "demo": true,
   "message": "Loaded Jails demo data.",
   "tools": {
     "jls": true,

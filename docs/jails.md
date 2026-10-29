@@ -11,6 +11,8 @@ The UI is intentionally read-mostly. It helps a new user answer:
 - what path, hostname, IP address, JID, and backend a selected jail uses
 - which lifecycle actions are safe for the selected state
 - what a proposed Bastille thick-jail creation would do before any command runs
+- how storage, userland, configuration, and lifecycle fit together while creating
+  a basic jail through a guarded wizard
 
 ## Launch
 
@@ -34,8 +36,8 @@ jails. It is read-only: the backend rejects start, stop, restart, and console
 requests while the demo fixture is active. The installed fixture lives at
 `~/.config/bsdrunner/jails/demo-snapshot.json`.
 
-The **Create Preview** button remains available in demo mode because it only
-validates input and generates a plan.
+The **Create Basic Jail** wizard remains available in demo mode so every step and
+the generated plan can be explored. Its final creation action is disabled.
 
 ## Backend
 
@@ -61,6 +63,12 @@ Some Bastille releases require root even for inventory commands. The backend
 first tries the read directly, then retries it through `mdo` when available.
 These probes only read Bastille state.
 
+The Storage step considers Bastille ready only when its configured prefix and
+the `jails` and `releases` directories exist. Merely having the package and
+configuration file installed is not enough. When storage is missing, the wizard
+stops at the first step and directs the user to run interactive `bastille setup`
+before refreshing the UI.
+
 Lifecycle actions are deliberately narrow:
 
 ```sh
@@ -73,8 +81,8 @@ bsdrunner-jails-backend.sh console NAME native
 For Bastille-backed rows, the third argument is `bastille` and the backend calls
 `bastille start`, `bastille stop`, `bastille restart`, or `bastille console`.
 
-The read-only creation preview accepts a jail name, FreeBSD release, IP address
-or CIDR, and an autostart preference:
+The wizard's read-only review step accepts a jail name, FreeBSD release, IP
+address or CIDR, and an autostart preference:
 
 ```sh
 bsdrunner-jails-backend.sh preview web 15.0-RELEASE 10.0.0.20/24 yes
@@ -93,6 +101,21 @@ autostart adds Bastille's `--no-boot` option. A failed readiness check is shown
 as a warning and leaves the generated commands visible for inspection, but the
 UI still never executes them.
 
+After the user types the proposed jail name on the final Lifecycle step, the UI
+may run two separately guarded actions:
+
+```sh
+bsdrunner-jails-backend.sh bootstrap 15.0-RELEASE 15.0-RELEASE
+bsdrunner-jails-backend.sh create web 15.0-RELEASE 10.0.0.20/24 yes web
+```
+
+The last argument is an exact confirmation value. Bootstrap is skipped when the
+release already exists. Before creation, the backend checks the release, jail
+name, address, Bastille availability, and setup state again; it then passes each
+validated value to Bastille as a separate command argument. A successful release
+download followed by a failed create is reported as a partial result instead of
+being hidden.
+
 If `mdo` is available, lifecycle commands use it for privilege escalation. If it
 is not available, the backend runs the command directly and expects the caller to
 already have the required privileges.
@@ -106,20 +129,22 @@ The UI treats jail creation as four visible concepts:
 3. Config: `jail.conf` gives the jail its name, path, hostname, IP, and startup behavior.
 4. Lifecycle: once configured, everyday work is start, stop, restart, and console.
 
-This is why V1 does not include a live, mutating create wizard. The Create Jail
-Preview teaches the Bastille provisioning path and exposes its commands without
-executing them. A future native or mutating workflow will need stronger
-validation around datasets, release downloads, `devfs`, network settings, and
-generated `/etc/jail.conf.d/NAME.conf` files.
+The **Create Basic Jail** wizard follows those four concepts directly. Storage
+confirms Bastille readiness, Userland selects or bootstraps a release, Config
+collects the name/address/startup policy, and Lifecycle presents the exact plan
+and typed confirmation. The initial target is deliberately a thick Bastille
+service jail. A future native workflow will need separate validation around
+datasets, release extraction, `devfs`, network settings, and generated
+`/etc/jail.conf.d/NAME.conf` files.
 
 ## Bastille
 
 Bastille is the assumed managed-jail backend, while native FreeBSD jails remain
 the no-dependency baseline. When Bastille is installed, BSDRunner can list its
-jails with release and boot metadata, call its lifecycle commands, and preview
-thick-jail creation against the current host. When it is absent, native jail
-status still works and creation plans remain available for learning or future
-setup.
+jails with release and boot metadata, call its lifecycle commands, and guide a
+user through thick-jail creation against the current host. When it is absent,
+native jail status still works and the wizard explains which setup prerequisite
+is missing.
 
 This keeps the learning path FreeBSD-native while leaving room for Bastille's
 useful features: bootstrapping releases, templates, cloning, snapshots, and
@@ -132,8 +157,8 @@ It supplies representative `jls`, `jail.conf`, `sysrc`, `bastille list`,
 `bastille config`, release inventory, and host-release results through an
 isolated test path. The suite checks rich snapshot parsing, bootstrapped and
 missing-release plans, name and address collisions, host compatibility,
-demo-mode guards, lifecycle dispatch, validation failures, and persisted action
-status.
+demo-mode guards, guarded bootstrap and creation dispatch, typed confirmations,
+last-second validation failures, lifecycle dispatch, and persisted action status.
 
 The suite requires `jq`:
 
@@ -172,7 +197,8 @@ bastille config ALL get host.hostname,path,ip4.addr,osrelease,boot
 ```
 
 Then open the UI and confirm that the list, details, backend detection, and
-guarded lifecycle actions match the command-line state. Open **Create Preview**,
-generate plans with autostart enabled and disabled, and confirm that readiness,
-release reuse, and collision warnings match the host without creating a jail or
-state file.
+guarded lifecycle actions match the command-line state. Open **Create Basic
+Jail** and confirm the Storage, Userland, Config,
+and Lifecycle pages match the host. Stop at the typed confirmation unless a test
+jail is genuinely wanted. When exercising creation, use an unused name/address
+and verify the resulting jail appears automatically in the inventory.
