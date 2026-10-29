@@ -21,6 +21,18 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
 
 The Apps menu also includes a Jails entry.
 
+To explore the complete UI on a development machine without FreeBSD jail tools,
+launch the installed app with the bundled sample snapshot:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh --demo
+```
+
+Demo mode shows running native, configured native, and stopped Bastille-backed
+jails. It is read-only: the backend rejects start, stop, restart, and console
+requests while the demo fixture is active. The installed fixture lives at
+`~/.config/bsdrunner/jails/demo-snapshot.json`.
+
 ## Backend
 
 The launcher runs:
@@ -77,10 +89,34 @@ This keeps the learning path FreeBSD-native while leaving room for Bastille's
 useful features: bootstrapping releases, templates, cloning, snapshots, and
 resource limits.
 
+## Automated Tests
+
+The fixture-backed backend suite runs without FreeBSD jail tools or root access.
+It supplies representative `jls`, `jail.conf`, `sysrc`, and `bastille list`
+results through an isolated test path, then checks snapshot parsing, demo-mode
+guards, lifecycle dispatch, validation failures, and persisted action status.
+
+The suite requires `jq`:
+
+```sh
+sh scripts/test-jails-backend.sh
+```
+
+The `BSDRUNNER_JAILS_TEST_*` environment variables used by this suite only take
+effect when `BSDRUNNER_JAILS_TEST_MODE=1`; normal launches continue to read the
+host's `/etc` and standard FreeBSD command paths.
+
 ## Acceptance Checks
 
-On a development machine without FreeBSD jail tools, the backend should still
-return valid JSON:
+Run the automated backend suite and QML validation from the repository root:
+
+```sh
+sh scripts/test-jails-backend.sh
+sh scripts/check-qml.sh
+```
+
+On a development machine without FreeBSD jail tools, the live backend should
+also return valid JSON:
 
 ```sh
 sh dotfiles/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh snapshot

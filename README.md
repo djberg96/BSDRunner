@@ -195,7 +195,9 @@ model, and exposes guarded lifecycle actions for existing jails.
 sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
 ```
 
-See `docs/jails.md` for backend commands, current scope, and the creation model.
+Use `--demo` to explore representative native and Bastille jail states without a
+configured FreeBSD jail host. See `docs/jails.md` for backend commands,
+fixture-backed tests, current scope, and the creation model.
 
 ## Scope
 

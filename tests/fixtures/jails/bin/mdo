@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'mdo'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+exec "$@"

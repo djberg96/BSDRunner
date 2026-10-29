@@ -1,11 +1,22 @@
 #!/bin/sh
 
 set -eu
-PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
+
+test_mode="${BSDRUNNER_JAILS_TEST_MODE:-0}"
+if [ "$test_mode" = "1" ]; then
+    PATH="${BSDRUNNER_JAILS_TEST_PATH:-/usr/bin:/bin}"
+    etc_dir="${BSDRUNNER_JAILS_TEST_ETC_DIR:-/etc}"
+    state_dir="${BSDRUNNER_JAILS_TEST_STATE_DIR:-${TMPDIR:-/tmp}/bsdrunner-jails-test-state}"
+else
+    PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
+    etc_dir="/etc"
+    state_dir="${HOME}/.config/bsdrunner/jails"
+fi
+export PATH
 
 action="${1:-snapshot}"
-state_dir="${HOME}/.config/bsdrunner/jails"
 state_file="$state_dir/last-result.conf"
+fixture_file="${BSDRUNNER_JAILS_FIXTURE:-}"
 
 json_escape() {
     awk '
@@ -110,18 +121,18 @@ running_jails_json() {
 }
 
 configured_jails_json() {
-    files=""
-    for file in /etc/jail.conf /etc/jail.conf.d/*.conf; do
+    set --
+    for file in "$etc_dir/jail.conf" "$etc_dir/jail.conf.d/"*.conf; do
         [ -r "$file" ] || continue
-        files="${files}${files:+ }${file}"
+        set -- "$@" "$file"
     done
 
-    [ -n "$files" ] || {
+    [ "$#" -gt 0 ] || {
         printf '[]'
         return
     }
 
-    awk '
+    awk -v top_config="$etc_dir/jail.conf" -v config_dir="$etc_dir/jail.conf.d" '
         function esc(value) {
             gsub(/\\/, "\\\\", value)
             gsub(/"/, "\\\"", value)
@@ -149,17 +160,17 @@ configured_jails_json() {
             printf "{\"name\":\"%s\",\"jid\":\"\",\"hostname\":\"\",\"path\":\"\",\"ipv4\":\"\",\"ipv6\":\"\",\"state\":\"configured\",\"backend\":\"native\",\"autostart\":\"unknown\",\"release\":\"unknown\",\"source\":\"%s\"}", esc(name), esc(source)
         }
         BEGIN { printf "["; first = 1 }
-        FILENAME ~ /\/etc\/jail\.conf$/ && /^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*\{/ {
+        FILENAME == top_config && /^[[:space:]]*[A-Za-z0-9_.-]+[[:space:]]*\{/ {
             name = trim($1)
             emit(name, FILENAME)
             next
         }
-        FILENAME ~ /\/etc\/jail\.conf\.d\/.*\.conf$/ {
+        index(FILENAME, config_dir "/") == 1 && FILENAME ~ /\.conf$/ {
             emit(jail_from_file(FILENAME), FILENAME)
             nextfile
         }
         END { printf "]" }
-    ' $files 2>/dev/null || printf '[]'
+    ' "$@" 2>/dev/null || printf '[]'
 }
 
 bastille_jails_json() {
@@ -256,7 +267,22 @@ do_lifecycle() {
             ;;
     esac
 
-    if [ "$backend" = "bastille" ] && command -v bastille >/dev/null 2>&1; then
+    case "$backend" in
+        bastille)
+            if ! command -v bastille >/dev/null 2>&1; then
+                emit_action_result false "Bastille is unavailable." "Install Bastille or use a native jail entry."
+                exit 1
+            fi
+            ;;
+        native)
+            ;;
+        *)
+            emit_action_result false "Unknown jail backend." "$backend"
+            exit 1
+            ;;
+    esac
+
+    if [ "$backend" = "bastille" ]; then
         if output="$(run_privileged bastille "$verb" "$name" 2>&1)"; then
             write_last_result "success" "$(printf '%s %s.' "$verb" "$name")"
             emit_action_result true "$(printf '%s %s.' "$verb" "$name")" "$output"
@@ -292,6 +318,25 @@ do_console() {
         exit 1
     }
 
+    case "$backend" in
+        bastille)
+            if ! command -v bastille >/dev/null 2>&1; then
+                emit_action_result false "Bastille is unavailable." "Install Bastille or use a native jail entry."
+                exit 1
+            fi
+            ;;
+        native)
+            if ! command -v jexec >/dev/null 2>&1; then
+                emit_action_result false "The jexec command is unavailable." "Native jail consoles need FreeBSD jexec(8)."
+                exit 1
+            fi
+            ;;
+        *)
+            emit_action_result false "Unknown jail backend." "$backend"
+            exit 1
+            ;;
+    esac
+
     if command -v kitty >/dev/null 2>&1; then
         term="kitty"
     elif command -v xterm >/dev/null 2>&1; then
@@ -301,15 +346,36 @@ do_console() {
         exit 1
     fi
 
-    if [ "$backend" = "bastille" ] && command -v bastille >/dev/null 2>&1; then
-        "$term" sh -lc "bastille console '$name'; printf '\nConsole closed. Press Enter.'; read _" >/dev/null 2>&1 &
+    if command -v mdo >/dev/null 2>&1; then
+        privilege_prefix="mdo "
     else
-        "$term" sh -lc "jexec '$name' login -f root || jexec '$name' /bin/sh; printf '\nConsole closed. Press Enter.'; read _" >/dev/null 2>&1 &
+        privilege_prefix=""
     fi
+
+    if [ "$backend" = "bastille" ]; then
+        console_command="${privilege_prefix}bastille console '$name'"
+    else
+        console_command="${privilege_prefix}jexec '$name' login -f root || ${privilege_prefix}jexec '$name' /bin/sh"
+    fi
+
+    "$term" sh -lc "$console_command; printf '\nConsole closed. Press Enter.'; read _" >/dev/null 2>&1 &
 
     write_last_result "info" "Opened console for ${name}."
     emit_action_result true "Opened console for ${name}." ""
 }
+
+if [ -n "$fixture_file" ]; then
+    if [ "$action" != "snapshot" ]; then
+        emit_action_result false "Actions are disabled in demo mode." "Restart Jails normally to manage real jails."
+        exit 1
+    fi
+    if [ ! -r "$fixture_file" ]; then
+        emit_action_result false "Unable to load Jails demo data." "$fixture_file"
+        exit 1
+    fi
+    cat "$fixture_file"
+    exit 0
+fi
 
 case "$action" in
     snapshot)

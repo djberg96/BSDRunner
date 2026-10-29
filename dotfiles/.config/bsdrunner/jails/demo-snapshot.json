@@ -1,0 +1,63 @@
+{
+  "ok": true,
+  "message": "Loaded Jails demo data.",
+  "tools": {
+    "jls": true,
+    "jail": true,
+    "service": true,
+    "bastille": true,
+    "mdo": true
+  },
+  "services": {
+    "jail": "YES",
+    "bastille": "YES"
+  },
+  "running": [
+    {
+      "name": "web",
+      "jid": "4",
+      "hostname": "web.home.arpa",
+      "path": "/jails/web",
+      "ipv4": "10.0.0.20",
+      "ipv6": "fd00::20",
+      "state": "running",
+      "backend": "native",
+      "autostart": "YES",
+      "release": "15.0-RELEASE"
+    }
+  ],
+  "configured": [
+    {
+      "name": "postgres",
+      "jid": "",
+      "hostname": "postgres.home.arpa",
+      "path": "/jails/postgres",
+      "ipv4": "10.0.0.21",
+      "ipv6": "",
+      "state": "configured",
+      "backend": "native",
+      "autostart": "NO",
+      "release": "15.0-RELEASE",
+      "source": "/etc/jail.conf.d/postgres.conf"
+    }
+  ],
+  "bastille": [
+    {
+      "name": "build",
+      "jid": "0",
+      "hostname": "build",
+      "path": "/usr/local/bastille/jails/build/root",
+      "ipv4": "10.0.0.22",
+      "ipv6": "",
+      "state": "stopped",
+      "backend": "bastille",
+      "autostart": "NO",
+      "release": "managed by Bastille"
+    }
+  ],
+  "last_result": {
+    "tone": "info",
+    "message": "Demo mode uses sample data; management actions are disabled.",
+    "timestamp": ""
+  }
+}

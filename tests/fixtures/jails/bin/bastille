@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -eu
+
+if [ "${1:-}" = "list" ] && [ "${2:-}" = "-a" ]; then
+    cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-list.txt"
+    exit 0
+fi
+
+{
+    printf 'bastille'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+printf 'Bastille action completed.\n'

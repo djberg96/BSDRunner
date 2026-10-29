@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -eu
+
+case "${2:-}" in
+    jail_enable)
+        printf 'YES\n'
+        ;;
+    bastille_enable)
+        printf 'NO\n'
+        ;;
+    *)
+        printf 'unknown\n'
+        ;;
+esac

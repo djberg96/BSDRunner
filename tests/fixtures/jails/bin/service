@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'service'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+printf 'Native jail action completed.\n'

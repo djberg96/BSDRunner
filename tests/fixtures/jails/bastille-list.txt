@@ -1,0 +1,3 @@
+JID  IP Address  Hostname  Path
+9  10.0.0.9  cache  /usr/local/bastille/jails/cache/root
+0  10.0.0.10  build  /usr/local/bastille/jails/build/root
