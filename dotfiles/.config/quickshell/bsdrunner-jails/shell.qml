@@ -116,6 +116,11 @@ ShellRoot {
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
     readonly property bool wizardBusy: createPreviewLoading || creationRunning || storageSetupRunning || networkSetupRunning
     readonly property var wizardSteps: ["Storage", "Userland", "Network", "Config", "Lifecycle"]
+    readonly property int wizardCaptionFontSize: 12
+    readonly property int wizardBodyFontSize: 13
+    readonly property int wizardControlFontSize: 14
+    readonly property int wizardHeadingFontSize: 16
+    readonly property int wizardPlanFontSize: 15
     readonly property var beginnerTopics: [
         {
             "id": "storage",
@@ -2033,7 +2038,7 @@ ShellRoot {
                                     width: parent.width
                                     text: "Guided " + root.previewJailType + " jail • every setup or creation change requires typed confirmation"
                                     color: root.palette.accent
-                                    font.pixelSize: 12
+                                    font.pixelSize: root.wizardControlFontSize
                                     font.bold: true
                                 }
                             }
@@ -2091,7 +2096,7 @@ ShellRoot {
                                         anchors.centerIn: parent
                                         text: (wizardStepCard.complete ? "✓ " : (wizardStepCard.index + 1) + ". ") + wizardStepCard.modelData
                                         color: wizardStepCard.active ? root.palette.accent : wizardStepCard.complete ? root.palette.success : root.palette.secondaryText
-                                        font.pixelSize: 12
+                                        font.pixelSize: root.wizardControlFontSize
                                         font.bold: true
                                     }
 
@@ -2127,7 +2132,7 @@ ShellRoot {
                                         width: parent.width
                                         text: (root.wizardStep + 1) + ". " + root.wizardSteps[root.wizardStep]
                                         color: root.palette.accent
-                                        font.pixelSize: 14
+                                        font.pixelSize: root.wizardHeadingFontSize
                                         font.bold: true
                                     }
 
@@ -2149,7 +2154,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.storageReady() ? "Bastille storage ready" : "Choose a ZFS pool"
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 14
+                                                font.pixelSize: root.wizardHeadingFontSize
                                                 font.bold: true
                                             }
 
@@ -2157,7 +2162,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.storageReady() ? "Bastille will own the release and jail datasets beneath its installation root." : "Bastille will use its conventional “bastille” dataset. Other datasets are left alone."
                                                 color: root.palette.secondaryText
-                                                font.pixelSize: 11
+                                                font.pixelSize: root.wizardBodyFontSize
                                                 wrapMode: Text.WordWrap
                                             }
 
@@ -2166,7 +2171,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "✓ " + (root.storageInfo.target_dataset || root.storageInfo.prefix || "/usr/local/bastille")
                                                 color: root.palette.success
-                                                font.pixelSize: 11
+                                                font.pixelSize: root.wizardBodyFontSize
                                                 font.bold: true
                                                 wrapMode: Text.WordWrap
                                             }
@@ -2176,7 +2181,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.storageInfo.initialized || root.bastilleSetup ? "Dataset hierarchy initialized" : "The Userland step will initialize the hierarchy"
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 10
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 wrapMode: Text.WordWrap
                                             }
 
@@ -2198,7 +2203,7 @@ ShellRoot {
                                                         anchors.verticalCenter: parent.verticalCenter
                                                         text: root.selectedStoragePool.length > 0 ? "Pool: " + root.selectedStoragePool : "No ZFS pool detected"
                                                         color: root.palette.primaryText
-                                                        font.pixelSize: 12
+                                                        font.pixelSize: root.wizardControlFontSize
                                                         font.bold: true
                                                         elide: Text.ElideRight
                                                     }
@@ -2209,7 +2214,7 @@ ShellRoot {
                                                         horizontalAlignment: Text.AlignRight
                                                         text: root.storagePools().length > 1 ? "Next ›" : ""
                                                         color: root.palette.accent
-                                                        font.pixelSize: 10
+                                                        font.pixelSize: root.wizardCaptionFontSize
                                                         font.bold: true
                                                     }
                                                 }
@@ -2229,7 +2234,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "Target: " + root.storageTargetDataset()
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 10
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 elide: Text.ElideRight
                                             }
 
@@ -2238,7 +2243,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "Type “" + root.selectedStoragePool + "” to confirm"
                                                 color: root.palette.secondaryText
-                                                font.pixelSize: 10
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -2261,7 +2266,7 @@ ShellRoot {
                                                     color: root.palette.primaryText
                                                     selectionColor: root.palette.accent
                                                     selectedTextColor: root.palette.panelBackground
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: root.wizardControlFontSize
                                                     verticalAlignment: TextInput.AlignVCenter
                                                     clip: true
                                                     onTextEdited: root.storageConfirmation = text
@@ -2281,7 +2286,7 @@ ShellRoot {
                                                     anchors.centerIn: parent
                                                     text: root.demoMode ? "Setup Disabled in Demo" : root.storageSetupRunning ? "Configuring Storage…" : "Configure Bastille Storage"
                                                     color: storageSetupMouse.enabled ? root.palette.success : root.palette.mutedText
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: root.wizardBodyFontSize
                                                     font.bold: true
                                                 }
 
@@ -2300,7 +2305,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.storageSetupMessage
                                                 color: root.storageSetupStage === "failed" ? root.palette.danger : root.palette.accent
-                                                font.pixelSize: 9
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 elide: Text.ElideRight
@@ -2326,7 +2331,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.networkReady() ? "Jail networking ready" : "Configure private jail networking"
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 13
+                                                font.pixelSize: root.wizardHeadingFontSize
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -2335,7 +2340,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: (root.networkInfo.loopback_ready ? "✓" : "!") + " " + (root.networkInfo.loopback_interface || "bastille0") + "   " + (root.networkInfo.nat_ready && root.networkInfo.rdr_anchor_ready && root.networkInfo.filter_anchor_ready ? "✓ PF NAT + anchors" : "! PF NAT + anchors")
                                                 color: root.networkReady() ? root.palette.success : root.palette.warning
-                                                font.pixelSize: 10
+                                                font.pixelSize: root.wizardBodyFontSize
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -2344,7 +2349,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "Uplink: " + (root.networkInfo.external_interface || "not detected") + " • address checked against host routes"
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 9
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 elide: Text.ElideRight
                                             }
 
@@ -2353,7 +2358,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "Type “" + root.previewAddress + "” to confirm"
                                                 color: root.palette.secondaryText
-                                                font.pixelSize: 10
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -2376,7 +2381,7 @@ ShellRoot {
                                                     color: root.palette.primaryText
                                                     selectionColor: root.palette.accent
                                                     selectedTextColor: root.palette.panelBackground
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: root.wizardControlFontSize
                                                     verticalAlignment: TextInput.AlignVCenter
                                                     clip: true
                                                     onTextEdited: root.networkConfirmation = text
@@ -2396,7 +2401,7 @@ ShellRoot {
                                                     anchors.centerIn: parent
                                                     text: root.demoMode ? "Setup Disabled in Demo" : root.networkSetupRunning ? "Configuring Networking…" : "Configure Jail Networking"
                                                     color: networkSetupMouse.enabled ? root.palette.success : root.palette.mutedText
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: root.wizardBodyFontSize
                                                     font.bold: true
                                                 }
 
@@ -2415,7 +2420,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.networkSetupMessage
                                                 color: root.networkSetupStage === "failed" ? root.palette.danger : root.palette.accent
-                                                font.pixelSize: 9
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 wrapMode: Text.WordWrap
                                                 maximumLineCount: 2
                                                 elide: Text.ElideRight
@@ -2428,7 +2433,7 @@ ShellRoot {
                                         width: parent.width
                                         text: "Jail name"
                                         color: root.palette.secondaryText
-                                        font.pixelSize: 11
+                                        font.pixelSize: root.wizardBodyFontSize
                                         font.bold: true
                                     }
 
@@ -2449,7 +2454,7 @@ ShellRoot {
                                             color: root.palette.primaryText
                                             selectionColor: root.palette.accent
                                             selectedTextColor: root.palette.panelBackground
-                                            font.pixelSize: 13
+                                            font.pixelSize: root.wizardControlFontSize
                                             verticalAlignment: TextInput.AlignVCenter
                                             clip: true
                                             onTextEdited: {
@@ -2464,14 +2469,14 @@ ShellRoot {
                                         width: parent.width
                                         text: "FreeBSD release"
                                         color: root.palette.secondaryText
-                                        font.pixelSize: 11
+                                        font.pixelSize: root.wizardBodyFontSize
                                         font.bold: true
                                     }
 
                                     Rectangle {
                                         visible: root.wizardStep === 1
                                         width: parent.width
-                                        height: 42
+                                        height: 52
                                         z: root.releaseMenuOpen ? 30 : 0
                                         radius: 6
                                         color: root.palette.cardBackground
@@ -2491,7 +2496,7 @@ ShellRoot {
                                                     width: parent.width
                                                     text: root.previewRelease
                                                     color: root.palette.primaryText
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: root.wizardControlFontSize
                                                     font.bold: true
                                                     elide: Text.ElideRight
                                                 }
@@ -2500,7 +2505,7 @@ ShellRoot {
                                                     width: parent.width
                                                     text: root.releaseSelectionDetail()
                                                     color: root.palette.mutedText
-                                                    font.pixelSize: 8
+                                                    font.pixelSize: root.wizardCaptionFontSize
                                                     elide: Text.ElideRight
                                                 }
                                             }
@@ -2567,7 +2572,7 @@ ShellRoot {
                                                                     width: parent.width
                                                                     text: releaseChoice.modelData.label
                                                                     color: root.palette.primaryText
-                                                                    font.pixelSize: 11
+                                                                    font.pixelSize: root.wizardControlFontSize
                                                                     font.bold: true
                                                                     elide: Text.ElideRight
                                                                 }
@@ -2576,7 +2581,7 @@ ShellRoot {
                                                                     width: parent.width
                                                                     text: releaseChoice.modelData.detail
                                                                     color: root.palette.mutedText
-                                                                    font.pixelSize: 9
+                                                                    font.pixelSize: root.wizardCaptionFontSize
                                                                     elide: Text.ElideRight
                                                                 }
                                                             }
@@ -2612,7 +2617,7 @@ ShellRoot {
                                             color: root.palette.primaryText
                                             selectionColor: root.palette.accent
                                             selectedTextColor: root.palette.panelBackground
-                                            font.pixelSize: 12
+                                            font.pixelSize: root.wizardControlFontSize
                                             verticalAlignment: TextInput.AlignVCenter
                                             clip: true
                                             onTextEdited: {
@@ -2628,7 +2633,7 @@ ShellRoot {
                                         width: parent.width
                                         text: "Jail userland"
                                         color: root.palette.secondaryText
-                                        font.pixelSize: 11
+                                        font.pixelSize: root.wizardBodyFontSize
                                         font.bold: true
                                     }
 
@@ -2665,7 +2670,7 @@ ShellRoot {
                                                         width: parent.width
                                                         text: (jailTypeChoice.selected ? "✓ " : "") + jailTypeChoice.modelData.label
                                                         color: jailTypeChoice.selected ? root.palette.accent : root.palette.primaryText
-                                                        font.pixelSize: 12
+                                                        font.pixelSize: root.wizardControlFontSize
                                                         font.bold: true
                                                     }
 
@@ -2673,7 +2678,7 @@ ShellRoot {
                                                         width: parent.width
                                                         text: jailTypeChoice.modelData.detail
                                                         color: root.palette.mutedText
-                                                        font.pixelSize: 9
+                                                        font.pixelSize: root.wizardCaptionFontSize
                                                         wrapMode: Text.WordWrap
                                                         maximumLineCount: 2
                                                         elide: Text.ElideRight
@@ -2696,7 +2701,7 @@ ShellRoot {
                                         width: parent.width
                                         text: root.bastilleReleases.length > 0 ? "Ready releases: " + root.bastilleReleases.join(", ") : "Selected release will be downloaded before creation."
                                         color: root.bastilleReleases.length > 0 ? root.palette.mutedText : root.palette.warning
-                                        font.pixelSize: 9
+                                        font.pixelSize: root.wizardCaptionFontSize
                                         elide: Text.ElideRight
                                     }
 
@@ -2705,7 +2710,7 @@ ShellRoot {
                                         width: parent.width
                                         text: "IP address / CIDR"
                                         color: root.palette.secondaryText
-                                        font.pixelSize: 11
+                                        font.pixelSize: root.wizardBodyFontSize
                                         font.bold: true
                                     }
 
@@ -2726,7 +2731,7 @@ ShellRoot {
                                             color: root.palette.primaryText
                                             selectionColor: root.palette.accent
                                             selectedTextColor: root.palette.panelBackground
-                                            font.pixelSize: 13
+                                            font.pixelSize: root.wizardControlFontSize
                                             verticalAlignment: TextInput.AlignVCenter
                                             clip: true
                                             onTextEdited: {
@@ -2756,7 +2761,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "Start at boot"
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 12
+                                                font.pixelSize: root.wizardControlFontSize
                                                 font.bold: true
                                             }
 
@@ -2764,7 +2769,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: root.previewAutostart ? "Bastille boot enabled" : "Adds --no-boot"
                                                 color: root.palette.mutedText
-                                                font.pixelSize: 10
+                                                font.pixelSize: root.wizardCaptionFontSize
                                             }
                                         }
 
@@ -2781,7 +2786,7 @@ ShellRoot {
                                                 anchors.centerIn: parent
                                                 text: root.previewAutostart ? "Enabled" : "Disabled"
                                                 color: root.previewAutostart ? root.palette.success : root.palette.secondaryText
-                                                font.pixelSize: 11
+                                                font.pixelSize: root.wizardBodyFontSize
                                                 font.bold: true
                                             }
 
@@ -2814,7 +2819,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "Type “" + root.previewName + "” to confirm"
                                                 color: root.palette.primaryText
-                                                font.pixelSize: 11
+                                                font.pixelSize: root.wizardBodyFontSize
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                             }
@@ -2836,7 +2841,7 @@ ShellRoot {
                                                     color: root.palette.primaryText
                                                     selectionColor: root.palette.accent
                                                     selectedTextColor: root.palette.panelBackground
-                                                    font.pixelSize: 13
+                                                    font.pixelSize: root.wizardControlFontSize
                                                     verticalAlignment: TextInput.AlignVCenter
                                                     clip: true
                                                     onTextEdited: root.creationConfirmation = text
@@ -2847,7 +2852,7 @@ ShellRoot {
                                                 width: parent.width
                                                 text: "Creation may download a release and write jail storage/configuration."
                                                 color: root.palette.warning
-                                                font.pixelSize: 9
+                                                font.pixelSize: root.wizardCaptionFontSize
                                                 wrapMode: Text.WordWrap
                                             }
                                         }
@@ -2866,7 +2871,7 @@ ShellRoot {
                                             anchors.centerIn: parent
                                             text: "Back"
                                             color: root.palette.secondaryText
-                                            font.pixelSize: 11
+                                            font.pixelSize: root.wizardBodyFontSize
                                             font.bold: true
                                         }
 
@@ -2893,7 +2898,7 @@ ShellRoot {
                                             anchors.centerIn: parent
                                             text: root.wizardStep === 0 ? "Continue to Userland" : root.wizardStep === 1 ? "Continue to Network" : root.wizardStep === 2 ? "Continue to Config" : "Review Creation Plan"
                                             color: root.palette.primaryText
-                                            font.pixelSize: 13
+                                            font.pixelSize: root.wizardControlFontSize
                                             font.bold: true
                                         }
 
@@ -2920,7 +2925,7 @@ ShellRoot {
                                             anchors.centerIn: parent
                                             text: root.demoMode ? "Creation Disabled in Demo" : root.creationStage === "complete" ? "Jail Created" : root.creationRunning ? (root.creationStage === "bootstrapping" ? "Bootstrapping Release…" : "Creating Jail…") : "Create Jail"
                                             color: createJailMouse.enabled ? root.palette.success : root.palette.mutedText
-                                            font.pixelSize: 13
+                                            font.pixelSize: root.wizardControlFontSize
                                             font.bold: true
                                         }
 
@@ -2939,7 +2944,7 @@ ShellRoot {
                                         width: parent.width
                                         text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.tools.bastille ? "Bastille is not detected; install it before creating a jail." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool and configure Bastille storage." : "Bastille is installed, but no ZFS pool was detected.") : !root.networkReady() ? "Configure the Bastille loopback and BSDRunner PF jail rules." : (root.bastilleSetup ? "Bastille inventory and networking are ready" : "Storage and networking configured; bootstrap will initialize storage") + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
                                         color: !root.demoMode && root.tools.bastille && root.storageReady() && root.networkReady() ? root.palette.success : root.palette.warning
-                                        font.pixelSize: 10
+                                        font.pixelSize: root.wizardCaptionFontSize
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -2962,7 +2967,7 @@ ShellRoot {
                                         width: parent.width
                                         text: root.wizardStep < 4 ? root.wizardSteps[root.wizardStep] + " explained" : root.creationStage === "complete" ? "Jail created" : root.creationStage === "failed" ? "Creation needs attention" : root.previewPayload ? root.previewPayload.message : "Checking creation plan…"
                                         color: root.creationStage === "complete" ? root.palette.success : root.creationStage === "failed" || root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.accent
-                                        font.pixelSize: 14
+                                        font.pixelSize: root.wizardHeadingFontSize
                                         font.bold: true
                                         elide: Text.ElideRight
                                     }
@@ -2995,7 +3000,7 @@ ShellRoot {
                                                 selectionColor: root.palette.accent
                                                 selectedTextColor: root.palette.panelBackground
                                                 font.family: "monospace"
-                                                font.pixelSize: 12
+                                                font.pixelSize: root.wizardPlanFontSize
                                             }
                                         }
                                     }
