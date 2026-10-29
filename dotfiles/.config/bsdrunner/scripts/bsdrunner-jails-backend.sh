@@ -9,12 +9,14 @@ if [ "$test_mode" = "1" ]; then
     state_dir="${BSDRUNNER_JAILS_TEST_STATE_DIR:-${TMPDIR:-/tmp}/bsdrunner-jails-test-state}"
     bastille_config_file="${BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG:-$etc_dir/bastille/bastille.conf}"
     bastille_test_prefix="${BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX:-$etc_dir/bastille-root}"
+    pf_backend="${BSDRUNNER_JAILS_TEST_PF_BACKEND:-${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
     state_dir="${HOME}/.config/bsdrunner/jails"
     bastille_config_file="/usr/local/etc/bastille/bastille.conf"
     bastille_test_prefix=""
+    pf_backend="${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh"
 fi
 export PATH
 
@@ -191,6 +193,134 @@ emit_storage_snapshot() {
     printf '}'
 }
 
+bastille_loopback_value() {
+    network_loopback="$(bastille_config_value bastille_network_loopback 2>/dev/null || true)"
+    [ -n "$network_loopback" ] || network_loopback="bastille0"
+    printf '%s\n' "$network_loopback"
+}
+
+default_interface_value() {
+    command -v route >/dev/null 2>&1 || return 1
+    route -n get default 2>/dev/null | awk '$1 == "interface:" { print $2; exit }'
+}
+
+network_interface_exists() {
+    network_interface_name="$1"
+    command -v ifconfig >/dev/null 2>&1 || return 1
+    ifconfig "$network_interface_name" >/dev/null 2>&1
+}
+
+pf_rules_capture() {
+    rules_kind="$1"
+    command -v pfctl >/dev/null 2>&1 || return 1
+    if output="$(pfctl "$rules_kind" 2>/dev/null)"; then
+        printf '%s\n' "$output"
+        return 0
+    fi
+    if command -v mdo >/dev/null 2>&1; then
+        mdo pfctl "$rules_kind" 2>/dev/null
+        return $?
+    fi
+    return 1
+}
+
+pf_is_running() {
+    command -v pfctl >/dev/null 2>&1 || return 1
+    command -v grep >/dev/null 2>&1 || return 1
+    pf_info="$(pfctl -s info 2>/dev/null || true)"
+    if [ -z "$pf_info" ] && command -v mdo >/dev/null 2>&1; then
+        pf_info="$(mdo pfctl -s info 2>/dev/null || true)"
+    fi
+    printf '%s\n' "$pf_info" | grep -qi 'Status:[[:space:]]*Enabled'
+}
+
+network_nat_ready() {
+    command -v grep >/dev/null 2>&1 || return 1
+    pf_rules_capture -sn | grep -Eq 'nat on .* from <jails> to any'
+}
+
+network_rdr_ready() {
+    command -v grep >/dev/null 2>&1 || return 1
+    pf_rules_capture -sn | grep -Eq 'rdr-anchor "?rdr/\*"?'
+}
+
+network_filter_anchor_ready() {
+    command -v grep >/dev/null 2>&1 || return 1
+    pf_rules_capture -sr | grep -Eq 'anchor "?bastille/\*"?'
+}
+
+bastille_network_ready() {
+    network_loopback="$(bastille_loopback_value)"
+    network_interface_exists "$network_loopback" && \
+        [ -n "$(default_interface_value 2>/dev/null || true)" ] && \
+        pf_is_running && network_nat_ready && network_rdr_ready && network_filter_anchor_ready
+}
+
+address_ipv4_value() {
+    printf '%s\n' "$1" | awk -F '/' '{ print $1 }'
+}
+
+address_route_available() {
+    proposed_address="$1"
+    valid_jail_ipv4 "$proposed_address" || return 1
+    proposed_ip="$(address_ipv4_value "$proposed_address")"
+    command -v route >/dev/null 2>&1 || return 1
+    if command -v ifconfig >/dev/null 2>&1 && ifconfig -a 2>/dev/null | awk -v target="$proposed_ip" '$1 == "inet" && $2 == target { found = 1 } END { exit found ? 0 : 1 }'; then
+        return 1
+    fi
+    route_output="$(route -n get "$proposed_ip" 2>/dev/null || true)"
+    route_destination="$(printf '%s\n' "$route_output" | awk '$1 == "destination:" { print $2; exit }')"
+    route_interface="$(printf '%s\n' "$route_output" | awk '$1 == "interface:" { print $2; exit }')"
+    loopback_interface="$(bastille_loopback_value)"
+    [ "$route_destination" = "0.0.0.0" ] || [ "$route_destination" = "default" ] || [ "$route_interface" = "$loopback_interface" ]
+}
+
+recommended_jail_address() {
+    candidate_host=20
+    while [ "$candidate_host" -le 39 ]; do
+        candidate_address="10.0.0.${candidate_host}/24"
+        if address_route_available "$candidate_address"; then
+            printf '%s\n' "$candidate_address"
+            return
+        fi
+        candidate_host=$((candidate_host + 1))
+    done
+    for candidate_address in 10.17.89.20/24 172.31.255.20/24 192.168.254.20/24; do
+        if address_route_available "$candidate_address"; then
+            printf '%s\n' "$candidate_address"
+            return
+        fi
+    done
+}
+
+emit_network_snapshot() {
+    network_loopback="$(bastille_loopback_value)"
+    network_external="$(default_interface_value 2>/dev/null || true)"
+    network_loopback_ready=false
+    network_pf_running=false
+    network_nat=false
+    network_rdr=false
+    network_anchor=false
+    network_ready=false
+    network_interface_exists "$network_loopback" && network_loopback_ready=true
+    pf_is_running && network_pf_running=true
+    network_nat_ready && network_nat=true
+    network_rdr_ready && network_rdr=true
+    network_filter_anchor_ready && network_anchor=true
+    if [ "$network_loopback_ready" = true ] && [ "$network_pf_running" = true ] && \
+       [ "$network_nat" = true ] && [ "$network_rdr" = true ] && \
+       [ "$network_anchor" = true ] && [ -n "$network_external" ]; then
+        network_ready=true
+    fi
+
+    printf '{"ready":%s,"loopback_ready":%s,"pf_running":%s,"nat_ready":%s,"rdr_anchor_ready":%s,"filter_anchor_ready":%s,' \
+        "$network_ready" "$network_loopback_ready" "$network_pf_running" "$network_nat" "$network_rdr" "$network_anchor"
+    printf '"loopback_interface":"%s","external_interface":"%s","recommended_address":"%s"}' \
+        "$(printf '%s' "$network_loopback" | json_escape)" \
+        "$(printf '%s' "$network_external" | json_escape)" \
+        "$(recommended_jail_address | json_escape)"
+}
+
 valid_name() {
     case "${1:-}" in
         ""|*[!A-Za-z0-9_.-]*)
@@ -225,6 +355,21 @@ valid_address() {
             return 0
             ;;
     esac
+}
+
+valid_jail_ipv4() {
+    printf '%s\n' "${1:-}" | awk -F '/' '
+        NF != 2 { exit 1 }
+        $2 !~ /^[0-9]+$/ || $2 < 1 || $2 > 32 { exit 1 }
+        {
+            count = split($1, octets, ".")
+            if (count != 4) exit 1
+            for (i = 1; i <= 4; i += 1) {
+                if (octets[i] !~ /^[0-9]+$/ || octets[i] < 0 || octets[i] > 255)
+                    exit 1
+            }
+        }
+    '
 }
 
 write_last_result() {
@@ -649,6 +794,9 @@ emit_snapshot() {
     printf '"storage":'
     emit_storage_snapshot
     printf ','
+    printf '"network":'
+    emit_network_snapshot
+    printf ','
     printf '"running":'
     running_jails_json
     printf ',"configured":'
@@ -796,6 +944,10 @@ do_preview() {
         emit_action_result false "Invalid jail address." "Use an IPv4 or IPv6 address with an optional CIDR prefix."
         exit 1
     }
+    valid_jail_ipv4 "$address" || {
+        emit_action_result false "Invalid jail address." "The basic-jail workflow requires IPv4 with a CIDR prefix, such as 10.0.0.20/24."
+        exit 1
+    }
     case "$autostart" in
         yes|no)
             ;;
@@ -811,6 +963,8 @@ do_preview() {
     release_bootstrapped=false
     name_available=true
     address_available=true
+    address_route_safe=false
+    network_ready=false
     host_compatible=true
     host_release="$(host_release_value | awk 'NF { print; exit }')"
     release_output=""
@@ -831,6 +985,12 @@ do_preview() {
     collect_jail_conflicts "$name" "$address"
     name_available="$conflict_name_available"
     address_available="$conflict_address_available"
+    if address_route_available "$address"; then
+        address_route_safe=true
+    fi
+    if bastille_network_ready; then
+        network_ready=true
+    fi
 
     if ! release_is_host_compatible "$host_release" "$release"; then
         host_compatible=false
@@ -839,6 +999,7 @@ do_preview() {
     ready=true
     if [ "$bastille_installed" != true ] || [ "$storage_configured" != true ] || \
        [ "$name_available" != true ] || [ "$address_available" != true ] || \
+       [ "$address_route_safe" != true ] || [ "$network_ready" != true ] || \
        [ "$host_compatible" != true ]; then
         ready=false
     fi
@@ -869,6 +1030,13 @@ do_preview() {
     else
         collision_note="Resolve the reported name or address conflict before running this plan."
     fi
+    if [ "$network_ready" = true ] && [ "$address_route_safe" = true ]; then
+        network_note="Bastille loopback and BSDRunner PF NAT are ready, and the jail address does not overlap an active host route."
+    elif [ "$network_ready" = true ]; then
+        network_note="Jail networking is configured, but the proposed address overlaps an active host route or interface."
+    else
+        network_note="Configure the Bastille loopback and BSDRunner PF jail rules before creating the jail."
+    fi
     if [ "$host_compatible" = true ]; then
         host_note="The proposed release is compatible with the detected host release, or the host release is unknown."
     else
@@ -890,20 +1058,132 @@ do_preview() {
         "$(printf '%s' "$release" | json_escape)" \
         "$(printf '%s' "$address" | json_escape)" \
         "$autostart"
-    printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"storage_configured":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"host_release":"%s","host_compatible":%s},' \
-        "$bastille_installed" "$bastille_setup" "$storage_configured" "$release_bootstrapped" "$name_available" "$address_available" \
+    printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"storage_configured":%s,"network_ready":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"address_route_safe":%s,"host_release":"%s","host_compatible":%s},' \
+        "$bastille_installed" "$bastille_setup" "$storage_configured" "$network_ready" "$release_bootstrapped" "$name_available" "$address_available" "$address_route_safe" \
         "$(printf '%s' "$host_release" | json_escape)" "$host_compatible"
     printf '"commands":['
     if [ "$release_bootstrapped" != true ]; then
         printf '"%s",' "$(printf '%s' "$bootstrap_command" | json_escape)"
     fi
     printf '"%s"],' "$(printf '%s' "$create_command" | json_escape)"
-    printf '"notes":["This plan creates a thick service jail; Bastille owns its storage and jail.conf entry.","%s","%s","%s","%s"]' \
+    printf '"notes":["This plan creates a thick service jail; Bastille owns its storage and jail.conf entry.","%s","%s","%s","%s","%s"]' \
         "$(printf '%s' "$availability_note" | json_escape)" \
         "$(printf '%s' "$release_note" | json_escape)" \
         "$(printf '%s' "$collision_note" | json_escape)" \
+        "$(printf '%s' "$network_note" | json_escape)" \
         "$(printf '%s' "$host_note" | json_escape)"
     printf '}\n'
+}
+
+do_network_preview() {
+    address="${1:-}"
+
+    valid_jail_ipv4 "$address" || {
+        emit_action_result false "Invalid jail address." "Use an IPv4 address with a CIDR prefix, such as 10.0.0.20/24."
+        exit 1
+    }
+    route_safe=false
+    address_route_available "$address" && route_safe=true
+    loopback_interface="$(bastille_loopback_value)"
+    external_interface="$(default_interface_value 2>/dev/null || true)"
+    loopback_ready=false
+    pf_running=false
+    nat_ready=false
+    rdr_ready=false
+    anchor_ready=false
+    ready=false
+    network_interface_exists "$loopback_interface" && loopback_ready=true
+    pf_is_running && pf_running=true
+    network_nat_ready && nat_ready=true
+    network_rdr_ready && rdr_ready=true
+    network_filter_anchor_ready && anchor_ready=true
+    if [ "$loopback_ready" = true ] && [ "$pf_running" = true ] && [ "$nat_ready" = true ] && \
+       [ "$rdr_ready" = true ] && [ "$anchor_ready" = true ] && [ "$route_safe" = true ] && \
+       [ -n "$external_interface" ]; then
+        ready=true
+    fi
+
+    printf '{"ok":true,"mutates":false,"ready":%s,"address":"%s",' \
+        "$ready" "$(printf '%s' "$address" | json_escape)"
+    printf '"loopback_interface":"%s","external_interface":"%s",' \
+        "$(printf '%s' "$loopback_interface" | json_escape)" \
+        "$(printf '%s' "$external_interface" | json_escape)"
+    printf '"checks":{"loopback_ready":%s,"pf_running":%s,"nat_ready":%s,"rdr_anchor_ready":%s,"filter_anchor_ready":%s,"address_route_safe":%s},' \
+        "$loopback_ready" "$pf_running" "$nat_ready" "$rdr_ready" "$anchor_ready" "$route_safe"
+    printf '"commands":['
+    if [ "$loopback_ready" != true ]; then
+        printf '"bastille setup --yes loopback",'
+    fi
+    printf '"bsdrunner-pf-backend.sh jail-network %s %s"],' \
+        "$(printf '%s' "$loopback_interface" | json_escape)" \
+        "$(printf '%s' "$external_interface" | json_escape)"
+    printf '"notes":["The Bastille loopback is configured separately from PF.","BSDRunner renders, validates, installs, and reloads its managed PF profile with Bastille NAT and anchors.","Full bastille setup and bastille setup pf are not used."]}\n'
+}
+
+do_network_setup() {
+    address="${1:-}"
+    confirmation="${2:-}"
+
+    valid_jail_ipv4 "$address" || {
+        emit_action_result false "Invalid jail address." "Use an IPv4 address with a CIDR prefix, such as 10.0.0.20/24."
+        exit 1
+    }
+    [ "$confirmation" = "$address" ] || {
+        emit_action_result false "Network confirmation did not match." "Type the proposed jail address exactly."
+        exit 1
+    }
+    command -v bastille >/dev/null 2>&1 || {
+        emit_action_result false "Bastille is unavailable." "Install Bastille before configuring jail networking."
+        exit 1
+    }
+    address_route_available "$address" || {
+        emit_action_result false "The jail address overlaps an active host route or interface." "$address"
+        exit 1
+    }
+    external_interface="$(default_interface_value 2>/dev/null || true)"
+    [ -n "$external_interface" ] || {
+        emit_action_result false "No default network interface was detected." "Connect the host to a network, then refresh."
+        exit 1
+    }
+    [ -r "$pf_backend" ] || {
+        emit_action_result false "The BSDRunner firewall backend is unavailable." "$pf_backend"
+        exit 1
+    }
+    if bastille_network_ready; then
+        emit_action_result true "Bastille jail networking is already ready." "No network change was needed."
+        return
+    fi
+
+    loopback_interface="$(bastille_loopback_value)"
+    loopback_output=""
+    if ! network_interface_exists "$loopback_interface"; then
+        if ! loopback_output="$(run_privileged bastille setup --yes loopback 2>&1)"; then
+            write_last_result "error" "Unable to configure the Bastille loopback."
+            emit_action_result false "Unable to configure the Bastille loopback." "$loopback_output"
+            exit 1
+        fi
+        loopback_interface="$(bastille_loopback_value)"
+        if ! network_interface_exists "$loopback_interface"; then
+            write_last_result "error" "Bastille reported success, but its loopback interface is unavailable."
+            emit_action_result false "Bastille loopback verification failed." "$loopback_output"
+            exit 1
+        fi
+    fi
+
+    if ! pf_output="$(sh "$pf_backend" jail-network "$loopback_interface" "$external_interface" 2>&1)"; then
+        write_last_result "error" "The loopback is ready, but BSDRunner PF jail rules were not applied."
+        emit_action_result false "The loopback is ready, but BSDRunner PF jail rules were not applied." "$pf_output"
+        exit 1
+    fi
+    if ! printf '%s\n' "$pf_output" | grep -q '"ok":true'; then
+        write_last_result "error" "The firewall backend returned an invalid network result."
+        emit_action_result false "The firewall backend returned an invalid network result." "$pf_output"
+        exit 1
+    fi
+
+    write_last_result "success" "Configured Bastille loopback and BSDRunner PF jail networking."
+    emit_action_result true "Configured Bastille jail networking." "$loopback_output
+$pf_output"
 }
 
 do_storage_preview() {
@@ -1052,6 +1332,10 @@ do_create() {
         emit_action_result false "Invalid jail address." "Use an IPv4 or IPv6 address with an optional CIDR prefix."
         exit 1
     }
+    valid_jail_ipv4 "$address" || {
+        emit_action_result false "Invalid jail address." "The basic-jail workflow requires IPv4 with a CIDR prefix, such as 10.0.0.20/24."
+        exit 1
+    }
     case "$autostart" in
         yes|no)
             ;;
@@ -1089,6 +1373,14 @@ do_create() {
         emit_action_result false "The jail address is already in use." "$address"
         exit 1
     fi
+    if ! address_route_available "$address"; then
+        emit_action_result false "The jail address overlaps an active host route or interface." "$address"
+        exit 1
+    fi
+    if ! bastille_network_ready; then
+        emit_action_result false "Bastille jail networking is not ready." "Configure the Bastille loopback and BSDRunner PF jail rules first."
+        exit 1
+    fi
 
     if [ "$autostart" = "no" ]; then
         if output="$(run_privileged bastille create --thick --no-boot "$name" "$release" "$address" 2>&1)"; then
@@ -1124,7 +1416,7 @@ if [ -n "$fixture_file" ]; then
             cat "$fixture_file"
             exit 0
             ;;
-        preview|storage-preview)
+        preview|storage-preview|network-preview)
             ;;
         *)
             emit_action_result false "Actions are disabled in demo mode." "Restart Jails normally to manage real jails."
@@ -1151,6 +1443,12 @@ case "$action" in
         ;;
     storage-setup)
         do_storage_setup "${2:-}" "${3:-}"
+        ;;
+    network-preview)
+        do_network_preview "${2:-}"
+        ;;
+    network-setup)
+        do_network_setup "${2:-}" "${3:-}"
         ;;
     bootstrap)
         do_bootstrap "${2:-}" "${3:-}"

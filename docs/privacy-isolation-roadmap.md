@@ -94,10 +94,12 @@ feels trustworthy.
 
 The first follow-up UI milestone began as a read-only creation preview and now
 drives a guarded `Create Basic Jail` wizard. It teaches Storage, Userland,
-Config, and Lifecycle in sequence, emits an exact Bastille thick-jail plan, and
-requires the selected pool before storage setup and the jail name before jail
-creation. Storage setup, bootstrap, and create run as separate stages so partial
-completion remains visible. A future native
+Network, Config, and Lifecycle in sequence, emits an exact Bastille thick-jail
+plan, and requires typed confirmation for storage, network, and jail creation.
+The Network stage recommends a non-overlapping private address, configures only
+Bastille's loopback prerequisite, and delegates NAT and anchors to BSDRunner's
+managed PF profile. Storage setup, network setup, bootstrap, and create run as
+separate stages so partial completion remains visible. A future native
 mode should add storage and hostname fields plus the generated
 `/etc/jail.conf.d/NAME.conf` content.
 
@@ -127,9 +129,10 @@ Creation should graduate in stages:
 
 1. host-aware, read-only Bastille thick-jail preview with generated commands,
    release reuse, and collision checks (implemented)
-2. guided Bastille creation through Storage, Userland, Config, and Lifecycle,
-   with conventional `POOL/bastille` storage setup, typed confirmation, and
-   separate storage/bootstrap/create stages (implemented)
+2. guided Bastille creation through Storage, Userland, Network, Config, and
+   Lifecycle, with conventional `POOL/bastille` storage setup, host-aware
+   address validation, managed PF NAT/anchors, typed confirmation, and separate
+   storage/network/bootstrap/create stages (implemented)
 3. native preview with generated config, storage, and userland steps
 4. thin/shared-base and desktop-app jail profiles after service jails are solid
 

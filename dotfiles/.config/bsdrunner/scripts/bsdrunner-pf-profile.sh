@@ -16,6 +16,20 @@ log_blocked="no"
 ssh_tarpit_port="22"
 ssh_real_port="22222"
 ssh_real_port_configured="no"
+jail_nat="no"
+jail_interface="bastille0"
+jail_ext_if=""
+
+valid_interface() {
+    case "${1:-}" in
+        ''|*[!A-Za-z0-9_.-]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
 
 valid_real_ssh_port() {
     case "${1:-}" in
@@ -79,11 +93,31 @@ load_profile() {
             log_blocked)
                 log_blocked="$(normalize_bool "$value")"
                 ;;
+            jail_nat)
+                jail_nat="$(normalize_bool "$value")"
+                ;;
+            jail_interface)
+                if valid_interface "$value"; then
+                    jail_interface="$value"
+                else
+                    jail_interface=""
+                fi
+                ;;
+            jail_ext_if)
+                if valid_interface "$value"; then
+                    jail_ext_if="$value"
+                else
+                    jail_ext_if=""
+                fi
+                ;;
         esac
     done <"$profile_file"
 
     if [ "$allow_ssh_lan" != "yes" ]; then
         allow_ssh_tarpit="no"
+    fi
+    if [ "$jail_nat" = "yes" ] && { ! valid_interface "$jail_interface" || ! valid_interface "$jail_ext_if"; }; then
+        jail_nat="no"
     fi
 }
 
@@ -100,6 +134,11 @@ emit_settings() {
         printf 'ssh_real_port=%s\n' "$ssh_real_port"
     fi
     printf 'log_blocked=%s\n' "$log_blocked"
+    if [ "$jail_nat" = "yes" ]; then
+        printf 'jail_nat=yes\n'
+        printf 'jail_interface=%s\n' "$jail_interface"
+        printf 'jail_ext_if=%s\n' "$jail_ext_if"
+    fi
 }
 
 profile_checksum() {
@@ -122,6 +161,14 @@ icmp_types = "{ echoreq, unreach, timex }"
 icmp6_types = "{ echoreq, unreach, timex, paramprob, routersol, routeradv, neighbrsol, neighbradv, toobig }"
 EOF
 
+    if [ "$jail_nat" = "yes" ]; then
+        printf 'jail_ext_if = "%s"\n' "$jail_ext_if"
+        printf 'jail_if = "%s"\n' "$jail_interface"
+        cat <<'EOF'
+table <jails> persist
+EOF
+    fi
+
     if [ "$allow_ssh_lan" = "yes" ]; then
         cat <<'EOF'
 lan_hosts = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }"
@@ -138,13 +185,33 @@ EOF
 EOF
     fi
 
-    cat <<'EOF'
+    if [ "$jail_nat" = "yes" ]; then
+        cat <<'EOF'
+
+set skip on lo
+EOF
+    else
+        cat <<'EOF'
 
 set skip on lo0
+EOF
+    fi
+
+    cat <<'EOF'
 set block-policy return
 set reassemble yes
 
 EOF
+
+    if [ "$jail_nat" = "yes" ]; then
+        cat <<'EOF'
+# Translate traffic from running Bastille jails on the current uplink.
+# Bastille adds and removes jail addresses from <jails> as jails start and stop.
+nat on $jail_ext_if inet from <jails> to any -> ($jail_ext_if:0)
+rdr-anchor "rdr/*"
+
+EOF
+    fi
 
     if [ "$block_unsolicited" = "yes" ]; then
         if [ "$log_blocked" = "yes" ]; then
@@ -171,6 +238,14 @@ EOF
 
 # Allow connections started by this computer.
 pass out all keep state
+EOF
+    fi
+
+    if [ "$jail_nat" = "yes" ]; then
+        cat <<'EOF'
+
+# Bastille stores per-jail inbound pass rules here when port redirects are used.
+anchor "bastille/*"
 EOF
     fi
 

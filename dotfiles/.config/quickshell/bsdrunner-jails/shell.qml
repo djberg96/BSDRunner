@@ -33,6 +33,18 @@ ShellRoot {
     property bool storageExited: false
     property bool storageStdoutFinished: false
     property bool storageStderrFinished: false
+    property bool networkSetupRunning: false
+    property string networkSetupStage: "idle"
+    property string networkSetupMessage: ""
+    property string networkSetupDetails: ""
+    property string networkConfirmation: ""
+    property var networkInfo: ({"ready": false, "loopback_ready": false, "pf_running": false, "nat_ready": false, "rdr_anchor_ready": false, "filter_anchor_ready": false, "loopback_interface": "bastille0", "external_interface": "", "recommended_address": "10.0.0.20/24"})
+    property string networkStdoutText: ""
+    property string networkStderrText: ""
+    property int networkExitCode: 0
+    property bool networkExited: false
+    property bool networkStdoutFinished: false
+    property bool networkStderrFinished: false
     property string creationStage: "idle"
     property string creationMessage: ""
     property string creationError: ""
@@ -86,6 +98,7 @@ ShellRoot {
     property string previewRelease: "15.0-RELEASE"
     property bool previewReleaseCustomized: false
     property string previewAddress: "10.0.0.20/24"
+    property bool previewAddressCustomized: false
     property bool previewAutostart: true
     property var previewPayload: null
     property string previewError: ""
@@ -98,8 +111,8 @@ ShellRoot {
 
     readonly property var jails: mergedJails()
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
-    readonly property bool wizardBusy: createPreviewLoading || creationRunning || storageSetupRunning
-    readonly property var wizardSteps: ["Storage", "Userland", "Config", "Lifecycle"]
+    readonly property bool wizardBusy: createPreviewLoading || creationRunning || storageSetupRunning || networkSetupRunning
+    readonly property var wizardSteps: ["Storage", "Userland", "Network", "Config", "Lifecycle"]
     readonly property var beginnerTopics: [
         {
             "id": "storage",
@@ -114,14 +127,20 @@ ShellRoot {
             "detail": "The jail shares the host kernel, but it still needs its own /bin, /etc, /usr, and packages. Bastille can bootstrap this; native jails usually start from a fetched base.txz or an existing template."
         },
         {
+            "id": "network",
+            "title": "3. Network",
+            "body": "A private jail address needs a loopback interface and PF NAT before it can reach the network.",
+            "detail": "BSDRunner keeps the pieces separate: Bastille owns its loopback interface and dynamic jail table, while the managed PF profile supplies NAT and Bastille's redirect/filter anchors."
+        },
+        {
             "id": "config",
-            "title": "3. Config",
+            "title": "4. Config",
             "body": "jail.conf gives the jail a name, path, hostname, network address, and startup behavior.",
             "detail": "The config is the contract between the host and the jail. It points at the root path, names the jail, chooses networking, controls devfs, and decides whether service jail start should include it."
         },
         {
             "id": "lifecycle",
-            "title": "4. Lifecycle",
+            "title": "5. Lifecycle",
             "body": "Once configured, start, stop, restart, and console are the everyday operations.",
             "detail": "After setup, jails feel like small service machines. Start boots the jail, console gets you inside, restart applies many config changes, and stop shuts the contained userland down."
         }
@@ -344,7 +363,13 @@ ShellRoot {
         storageSetupStage = "idle"
         storageSetupMessage = ""
         storageSetupDetails = ""
+        networkConfirmation = ""
+        networkSetupStage = "idle"
+        networkSetupMessage = ""
+        networkSetupDetails = ""
         chooseDefaultStoragePool()
+        if (!previewAddressCustomized && networkInfo && networkInfo.recommended_address)
+            previewAddress = networkInfo.recommended_address
     }
 
     function closeCreatePreview() {
@@ -450,6 +475,56 @@ ShellRoot {
         refreshSnapshot()
     }
 
+    function networkReady() {
+        return networkInfo && networkInfo.ready
+    }
+
+    function canConfigureNetwork() {
+        return !demoMode && tools.bastille && !networkReady() && !networkSetupRunning && previewAddress.length > 0 && networkConfirmation === previewAddress
+    }
+
+    function startNetworkSetup() {
+        if (!canConfigureNetwork())
+            return
+        networkSetupRunning = true
+        networkSetupStage = "configuring"
+        networkSetupMessage = "Configuring Bastille loopback and BSDRunner PF jail rules…"
+        networkSetupDetails = ""
+        networkStdoutText = ""
+        networkStderrText = ""
+        networkExitCode = 0
+        networkExited = false
+        networkStdoutFinished = false
+        networkStderrFinished = false
+        networkSetupProcess.running = true
+    }
+
+    function maybeFinalizeNetworkSetup() {
+        if (!networkExited || !networkStdoutFinished || !networkStderrFinished)
+            return
+        networkSetupRunning = false
+        var payload = null
+        try {
+            payload = JSON.parse(networkStdoutText || "{}")
+        } catch (error) {
+            payload = null
+        }
+        if (networkExitCode !== 0 || !payload || !payload.ok) {
+            networkSetupStage = "failed"
+            networkSetupMessage = payload ? payload.message || "Jail network setup failed." : "The Jails backend returned invalid network data."
+            networkSetupDetails = payload ? payload.details || networkStderrText : networkStderrText
+            return
+        }
+        networkSetupStage = "complete"
+        networkSetupMessage = payload.message || "Configured Bastille jail networking."
+        networkSetupDetails = payload.details || ""
+        networkConfirmation = ""
+        statusTone = "success"
+        statusMessage = networkSetupMessage
+        actionDetails = networkSetupDetails
+        refreshSnapshot()
+    }
+
     function wizardCanContinue() {
         if (wizardBusy)
             return false
@@ -458,6 +533,8 @@ ShellRoot {
         if (wizardStep === 1)
             return previewRelease.length > 0
         if (wizardStep === 2)
+            return previewAddress.length > 0 && networkReady()
+        if (wizardStep === 3)
             return previewName.length > 0 && previewAddress.length > 0
         return false
     }
@@ -475,11 +552,11 @@ ShellRoot {
     function nextWizardStep() {
         if (!wizardCanContinue())
             return
-        if (wizardStep < 2) {
+        if (wizardStep < 3) {
             wizardStep += 1
             return
         }
-        wizardStep = 3
+        wizardStep = 4
         creationConfirmation = ""
         creationStage = "idle"
         creationMessage = ""
@@ -606,8 +683,28 @@ ShellRoot {
         }
         if (wizardStep === 1)
             return "USERLAND\n\nChoose a FreeBSD release no newer than the host. The jail shares the host kernel but needs its own /bin, /etc, and /usr.\n\nHost: " + (hostRelease || "Unknown") + "\nBootstrapped: " + (bastilleReleases.length > 0 ? bastilleReleases.join(", ") : "None; the selected release will be downloaded.")
-        if (wizardStep === 2)
-            return "CONFIG\n\nGive the jail a unique name and IP address. Start at boot controls whether Bastille marks it for automatic startup. The backend will recheck these values immediately before creation."
+        if (wizardStep === 2) {
+            var networkLines = ["NETWORK", "", "The jail uses a private IPv4 address on Bastille's loopback interface. BSDRunner adds only the PF NAT and anchor rules needed for outbound access and future port redirects.", ""]
+            networkLines.push((networkInfo.loopback_ready ? "[ok] " : "[!] ") + "Loopback " + (networkInfo.loopback_interface || "bastille0"))
+            networkLines.push((networkInfo.pf_running ? "[ok] " : "[!] ") + "PF running")
+            networkLines.push((networkInfo.nat_ready ? "[ok] " : "[!] ") + "Bastille NAT table")
+            networkLines.push((networkInfo.rdr_anchor_ready ? "[ok] " : "[!] ") + "Port-redirect anchor")
+            networkLines.push((networkInfo.filter_anchor_ready ? "[ok] " : "[!] ") + "Bastille filter anchor")
+            networkLines.push("")
+            networkLines.push("Jail address: " + previewAddress)
+            networkLines.push("External interface: " + (networkInfo.external_interface || "Not detected"))
+            networkLines.push("")
+            networkLines.push("After your typed confirmation, setup runs only `bastille setup --yes loopback`, then renders, validates, installs, and reloads BSDRunner's managed PF profile. It never runs `bastille setup pf`.")
+            if (networkSetupStage === "failed") {
+                networkLines.push("")
+                networkLines.push("[!] " + networkSetupMessage)
+                if (networkSetupDetails.length > 0)
+                    networkLines.push(networkSetupDetails)
+            }
+            return networkLines.join("\n")
+        }
+        if (wizardStep === 3)
+            return "CONFIG\n\nGive the jail a unique name and choose whether it starts at boot. The selected address is " + previewAddress + ". The backend rechecks the name, address, active routes, and network readiness immediately before creation."
 
         var progress = ""
         if (creationStage === "bootstrapping")
@@ -649,9 +746,11 @@ ShellRoot {
         var lines = ["READINESS"]
         lines.push((checks.bastille_installed ? "[ok] " : "[!] ") + "Bastille installed")
         lines.push((checks.storage_configured ? "[ok] " : "[!] ") + "Bastille storage configured")
+        lines.push((checks.network_ready ? "[ok] " : "[!] ") + "Bastille loopback and PF jail rules ready")
         lines.push((checks.bastille_setup ? "[ok] " : "[plan] ") + "Bastille inventory " + (checks.bastille_setup ? "readable" : "will initialize during bootstrap"))
         lines.push((checks.name_available ? "[ok] " : "[!] ") + "Jail name available")
         lines.push((checks.address_available ? "[ok] " : "[!] ") + "IP address available")
+        lines.push((checks.address_route_safe ? "[ok] " : "[!] ") + "IP address does not overlap an active host route")
         lines.push((checks.host_compatible ? "[ok] " : "[!] ") + "Host release compatible" + (checks.host_release ? " (" + checks.host_release + ")" : ""))
         lines.push((checks.release_bootstrapped ? "[ok] " : "[plan] ") + "Release " + (checks.release_bootstrapped ? "already bootstrapped" : "will be bootstrapped"))
         lines.push("")
@@ -718,6 +817,9 @@ ShellRoot {
         bastilleSetup = payload.bastille_setup || false
         storageInfo = payload.storage || {"configured": bastilleSetup, "initialized": bastilleSetup, "prefix": "/usr/local/bastille", "zfs_pool": "", "zfs_prefix": "bastille", "target_dataset": "", "pools": []}
         chooseDefaultStoragePool()
+        networkInfo = payload.network || {"ready": false, "loopback_ready": false, "pf_running": false, "nat_ready": false, "rdr_anchor_ready": false, "filter_anchor_ready": false, "loopback_interface": "bastille0", "external_interface": "", "recommended_address": "10.0.0.20/24"}
+        if (!previewAddressCustomized && networkInfo.recommended_address)
+            previewAddress = networkInfo.recommended_address
         hostRelease = payload.host_release || ""
         if (!previewReleaseCustomized && bastilleReleases.length > 0)
             previewRelease = bastilleReleases[bastilleReleases.length - 1]
@@ -878,6 +980,34 @@ ShellRoot {
             storageSetupProcess.controller.storageExitCode = exitCode
             storageSetupProcess.controller.storageExited = true
             storageSetupProcess.controller.maybeFinalizeStorageSetup()
+        }
+    }
+
+    Process {
+        id: networkSetupProcess
+        property var controller: root
+
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "network-setup", root.previewAddress, root.networkConfirmation]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                networkSetupProcess.controller.networkStdoutText = text
+                networkSetupProcess.controller.networkStdoutFinished = true
+                networkSetupProcess.controller.maybeFinalizeNetworkSetup()
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                networkSetupProcess.controller.networkStderrText = text
+                networkSetupProcess.controller.networkStderrFinished = true
+                networkSetupProcess.controller.maybeFinalizeNetworkSetup()
+            }
+        }
+        onExited: function (exitCode) {
+            networkSetupProcess.controller.networkExitCode = exitCode
+            networkSetupProcess.controller.networkExited = true
+            networkSetupProcess.controller.maybeFinalizeNetworkSetup()
         }
     }
 
@@ -1115,7 +1245,7 @@ ShellRoot {
                                     Text {
                                         anchors.fill: parent
                                         anchors.margins: 8
-                                        text: "Walk through storage, userland, config, and creation with Bastille."
+                                        text: "Walk through storage, userland, networking, config, and creation with Bastille."
                                         color: root.palette.primaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -1752,7 +1882,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Start a guided basic-jail flow through Storage, Userland, Config, and Lifecycle. Nothing changes until the final typed confirmation."
+                                        text: "Start a guided flow through Storage, Userland, Network, Config, and Lifecycle. Nothing changes until typed confirmation."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -1814,7 +1944,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Guided thick jail • nothing changes until final confirmation"
+                                    text: "Guided thick jail • every setup or creation change requires typed confirmation"
                                     color: root.palette.accent
                                     font.pixelSize: 12
                                     font.bold: true
@@ -1863,7 +1993,7 @@ ShellRoot {
                                     readonly property bool active: root.wizardStep === index
                                     readonly property bool complete: root.wizardStep > index || root.creationStage === "complete"
 
-                                    width: (parent.width - 24) / 4
+                                    width: (parent.width - 32) / 5
                                     height: 46
                                     radius: 7
                                     color: active ? Qt.alpha(root.palette.accent, 0.18) : root.palette.panelBackground
@@ -2091,8 +2221,123 @@ ShellRoot {
                                         }
                                     }
 
-                                    Text {
+                                    Rectangle {
                                         visible: root.wizardStep === 2
+                                        width: parent.width
+                                        height: root.networkReady() ? 142 : 248
+                                        radius: 7
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.networkReady() ? root.palette.success : root.networkSetupStage === "failed" ? root.palette.danger : root.palette.warning
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 7
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.networkReady() ? "Jail networking ready" : "Configure private jail networking"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: (root.networkInfo.loopback_ready ? "✓" : "!") + " " + (root.networkInfo.loopback_interface || "bastille0") + "   " + (root.networkInfo.nat_ready && root.networkInfo.rdr_anchor_ready && root.networkInfo.filter_anchor_ready ? "✓ PF NAT + anchors" : "! PF NAT + anchors")
+                                                color: root.networkReady() ? root.palette.success : root.palette.warning
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Uplink: " + (root.networkInfo.external_interface || "not detected") + " • address checked against host routes"
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 9
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                visible: !root.networkReady()
+                                                width: parent.width
+                                                text: "Type “" + root.previewAddress + "” to confirm"
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Rectangle {
+                                                visible: !root.networkReady()
+                                                width: parent.width
+                                                height: 38
+                                                radius: 6
+                                                color: root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: networkConfirmationInput.activeFocus ? root.palette.accent : root.networkConfirmation === root.previewAddress && root.previewAddress.length > 0 ? root.palette.success : root.palette.panelBorder
+
+                                                TextInput {
+                                                    id: networkConfirmationInput
+                                                    anchors.fill: parent
+                                                    anchors.margins: 10
+                                                    text: root.networkConfirmation
+                                                    enabled: !root.networkSetupRunning && root.previewAddress.length > 0
+                                                    color: root.palette.primaryText
+                                                    selectionColor: root.palette.accent
+                                                    selectedTextColor: root.palette.panelBackground
+                                                    font.pixelSize: 11
+                                                    verticalAlignment: TextInput.AlignVCenter
+                                                    clip: true
+                                                    onTextEdited: root.networkConfirmation = text
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                visible: !root.networkReady()
+                                                width: parent.width
+                                                height: 42
+                                                radius: 7
+                                                color: networkSetupMouse.enabled ? (networkSetupMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.18)) : root.palette.panelBackground
+                                                border.width: 1
+                                                border.color: networkSetupMouse.enabled ? root.palette.success : root.palette.panelBorder
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: root.demoMode ? "Setup Disabled in Demo" : root.networkSetupRunning ? "Configuring Networking…" : "Configure Jail Networking"
+                                                    color: networkSetupMouse.enabled ? root.palette.success : root.palette.mutedText
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    id: networkSetupMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: root.canConfigureNetwork()
+                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                    onClicked: root.startNetworkSetup()
+                                                }
+                                            }
+
+                                            Text {
+                                                visible: !root.networkReady() && root.networkSetupMessage.length > 0
+                                                width: parent.width
+                                                text: root.networkSetupMessage
+                                                color: root.networkSetupStage === "failed" ? root.palette.danger : root.palette.accent
+                                                font.pixelSize: 9
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: root.wizardStep === 3
                                         width: parent.width
                                         text: "Jail name"
                                         color: root.palette.secondaryText
@@ -2101,7 +2346,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
-                                        visible: root.wizardStep === 2
+                                        visible: root.wizardStep === 3
                                         width: parent.width
                                         height: 40
                                         radius: 6
@@ -2204,13 +2449,18 @@ ShellRoot {
                                             clip: true
                                             onTextEdited: {
                                                 root.previewAddress = text
+                                                root.previewAddressCustomized = true
+                                                root.networkConfirmation = ""
+                                                root.networkSetupStage = "idle"
+                                                root.networkSetupMessage = ""
+                                                root.networkSetupDetails = ""
                                                 root.invalidateCreatePlan()
                                             }
                                         }
                                     }
 
                                     Row {
-                                        visible: root.wizardStep === 2
+                                        visible: root.wizardStep === 3
                                         width: parent.width
                                         height: 44
                                         spacing: 10
@@ -2265,7 +2515,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
-                                        visible: root.wizardStep === 3
+                                        visible: root.wizardStep === 4
                                         width: parent.width
                                         height: 104
                                         radius: 7
@@ -2349,7 +2599,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
-                                        visible: root.wizardStep < 3
+                                        visible: root.wizardStep < 4
                                         width: parent.width
                                         height: 46
                                         radius: 7
@@ -2359,7 +2609,7 @@ ShellRoot {
 
                                         Text {
                                             anchors.centerIn: parent
-                                            text: root.wizardStep === 0 ? "Continue to Userland" : root.wizardStep === 1 ? "Continue to Config" : "Review Creation Plan"
+                                            text: root.wizardStep === 0 ? "Continue to Userland" : root.wizardStep === 1 ? "Continue to Network" : root.wizardStep === 2 ? "Continue to Config" : "Review Creation Plan"
                                             color: root.palette.primaryText
                                             font.pixelSize: 13
                                             font.bold: true
@@ -2376,7 +2626,7 @@ ShellRoot {
                                     }
 
                                     Rectangle {
-                                        visible: root.wizardStep === 3
+                                        visible: root.wizardStep === 4
                                         width: parent.width
                                         height: 46
                                         radius: 7
@@ -2403,9 +2653,10 @@ ShellRoot {
                                     }
 
                                     Text {
+                                        visible: root.wizardStep !== 2
                                         width: parent.width
-                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.tools.bastille ? "Bastille is not detected; install it before creating a jail." : root.storageReady() ? (root.bastilleSetup ? "Bastille inventory is readable" : "Storage configured; bootstrap will initialize it") + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "") : root.storagePools().length > 0 ? "Select a pool and configure Bastille storage." : "Bastille is installed, but no ZFS pool was detected."
-                                        color: !root.demoMode && root.tools.bastille && root.storageReady() ? root.palette.success : root.palette.warning
+                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.tools.bastille ? "Bastille is not detected; install it before creating a jail." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool and configure Bastille storage." : "Bastille is installed, but no ZFS pool was detected.") : !root.networkReady() ? "Configure the Bastille loopback and BSDRunner PF jail rules." : (root.bastilleSetup ? "Bastille inventory and networking are ready" : "Storage and networking configured; bootstrap will initialize storage") + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
+                                        color: !root.demoMode && root.tools.bastille && root.storageReady() && root.networkReady() ? root.palette.success : root.palette.warning
                                         font.pixelSize: 10
                                         wrapMode: Text.WordWrap
                                     }
@@ -2427,7 +2678,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.wizardStep < 3 ? root.wizardSteps[root.wizardStep] + " explained" : root.creationStage === "complete" ? "Jail created" : root.creationStage === "failed" ? "Creation needs attention" : root.previewPayload ? root.previewPayload.message : "Checking creation plan…"
+                                        text: root.wizardStep < 4 ? root.wizardSteps[root.wizardStep] + " explained" : root.creationStage === "complete" ? "Jail created" : root.creationStage === "failed" ? "Creation needs attention" : root.previewPayload ? root.previewPayload.message : "Checking creation plan…"
                                         color: root.creationStage === "complete" ? root.palette.success : root.creationStage === "failed" || root.previewError.length > 0 ? root.palette.danger : root.previewPayload && root.previewPayload.ready === false ? root.palette.warning : root.palette.accent
                                         font.pixelSize: 14
                                         font.bold: true

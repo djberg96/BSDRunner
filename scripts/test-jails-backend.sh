@@ -41,6 +41,10 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_LOG="$command_log" \
     BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG="${BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG:-$fixtures/etc/bastille/bastille.conf}" \
     BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="${BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX:-$fixtures/etc/bastille-root}" \
+    BSDRUNNER_JAILS_TEST_PF_BACKEND="$fixtures/bin/bsdrunner-pf-backend" \
+    BSDRUNNER_JAILS_TEST_NETWORK_READY="${BSDRUNNER_JAILS_TEST_NETWORK_READY:-1}" \
+    BSDRUNNER_JAILS_TEST_PF_STATE="${BSDRUNNER_JAILS_TEST_PF_STATE:-}" \
+    BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="${BSDRUNNER_JAILS_TEST_LOOPBACK_STATE:-}" \
     sh "$backend" "$@"
 }
 
@@ -98,6 +102,9 @@ assert_json "$snapshot_output" \
 assert_json "$snapshot_output" \
     '.storage.configured == true and .storage.initialized == true and (.storage.prefix | endswith("/tests/fixtures/jails/etc/bastille-root")) and .storage.zfs_prefix == "bastille" and .storage.pools == ["zroot","tank"]' \
     "snapshot should report Bastille storage and detected pools"
+assert_json "$snapshot_output" \
+    '.network == {"ready":true,"loopback_ready":true,"pf_running":true,"nat_ready":true,"rdr_anchor_ready":true,"filter_anchor_ready":true,"loopback_interface":"bastille0","external_interface":"wlan0","recommended_address":"10.0.0.20/24"}' \
+    "snapshot should report fixture-backed Bastille network readiness"
 assert_json "$snapshot_output" \
     '(.running | length) == 2 and .running[0].name == "api" and .running[1].ipv6 == "none"' \
     "snapshot should parse jls output"
@@ -158,6 +165,51 @@ grep -Fx 'bastille setup storage zroot' "$command_log" >/dev/null || fail "stora
 pass "storage setup is previewed, confirmed, and narrowly dispatched"
 
 : >"$command_log"
+network_preview="$test_root/network-preview.json"
+run_backend network-preview 10.0.0.20/24 >"$network_preview"
+assert_json "$network_preview" \
+    '.ok == true and .mutates == false and .ready == true and .address == "10.0.0.20/24" and .loopback_interface == "bastille0" and .external_interface == "wlan0" and .checks == {"loopback_ready":true,"pf_running":true,"nat_ready":true,"rdr_anchor_ready":true,"filter_anchor_ready":true,"address_route_safe":true}' \
+    "network preview should report a ready non-overlapping jail network"
+[ ! -s "$command_log" ] || fail "network preview should not execute setup commands"
+
+run_backend network-preview 192.168.1.20/24 >"$network_preview"
+assert_json "$network_preview" \
+    '.ok == true and .ready == false and .checks.address_route_safe == false' \
+    "network preview should reject an address on the host LAN"
+
+network_setup="$test_root/network-setup.json"
+if run_backend network-setup 10.0.0.20/24 wrong >"$network_setup"; then
+    fail "network setup should require exact address confirmation"
+fi
+assert_json "$network_setup" \
+    '.ok == false and .message == "Network confirmation did not match."' \
+    "network setup should explain a mismatched confirmation"
+[ ! -s "$command_log" ] || fail "rejected network setup should not execute setup commands"
+
+loopback_state="$test_root/loopback-ready"
+pf_state="$test_root/pf-ready"
+BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="$loopback_state" \
+BSDRUNNER_JAILS_TEST_NETWORK_READY=0 \
+BSDRUNNER_JAILS_TEST_PF_STATE="$pf_state" \
+run_backend network-setup 10.0.0.20/24 10.0.0.20/24 >"$network_setup"
+assert_json "$network_setup" \
+    '.ok == true and .message == "Configured Bastille jail networking."' \
+    "network setup should return structured success"
+grep -Fx 'mdo bastille setup --yes loopback' "$command_log" >/dev/null || fail "network setup should configure Bastille loopback without a hidden prompt"
+grep -Fx 'bastille setup --yes loopback' "$command_log" >/dev/null || fail "network setup should call Bastille's narrow noninteractive loopback subcommand"
+grep -Fx 'pf-backend jail-network bastille0 wlan0' "$command_log" >/dev/null || fail "network setup should delegate NAT to BSDRunner PF"
+
+network_snapshot="$test_root/network-snapshot.json"
+BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="$loopback_state" \
+BSDRUNNER_JAILS_TEST_NETWORK_READY=0 \
+BSDRUNNER_JAILS_TEST_PF_STATE="$pf_state" \
+run_backend snapshot >"$network_snapshot"
+assert_json "$network_snapshot" \
+    '.network.ready == true and .network.loopback_ready == true and .network.nat_ready == true and .network.rdr_anchor_ready == true and .network.filter_anchor_ready == true' \
+    "network setup should satisfy the next readiness snapshot"
+pass "network setup is host-aware, confirmed, and split between Bastille and BSDRunner PF"
+
+: >"$command_log"
 configured_only_config="$test_root/configured-bastille.conf"
 printf '%s\n' \
     'bastille_prefix="/usr/local/bastille"' \
@@ -178,7 +230,7 @@ pass "configured ZFS storage can be initialized by the first bootstrap"
 preview_output="$test_root/preview.json"
 run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$preview_output"
 assert_json "$preview_output" \
-    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"storage_configured":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands == ["bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
+    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"storage_configured":true,"network_ready":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"address_route_safe":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands == ["bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
     "create preview should return an exact non-mutating Bastille plan"
 [ ! -s "$command_log" ] || fail "create preview should not execute Bastille"
 

@@ -22,7 +22,21 @@ log_blocked="no"
 ssh_tarpit_port="22"
 ssh_real_port="22222"
 ssh_real_port_configured="no"
+jail_nat="no"
+jail_interface="bastille0"
+jail_ext_if=""
 sshd_config_file="/etc/ssh/sshd_config"
+
+valid_interface() {
+    case "${1:-}" in
+        ''|*[!A-Za-z0-9_.-]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
 
 valid_real_ssh_port() {
     case "${1:-}" in
@@ -123,11 +137,31 @@ load_profile() {
             log_blocked)
                 log_blocked="$(normalize_bool "$value")"
                 ;;
+            jail_nat)
+                jail_nat="$(normalize_bool "$value")"
+                ;;
+            jail_interface)
+                if valid_interface "$value"; then
+                    jail_interface="$value"
+                else
+                    jail_interface=""
+                fi
+                ;;
+            jail_ext_if)
+                if valid_interface "$value"; then
+                    jail_ext_if="$value"
+                else
+                    jail_ext_if=""
+                fi
+                ;;
         esac
     done <"$profile_file"
 
     if [ "$allow_ssh_lan" != "yes" ]; then
         allow_ssh_tarpit="no"
+    fi
+    if [ "$jail_nat" = "yes" ] && { ! valid_interface "$jail_interface" || ! valid_interface "$jail_ext_if"; }; then
+        jail_nat="no"
     fi
 }
 
@@ -146,6 +180,11 @@ write_profile() {
             printf 'ssh_real_port=%s\n' "$ssh_real_port"
         fi
         printf 'log_blocked=%s\n' "$log_blocked"
+        if [ "$jail_nat" = "yes" ]; then
+            printf 'jail_nat=yes\n'
+            printf 'jail_interface=%s\n' "$jail_interface"
+            printf 'jail_ext_if=%s\n' "$jail_ext_if"
+        fi
     } >"$profile_file"
 }
 
@@ -162,6 +201,11 @@ emit_settings() {
         printf 'ssh_real_port=%s\n' "$ssh_real_port"
     fi
     printf 'log_blocked=%s\n' "$log_blocked"
+    if [ "$jail_nat" = "yes" ]; then
+        printf 'jail_nat=yes\n'
+        printf 'jail_interface=%s\n' "$jail_interface"
+        printf 'jail_ext_if=%s\n' "$jail_ext_if"
+    fi
 }
 
 profile_checksum() {
@@ -432,6 +476,7 @@ rules_summary_json() {
     printf ',{"id":"ssh","label":"SSH from local network","description":"SSH is limited to private IPv4 LAN ranges.","enabled":%s}' "$(bool_json "$allow_ssh_lan")"
     printf ',{"id":"tarpit","label":"SSH tarpit","description":"endlessh listens on port 22 while real SSH moves to the stored high port.","enabled":%s}' "$(bool_json "$allow_ssh_tarpit")"
     printf ',{"id":"logging","label":"Blocked attempt logging","description":"Blocked packets are written to pflog.","enabled":%s}' "$(bool_json "$log_blocked")"
+    printf ',{"id":"jail_nat","label":"Bastille jail networking","description":"Running Bastille jails use the managed PF NAT and anchor rules.","enabled":%s}' "$(bool_json "$jail_nat")"
     printf ']'
 }
 
@@ -494,6 +539,7 @@ emit_snapshot() {
     printf '"allow_ssh_lan":%s,' "$(bool_json "$allow_ssh_lan")"
     printf '"allow_ssh_tarpit":%s,' "$(bool_json "$allow_ssh_tarpit")"
     printf '"log_blocked":%s' "$(bool_json "$log_blocked")"
+    printf ',"jail_nat":%s' "$(bool_json "$jail_nat")"
     printf '},'
     printf '"rules":'
     rules_summary_json
@@ -946,6 +992,35 @@ ${sshd_output:-}"
     fi
 }
 
+do_jail_network() {
+    requested_jail_if="${1:-}"
+    requested_ext_if="${2:-}"
+
+    valid_interface "$requested_jail_if" || {
+        emit_action_result false "Invalid jail interface." "$requested_jail_if"
+        exit 1
+    }
+    valid_interface "$requested_ext_if" || {
+        emit_action_result false "Invalid external interface." "$requested_ext_if"
+        exit 1
+    }
+    if ! ifconfig "$requested_jail_if" >/dev/null 2>&1; then
+        emit_action_result false "The Bastille loopback interface is unavailable." "$requested_jail_if"
+        exit 1
+    fi
+    if ! ifconfig "$requested_ext_if" >/dev/null 2>&1; then
+        emit_action_result false "The external interface is unavailable." "$requested_ext_if"
+        exit 1
+    fi
+
+    load_profile
+    jail_nat="yes"
+    jail_interface="$requested_jail_if"
+    jail_ext_if="$requested_ext_if"
+    write_profile
+    do_apply normal
+}
+
 do_enable() {
     load_profile
     if [ "$allow_ssh_tarpit" = "yes" ]; then
@@ -1046,6 +1121,9 @@ case "$action" in
         ;;
     reload)
         do_reload
+        ;;
+    jail-network)
+        do_jail_network "${2:-}" "${3:-}"
         ;;
     set)
         load_profile

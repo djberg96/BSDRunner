@@ -26,6 +26,17 @@
       "zroot"
     ]
   },
+  "network": {
+    "ready": true,
+    "loopback_ready": true,
+    "pf_running": true,
+    "nat_ready": true,
+    "rdr_anchor_ready": true,
+    "filter_anchor_ready": true,
+    "loopback_interface": "bastille0",
+    "external_interface": "wlan0",
+    "recommended_address": "10.0.0.20/24"
+  },
   "bastille_releases": [
     "14.3-RELEASE",
     "15.0-RELEASE"

@@ -17,6 +17,10 @@ if [ "${1:-}" = "config" ] && [ "${2:-}" = "ALL" ] && [ "${3:-}" = "get" ]; then
     exit 0
 fi
 
+if [ "${1:-}" = "setup" ] && [ "${2:-}" = "--yes" ] && [ "${3:-}" = "loopback" ] && [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_STATE:-}" ]; then
+    : >"$BSDRUNNER_JAILS_TEST_LOOPBACK_STATE"
+fi
+
 {
     printf 'bastille'
     printf ' %s' "$@"

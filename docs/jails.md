@@ -11,8 +11,8 @@ The UI is intentionally read-mostly. It helps a new user answer:
 - what path, hostname, IP address, JID, and backend a selected jail uses
 - which lifecycle actions are safe for the selected state
 - what a proposed Bastille thick-jail creation would do before any command runs
-- how storage, userland, configuration, and lifecycle fit together while creating
-  a basic jail through a guarded wizard
+- how storage, userland, networking, configuration, and lifecycle fit together
+  while creating a basic jail through a guarded wizard
 
 ## Launch
 
@@ -56,6 +56,7 @@ The snapshot action returns JSON with:
 - the host FreeBSD release, Bastille setup readiness, and bootstrapped releases
 - detected ZFS pools plus Bastille's configured pool, dataset prefix, and
   initialization state
+- Bastille loopback, PF, NAT, anchor, uplink, and recommended-address readiness
 - Bastille jail hostname, path, address, release, and boot setting from
   `bastille config ALL get ...`, with `bastille list all` and the deprecated
   `bastille list -a` form as compatibility fallbacks
@@ -86,6 +87,29 @@ stage. The first release bootstrap creates the `POOL/bastille` dataset hierarchy
 and mounts its installation root. If Bastille already has initialized
 filesystem-backed storage, the backend refuses to convert it implicitly.
 
+The Network step is separate from storage and exposes the host state it relies
+on. Its snapshot checks for Bastille's configured loopback interface, a running
+PF ruleset, the `<jails>` NAT rule, Bastille's redirect and filter anchors, the
+default-route interface, and a host-aware recommended address. The recommendation
+prefers an unused address in `10.0.0.0/24` when that subnet does not overlap a
+host route; otherwise it selects another private subnet. A proposed address is
+also checked again during preview and immediately before creation.
+
+Network setup has a read-only preview and an exact typed confirmation:
+
+```sh
+bsdrunner-jails-backend.sh network-preview 10.0.0.20/24
+bsdrunner-jails-backend.sh network-setup 10.0.0.20/24 10.0.0.20/24
+```
+
+The mutating action does not run the broad `bastille setup` command. If needed,
+it runs only `bastille setup --yes loopback`, using the UI's typed confirmation
+instead of opening a second interactive prompt. It verifies the interface, then
+asks BSDRunner's PF backend to enable jail networking on the detected uplink. That
+backend renders and syntax-checks the complete managed profile before installing
+and reloading it. If loopback setup succeeds but PF setup fails, the UI reports
+the partial result and leaves creation blocked until all readiness checks pass.
+
 Lifecycle actions are deliberately narrow:
 
 ```sh
@@ -109,14 +133,15 @@ It returns JSON containing the validated inputs, host checks, and exact Bastille
 commands. It does not invoke a mutating Bastille command, download a release,
 create storage, or write config. The preview checks whether Bastille is set up,
 whether the release is already bootstrapped, whether the jail name or address
-collides with detected jails, and whether the proposed jail release is newer
+collides with detected jails, whether networking is ready, whether the proposed
+address overlaps a host route, and whether the proposed jail release is newer
 than the host. An existing release skips the redundant bootstrap command;
 otherwise the plan includes it.
 
 The current preview deliberately plans a thick service jail. Choosing no
 autostart adds Bastille's `--no-boot` option. A failed readiness check is shown
-as a warning and leaves the generated commands visible for inspection, but the
-UI still never executes them.
+as a warning and leaves the generated commands visible for inspection. Preview
+never executes them; the final Lifecycle step requires separate confirmation.
 
 After the user types the proposed jail name on the final Lifecycle step, the UI
 may run two separately guarded actions:
@@ -141,17 +166,20 @@ already have the required privileges.
 
 ## Beginner Model
 
-The UI treats jail creation as four visible concepts:
+The UI treats jail creation as five visible concepts:
 
 1. Storage: the jail needs a filesystem root, preferably a ZFS dataset.
 2. Userland: a FreeBSD release or base tree must be fetched or extracted.
-3. Config: `jail.conf` gives the jail its name, path, hostname, IP, and startup behavior.
-4. Lifecycle: once configured, everyday work is start, stop, restart, and console.
+3. Network: the jail needs a non-overlapping address, a loopback interface, and
+   PF NAT/anchors to reach the outside network.
+4. Config: the jail gets its name, hostname, address, and startup behavior.
+5. Lifecycle: once configured, everyday work is start, stop, restart, and console.
 
-The **Create Basic Jail** wizard follows those four concepts directly. Storage
+The **Create Basic Jail** wizard follows those five concepts directly. Storage
 selects and configures a ZFS pool when necessary, Userland selects or
-bootstraps a release, Config collects the name/address/startup policy, and
-Lifecycle presents the exact plan and typed confirmation. The initial target is
+bootstraps a release, Network validates the address and can configure the narrow
+Bastille/PF prerequisites, Config collects the name/startup policy, and Lifecycle
+presents the exact plan and typed confirmation. The initial target is
 deliberately a thick Bastille service jail. A future native workflow will need
 separate validation around datasets, release extraction, `devfs`, network
 settings, and generated `/etc/jail.conf.d/NAME.conf` files.
@@ -172,10 +200,11 @@ resource limits.
 ## Automated Tests
 
 The fixture-backed backend suite runs without FreeBSD jail tools or root access.
-It supplies representative `jls`, `jail.conf`, `sysrc`, `bastille list`,
-`bastille config`, release inventory, and host-release results through an
-isolated test path. The suite checks rich snapshot parsing, ZFS pool discovery,
+It supplies representative `jls`, `jail.conf`, `sysrc`, `ifconfig`, `route`,
+`pfctl`, `bastille list`, `bastille config`, release inventory, and host-release
+results through an isolated test path. The suite checks rich snapshot parsing, ZFS pool discovery,
 storage preview and guarded setup, configured-but-uninitialized bootstrap,
+network recommendation, route-overlap checks, narrow loopback/PF setup,
 bootstrapped and missing-release plans, name and address collisions, host
 compatibility, demo-mode guards, guarded bootstrap and creation dispatch, typed
 confirmations, last-second validation failures, lifecycle dispatch, and
@@ -197,6 +226,7 @@ Run the automated backend suite and QML validation from the repository root:
 
 ```sh
 sh scripts/test-jails-backend.sh
+sh scripts/test-pf-profile.sh
 sh scripts/check-qml.sh
 ```
 
@@ -220,8 +250,10 @@ bastille config ALL get host.hostname,path,ip4.addr,osrelease,boot
 Then open the UI and confirm that the list, details, backend detection, and
 guarded lifecycle actions match the command-line state. Open **Create Basic
 Jail** and confirm the Storage page shows the expected pool and conventional
-`POOL/bastille` target, then verify that the Userland, Config, and Lifecycle
-pages match the host. Stop at either typed confirmation unless storage setup or
-a test jail is genuinely wanted. When exercising creation, use an unused
+`POOL/bastille` target, then verify that the Userland, Network, Config, and
+Lifecycle pages match the host. Confirm that Network reports the expected
+uplink, non-overlapping recommendation, loopback, PF NAT, and anchors. Stop at any typed
+confirmation unless storage/network setup or a test jail is genuinely wanted.
+When exercising creation, use an unused
 name/address and verify the resulting jail appears automatically in the
 inventory.

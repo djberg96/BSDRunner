@@ -188,8 +188,8 @@ See `docs/zfs.md` for the backend commands and scope.
 ## Jails
 
 BSDRunner includes a beginner-focused FreeBSD jails surface. It lists native
-jails, detects Bastille when installed, explains the storage/userland/config
-model, and exposes guarded lifecycle actions for existing jails.
+jails, detects Bastille when installed, explains the storage/userland/network/
+config model, and exposes guarded lifecycle actions for existing jails.
 
 ```sh
 sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
@@ -198,10 +198,12 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
 Use `--demo` to explore representative native and Bastille jail states without a
 configured FreeBSD jail host. The UI also includes a host-aware, read-only
 Bastille plan plus a guarded **Create Basic Jail** wizard that follows Storage,
-Userland, Config, and Lifecycle. The Storage step can select an existing ZFS
-pool and configure Bastille's conventional `POOL/bastille` hierarchy without
-touching PF or networking. See `docs/jails.md` for backend commands,
-fixture-backed tests, current scope, and the creation model.
+Userland, Network, Config, and Lifecycle. The Storage step can select an
+existing ZFS pool and configure Bastille's conventional `POOL/bastille`
+hierarchy. The separate Network step recommends a route-safe jail address and,
+after typed confirmation, can create Bastille's loopback interface and add its
+NAT and anchors to BSDRunner's managed PF profile. See `docs/jails.md` for
+backend commands, fixture-backed tests, current scope, and the creation model.
 
 ## Scope
 

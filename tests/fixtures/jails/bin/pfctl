@@ -1,0 +1,31 @@
+#!/bin/sh
+
+set -eu
+
+network_ready=true
+if [ "${BSDRUNNER_JAILS_TEST_NETWORK_READY:-1}" = "0" ] && \
+   { [ -z "${BSDRUNNER_JAILS_TEST_PF_STATE:-}" ] || [ ! -f "$BSDRUNNER_JAILS_TEST_PF_STATE" ]; }; then
+    network_ready=false
+fi
+
+case "${1:-}" in
+    -s)
+        [ "${2:-}" = "info" ] || exit 1
+        printf 'Status: Enabled\n'
+        ;;
+    -sn)
+        if [ "$network_ready" = true ]; then
+            printf '%s\n' 'nat on wlan0 inet from <jails> to any -> (wlan0:0)'
+            printf '%s\n' 'rdr-anchor "rdr/*" all'
+        fi
+        ;;
+    -sr)
+        printf '%s\n' 'block return all'
+        if [ "$network_ready" = true ]; then
+            printf '%s\n' 'anchor "bastille/*" all'
+        fi
+        ;;
+    *)
+        exit 1
+        ;;
+esac
