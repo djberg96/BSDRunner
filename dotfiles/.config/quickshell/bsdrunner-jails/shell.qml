@@ -1126,10 +1126,14 @@ ShellRoot {
 
     Timer {
         id: provisionContinueTimer
-        interval: 20
+        interval: 100
         onTriggered: {
             if (root.provisionNextAction.length === 0)
                 return
+            if (provisionProcess.running) {
+                restart()
+                return
+            }
             var nextAction = root.provisionNextAction
             root.provisionNextAction = ""
             root.startProvisionAction(nextAction)

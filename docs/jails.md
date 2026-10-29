@@ -134,6 +134,9 @@ address or CIDR, and an autostart preference.
 The release field defaults to the detected host release without its patch-level
 suffix (`15.1-RELEASE-p6` becomes `15.1-RELEASE`). If the host release cannot be
 normalized, the wizard falls back to the latest bootstrapped Bastille release.
+Bastille release inventory is normalized the same way, so a bootstrapped
+`15.1-RELEASE-p6` satisfies creation requests for its `15.1-RELEASE` directory
+instead of triggering another bootstrap.
 
 For example:
 

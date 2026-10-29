@@ -7,7 +7,7 @@ if [ "${1:-}" = "list" ] && { [ "${2:-}" = "all" ] || [ "${2:-}" = "-a" ]; }; th
     exit 0
 fi
 
-if [ "${1:-}" = "list" ] && [ "${2:-}" = "releases" ]; then
+if [ "${1:-}" = "list" ] && { [ "${2:-}" = "release" ] || [ "${2:-}" = "releases" ]; }; then
     cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-releases.txt"
     exit 0
 fi

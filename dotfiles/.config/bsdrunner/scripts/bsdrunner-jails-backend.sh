@@ -623,7 +623,10 @@ bastille_releases_json() {
             for (i = 1; i <= NF; i += 1) {
                 value = $i
                 gsub(/^[^0-9]+|[^A-Za-z0-9_.-]+$/, "", value)
-                if (value ~ /^[0-9]+\.[0-9]+-RELEASE(-p[0-9]+)?$/ && !seen[value]++) {
+                if (value ~ /^[0-9]+\.[0-9]+-RELEASE(-p[0-9]+)?$/) {
+                    sub(/-p[0-9]+$/, "", value)
+                }
+                if (value ~ /^[0-9]+\.[0-9]+-RELEASE$/ && !seen[value]++) {
                     if (!first) printf ","
                     first = 0
                     printf "\"%s\"", esc(value)
@@ -715,10 +718,12 @@ configured_name_exists() {
 release_is_bootstrapped() {
     target="$1"
     awk -v target="$target" '
+        BEGIN { sub(/-p[0-9]+$/, "", target) }
         {
             for (i = 1; i <= NF; i += 1) {
                 value = $i
                 gsub(/^[^0-9]+|[^A-Za-z0-9_.-]+$/, "", value)
+                sub(/-p[0-9]+$/, "", value)
                 if (value == target) found = 1
             }
         }
@@ -809,7 +814,7 @@ emit_snapshot() {
     bastille_setup=false
     bastille_release_output=""
     if command -v bastille >/dev/null 2>&1 && bastille_storage_ready; then
-        if bastille_release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+        if bastille_release_output="$(run_bastille_read list release 2>/dev/null)"; then
             bastille_setup=true
         fi
     fi
@@ -1019,7 +1024,7 @@ do_preview() {
         if bastille_storage_configured; then
             storage_configured=true
         fi
-        if bastille_storage_ready && release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+        if bastille_storage_ready && release_output="$(run_bastille_read list release 2>/dev/null)"; then
             bastille_setup=true
         fi
         if printf '%s\n' "$release_output" | release_is_bootstrapped "$release"; then
@@ -1363,7 +1368,7 @@ do_bootstrap() {
         exit 1
     }
     if bastille_storage_ready; then
-        if ! release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+        if ! release_output="$(run_bastille_read list release 2>/dev/null)"; then
             emit_action_result false "Bastille setup is not ready." "Make sure privileged inventory reads work."
             exit 1
         fi
@@ -1436,7 +1441,7 @@ do_create() {
         emit_action_result false "Bastille storage is not set up." "Run bastille setup before creating a jail."
         exit 1
     }
-    if ! release_output="$(run_bastille_read list releases 2>/dev/null)"; then
+    if ! release_output="$(run_bastille_read list release 2>/dev/null)"; then
         emit_action_result false "Bastille setup is not ready." "Run bastille setup and make sure privileged inventory reads work."
         exit 1
     fi
