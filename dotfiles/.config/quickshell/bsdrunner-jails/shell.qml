@@ -171,8 +171,8 @@ ShellRoot {
     function mergedJails() {
         var merged = []
         var seen = {}
-        addJails(merged, seen, runningJails || [])
         addJails(merged, seen, bastilleJails || [])
+        addJails(merged, seen, runningJails || [])
         addJails(merged, seen, configuredJails || [])
         return merged
     }
@@ -180,7 +180,8 @@ ShellRoot {
     function addJails(target, seen, source) {
         for (var i = 0; i < source.length; i += 1) {
             var jail = source[i]
-            var key = (jail.backend || "native") + ":" + (jail.name || jail.hostname || jail.jid)
+            var identity = jail.name || jail.hostname || jail.path || jail.jid
+            var key = identity ? "jail:" + identity : ""
             if (!key || seen[key])
                 continue
             seen[key] = true
