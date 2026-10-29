@@ -67,6 +67,10 @@ run_bastille_list_all() {
     run_bastille_read list -a 2>/dev/null
 }
 
+run_bastille_list_json() {
+    run_bastille_read list -j 2>/dev/null
+}
+
 host_release_value() {
     if command -v freebsd-version >/dev/null 2>&1; then
         freebsd-version -u 2>/dev/null || true
@@ -538,6 +542,38 @@ bastille_jails_json() {
         return
     fi
 
+    if command -v jq >/dev/null 2>&1; then
+        json_output="$(run_bastille_list_json 2>/dev/null || true)"
+        if printf '%s\n' "$json_output" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            prefix="$(bastille_prefix_value 2>/dev/null || true)"
+            [ -n "$prefix" ] || prefix="/usr/local/bastille"
+            printf '%s\n' "$json_output" |
+            jq -c --arg prefix "$prefix" '
+                [ .[]
+                  | select(((.Name // "") | tostring) != "" and ((.Name // "") | tostring) != "-")
+                  | ((.Name // "") | tostring) as $name
+                  | ((.Boot // "unknown") | tostring | ascii_downcase) as $boot
+                  | ((.State // "") | tostring | ascii_downcase) as $state
+                  | ((.["IP Address"] // "") | tostring | split("|") | last) as $ip
+                  | ((.Release // "") | tostring) as $release
+                  | {
+                      name: $name,
+                      jid: ((.JID // "") | tostring),
+                      hostname: $name,
+                      path: ($prefix + "/jails/" + $name + "/root"),
+                      ipv4: (if $ip == "-" then "" else $ip end),
+                      ipv6: "",
+                      state: (if $state == "up" then "running" else "stopped" end),
+                      backend: "bastille",
+                      autostart: (if $boot == "on" or $boot == "yes" then "YES" elif $boot == "off" or $boot == "no" then "NO" else "unknown" end),
+                      release: (if $release == "" or $release == "-" then "managed by Bastille" else $release end)
+                    }
+                ]
+            '
+            return
+        fi
+    fi
+
     config_output="$(run_bastille_read config ALL get host.hostname,path,ip4.addr,osrelease,boot 2>/dev/null || true)"
     if printf '%s\n' "$config_output" | awk '
         ($1 == "-" || $1 ~ /^[0-9]+$/) && ($3 == "host.hostname" || $3 == "path" || $3 == "ip4.addr" || $3 == "osrelease" || $3 == "boot") { found = 1 }
@@ -594,7 +630,7 @@ bastille_jails_json() {
             return value
         }
         BEGIN { printf "["; first = 1 }
-        /^[[:space:]]*$/ || /^JID[[:space:]]/ || /^-/ { next }
+        /^[[:space:]]*$/ || /^[[:space:]]*JID[[:space:]]/ || /^[[:space:]]*-/ { next }
         {
             jid = $1
             ip = $2
@@ -638,6 +674,18 @@ bastille_releases_json() {
 }
 
 bastille_inventory() {
+    if command -v jq >/dev/null 2>&1; then
+        json_output="$(run_bastille_list_json 2>/dev/null || true)"
+        if printf '%s\n' "$json_output" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            printf '%s\n' "$json_output" |
+            jq -r '.[]
+                | select(((.Name // "") | tostring) != "" and ((.Name // "") | tostring) != "-")
+                | [((.Name // "") | tostring), ((.["IP Address"] // "") | tostring | split("|") | last)]
+                | @tsv'
+            return
+        fi
+    fi
+
     config_output="$(run_bastille_read config ALL get host.hostname,ip4.addr 2>/dev/null || true)"
     if printf '%s\n' "$config_output" | awk '
         ($1 == "-" || $1 ~ /^[0-9]+$/) && ($3 == "host.hostname" || $3 == "ip4.addr") { found = 1 }

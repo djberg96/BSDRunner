@@ -127,6 +127,9 @@ bsdrunner-jails-backend.sh console NAME native
 
 For Bastille-backed rows, the third argument is `bastille` and the backend calls
 `bastille start`, `bastille stop`, `bastille restart`, or `bastille console`.
+BSDRunner reads Bastille's JSON inventory when available so newer table layouts
+cannot be mistaken for jail data; a guarded legacy parser remains for older
+Bastille versions.
 
 The wizard's read-only review step accepts a jail name, FreeBSD release, IP
 address or CIDR, and an autostart preference.
