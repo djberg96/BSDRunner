@@ -379,6 +379,8 @@ Install flow:
 Remove and upgrade flows should follow the same shape. Remove actions also
 block plans that would remove protected BSDRunner desktop packages such as
 Hyprland, Quickshell, Waybar, Kitty, Rofi, and portal/session components.
+Single-package upgrades use `pkg upgrade PACKAGE` for both the dry run and the
+privileged action so validation and execution resolve the same transaction.
 
 ## Error Handling
 

@@ -164,11 +164,14 @@ run_preview() {
     # modes, and a trailing -y can turn the intended preview into a real
     # package transaction before validate_preview has inspected the plan.
     case "$action" in
-        install|upgrade)
+        install)
             pkg install -n -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
         reinstall)
             pkg install -n -f -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            ;;
+        upgrade)
+            pkg upgrade -n -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
         upgrade-all)
             pkg upgrade -n >"$stdout_file" 2>"$stderr_file"
@@ -304,7 +307,7 @@ case "$action" in
         success_message="Upgrade request completed for $package_name."
         failure_message="Unable to upgrade $package_name."
         run_action \
-            mdo -- pkg install -y -- "$package_name"
+            mdo -- pkg upgrade -y -- "$package_name"
         ;;
     upgrade-all)
         success_message="Upgrade all request completed."
