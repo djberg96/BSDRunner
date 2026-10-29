@@ -234,6 +234,13 @@ assert_json "$preview_output" \
     "create preview should return an exact non-mutating Bastille plan"
 [ ! -s "$command_log" ] || fail "create preview should not execute Bastille"
 
+thin_preview_output="$test_root/thin-preview.json"
+run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes thin >"$thin_preview_output"
+assert_json "$thin_preview_output" \
+    '.ok == true and .inputs.jail_type == "thin" and .commands == ["bastille create web 15.0-RELEASE 10.0.0.20/24"] and (.notes[0] | contains("thin service jail"))' \
+    "thin preview should omit Bastille's thick-jail flag and explain shared userland"
+[ ! -s "$command_log" ] || fail "thin preview should remain read-only"
+
 bootstrap_preview_output="$test_root/bootstrap-preview.json"
 run_backend preview web 14.4-RELEASE 10.0.0.20/24 no >"$bootstrap_preview_output"
 assert_json "$bootstrap_preview_output" \
@@ -266,6 +273,12 @@ fi
 assert_json "$invalid_preview_output" \
     '.ok == false and .message == "Invalid jail address."' \
     "create preview should reject unsafe address characters"
+if run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes clone >"$invalid_preview_output"; then
+    fail "create preview should reject unsupported jail types"
+fi
+assert_json "$invalid_preview_output" \
+    '.ok == false and .message == "Invalid jail type."' \
+    "create preview should reject unsupported jail types"
 pass "create preview is exact, read-only, and validated"
 
 : >"$command_log"
@@ -286,7 +299,14 @@ assert_json "$create_output" \
     "basic jail creation should return a structured success"
 grep -Fx 'mdo bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24' "$command_log" >/dev/null || fail "jail creation should use mdo"
 grep -Fx 'bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24' "$command_log" >/dev/null || fail "jail creation should call Bastille with exact arguments"
-pass "basic jail creation uses the guarded command path"
+
+run_backend create lean 15.0-RELEASE 10.0.0.31/24 yes lean thin >"$create_output"
+assert_json "$create_output" \
+    '.ok == true and .message == "Created lean."' \
+    "thin jail creation should return a structured success"
+grep -Fx 'mdo bastille create lean 15.0-RELEASE 10.0.0.31/24' "$command_log" >/dev/null || fail "thin jail creation should use Bastille's default thin mode through mdo"
+grep -Fx 'bastille create lean 15.0-RELEASE 10.0.0.31/24' "$command_log" >/dev/null || fail "thin jail creation should omit the thick-jail flag"
+pass "thick and thin jail creation use guarded command paths"
 
 : >"$command_log"
 guarded_create_output="$test_root/guarded-create.json"

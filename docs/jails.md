@@ -10,7 +10,7 @@ The UI is intentionally read-mostly. It helps a new user answer:
 - whether native FreeBSD jail tools or Bastille are available
 - what path, hostname, IP address, JID, and backend a selected jail uses
 - which lifecycle actions are safe for the selected state
-- what a proposed Bastille thick-jail creation would do before any command runs
+- what a proposed Bastille thick- or thin-jail creation would do before any command runs
 - how storage, userland, networking, configuration, and lifecycle fit together
   while creating a basic jail through a guarded wizard
 
@@ -123,7 +123,13 @@ For Bastille-backed rows, the third argument is `bastille` and the backend calls
 `bastille start`, `bastille stop`, `bastille restart`, or `bastille console`.
 
 The wizard's read-only review step accepts a jail name, FreeBSD release, IP
-address or CIDR, and an autostart preference:
+address or CIDR, and an autostart preference.
+
+The release field defaults to the detected host release without its patch-level
+suffix (`15.1-RELEASE-p6` becomes `15.1-RELEASE`). If the host release cannot be
+normalized, the wizard falls back to the latest bootstrapped Bastille release.
+
+For example:
 
 ```sh
 bsdrunner-jails-backend.sh preview web 15.0-RELEASE 10.0.0.20/24 yes
@@ -138,17 +144,30 @@ address overlaps a host route, and whether the proposed jail release is newer
 than the host. An existing release skips the redundant bootstrap command;
 otherwise the plan includes it.
 
-The current preview deliberately plans a thick service jail. Choosing no
-autostart adds Bastille's `--no-boot` option. A failed readiness check is shown
+The optional final argument selects `thick` or `thin`; omitting it preserves the
+beginner-friendly `thick` default:
+
+```sh
+bsdrunner-jails-backend.sh preview web 15.0-RELEASE 10.0.0.20/24 yes thin
+```
+
+Thick uses Bastille's `--thick` flag and gives the jail an independent userland
+copy. Thin uses Bastille's default shared-base layout and omits that flag.
+Choosing no autostart adds Bastille's `--no-boot` option. A failed readiness check is shown
 as a warning and leaves the generated commands visible for inspection. Preview
 never executes them; the final Lifecycle step requires separate confirmation.
+
+The beginner picker remains FreeBSD-only. Bastille's experimental Linux mode
+needs separate Linux compatibility and debootstrap setup, while Clone is a
+ZFS-specific workflow; both are intentionally deferred to a future Advanced
+path instead of being mixed into the basic release list.
 
 After the user types the proposed jail name on the final Lifecycle step, the UI
 may run two separately guarded actions:
 
 ```sh
 bsdrunner-jails-backend.sh bootstrap 15.0-RELEASE 15.0-RELEASE
-bsdrunner-jails-backend.sh create web 15.0-RELEASE 10.0.0.20/24 yes web
+bsdrunner-jails-backend.sh create web 15.0-RELEASE 10.0.0.20/24 yes web thick
 ```
 
 The last argument is an exact confirmation value. Bootstrap is skipped when the
@@ -177,10 +196,12 @@ The UI treats jail creation as five visible concepts:
 
 The **Create Basic Jail** wizard follows those five concepts directly. Storage
 selects and configures a ZFS pool when necessary, Userland selects or
-bootstraps a release, Network validates the address and can configure the narrow
+bootstraps a release, presents common release choices, and selects a Thick or
+Thin userland. Network validates the address and can configure the narrow
 Bastille/PF prerequisites, Config collects the name/startup policy, and Lifecycle
-presents the exact plan and typed confirmation. The initial target is
-deliberately a thick Bastille service jail. A future native workflow will need
+presents the exact plan and typed confirmation. Thick remains the recommended
+default; Thin is available for users comfortable managing a shared release base.
+A future native workflow will need
 separate validation around datasets, release extraction, `devfs`, network
 settings, and generated `/etc/jail.conf.d/NAME.conf` files.
 
@@ -189,7 +210,8 @@ settings, and generated `/etc/jail.conf.d/NAME.conf` files.
 Bastille is the assumed managed-jail backend, while native FreeBSD jails remain
 the no-dependency baseline. When Bastille is installed, BSDRunner can list its
 jails with release and boot metadata, call its lifecycle commands, and guide a
-user through thick-jail creation against the current host. When it is absent,
+user through thick- or thin-jail creation against the current host. When it is
+absent,
 native jail status still works and the wizard explains which setup prerequisite
 is missing.
 
@@ -205,7 +227,8 @@ It supplies representative `jls`, `jail.conf`, `sysrc`, `ifconfig`, `route`,
 results through an isolated test path. The suite checks rich snapshot parsing, ZFS pool discovery,
 storage preview and guarded setup, configured-but-uninitialized bootstrap,
 network recommendation, route-overlap checks, narrow loopback/PF setup,
-bootstrapped and missing-release plans, name and address collisions, host
+bootstrapped and missing-release plans, exact thick/thin commands, invalid type
+rejection, name and address collisions, host
 compatibility, demo-mode guards, guarded bootstrap and creation dispatch, typed
 confirmations, last-second validation failures, lifecycle dispatch, and
 persisted action status.

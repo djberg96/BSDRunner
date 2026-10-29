@@ -343,6 +343,17 @@ valid_release() {
     esac
 }
 
+valid_jail_type() {
+    case "${1:-}" in
+        thick|thin)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 valid_address() {
     case "${1:-}" in
         inherit)
@@ -931,6 +942,7 @@ do_preview() {
     release="${2:-}"
     address="${3:-}"
     autostart="${4:-yes}"
+    jail_type="${5:-thick}"
 
     valid_name "$name" || {
         emit_action_result false "Invalid jail name." "Use letters, numbers, dots, underscores, or hyphens."
@@ -956,6 +968,10 @@ do_preview() {
             exit 1
             ;;
     esac
+    valid_jail_type "$jail_type" || {
+        emit_action_result false "Invalid jail type." "Choose thick or thin."
+        exit 1
+    }
 
     bastille_installed=false
     bastille_setup=false
@@ -1005,7 +1021,10 @@ do_preview() {
     fi
 
     bootstrap_command="bastille bootstrap --update ${release}"
-    create_command="bastille create --thick"
+    create_command="bastille create"
+    if [ "$jail_type" = "thick" ]; then
+        create_command="${create_command} --thick"
+    fi
     if [ "$autostart" = "no" ]; then
         create_command="${create_command} --no-boot"
     fi
@@ -1053,11 +1072,11 @@ do_preview() {
     printf '"ok":true,'
     printf '"message":"%s",' "$(printf '%s' "$preview_message" | json_escape)"
     printf '"backend":"bastille","mutates":false,"ready":%s,' "$ready"
-    printf '"inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","jail_type":"thick"},' \
+    printf '"inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","jail_type":"%s"},' \
         "$(printf '%s' "$name" | json_escape)" \
         "$(printf '%s' "$release" | json_escape)" \
         "$(printf '%s' "$address" | json_escape)" \
-        "$autostart"
+        "$autostart" "$jail_type"
     printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"storage_configured":%s,"network_ready":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"address_route_safe":%s,"host_release":"%s","host_compatible":%s},' \
         "$bastille_installed" "$bastille_setup" "$storage_configured" "$network_ready" "$release_bootstrapped" "$name_available" "$address_available" "$address_route_safe" \
         "$(printf '%s' "$host_release" | json_escape)" "$host_compatible"
@@ -1066,7 +1085,13 @@ do_preview() {
         printf '"%s",' "$(printf '%s' "$bootstrap_command" | json_escape)"
     fi
     printf '"%s"],' "$(printf '%s' "$create_command" | json_escape)"
-    printf '"notes":["This plan creates a thick service jail; Bastille owns its storage and jail.conf entry.","%s","%s","%s","%s","%s"]' \
+    if [ "$jail_type" = "thick" ]; then
+        type_note="This plan creates a thick service jail with an independent userland copy; Bastille owns its storage and jail.conf entry."
+    else
+        type_note="This plan creates a thin service jail that shares the bootstrapped release base; Bastille owns its storage, mounts, and jail.conf entry."
+    fi
+    printf '"notes":["%s","%s","%s","%s","%s","%s"]' \
+        "$(printf '%s' "$type_note" | json_escape)" \
         "$(printf '%s' "$availability_note" | json_escape)" \
         "$(printf '%s' "$release_note" | json_escape)" \
         "$(printf '%s' "$collision_note" | json_escape)" \
@@ -1319,6 +1344,7 @@ do_create() {
     address="${3:-}"
     autostart="${4:-yes}"
     confirmation="${5:-}"
+    jail_type="${6:-thick}"
 
     valid_name "$name" || {
         emit_action_result false "Invalid jail name." "Use letters, numbers, dots, underscores, or hyphens."
@@ -1344,6 +1370,10 @@ do_create() {
             exit 1
             ;;
     esac
+    valid_jail_type "$jail_type" || {
+        emit_action_result false "Invalid jail type." "Choose thick or thin."
+        exit 1
+    }
     [ "$confirmation" = "$name" ] || {
         emit_action_result false "Jail confirmation did not match." "Return to the review step and confirm the jail name."
         exit 1
@@ -1382,18 +1412,18 @@ do_create() {
         exit 1
     fi
 
+    set -- bastille create
+    if [ "$jail_type" = "thick" ]; then
+        set -- "$@" --thick
+    fi
     if [ "$autostart" = "no" ]; then
-        if output="$(run_privileged bastille create --thick --no-boot "$name" "$release" "$address" 2>&1)"; then
-            create_ok=true
-        else
-            create_ok=false
-        fi
+        set -- "$@" --no-boot
+    fi
+    set -- "$@" "$name" "$release" "$address"
+    if output="$(run_privileged "$@" 2>&1)"; then
+        create_ok=true
     else
-        if output="$(run_privileged bastille create --thick "$name" "$release" "$address" 2>&1)"; then
-            create_ok=true
-        else
-            create_ok=false
-        fi
+        create_ok=false
     fi
 
     if [ "$create_ok" = true ]; then
@@ -1436,7 +1466,7 @@ case "$action" in
         do_console "${2:-}" "${3:-native}"
         ;;
     preview)
-        do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}"
+        do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-thick}"
         ;;
     storage-preview)
         do_storage_preview "${2:-}"
@@ -1454,7 +1484,7 @@ case "$action" in
         do_bootstrap "${2:-}" "${3:-}"
         ;;
     create)
-        do_create "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-}"
+        do_create "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-}" "${7:-thick}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"

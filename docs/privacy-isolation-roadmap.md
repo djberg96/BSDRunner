@@ -94,8 +94,9 @@ feels trustworthy.
 
 The first follow-up UI milestone began as a read-only creation preview and now
 drives a guarded `Create Basic Jail` wizard. It teaches Storage, Userland,
-Network, Config, and Lifecycle in sequence, emits an exact Bastille thick-jail
-plan, and requires typed confirmation for storage, network, and jail creation.
+Network, Config, and Lifecycle in sequence, emits an exact Bastille thick- or
+thin-jail plan, and requires typed confirmation for storage, network, and jail
+creation.
 The Network stage recommends a non-overlapping private address, configures only
 Bastille's loopback prerequisite, and delegates NAT and anchors to BSDRunner's
 managed PF profile. Storage setup, network setup, bootstrap, and create run as
@@ -134,7 +135,8 @@ Creation should graduate in stages:
    address validation, managed PF NAT/anchors, typed confirmation, and separate
    storage/network/bootstrap/create stages (implemented)
 3. native preview with generated config, storage, and userland steps
-4. thin/shared-base and desktop-app jail profiles after service jails are solid
+4. broader shared-base, clone, Linux, and desktop-app jail profiles after the
+   basic Thick/Thin service-jail choice is solid
 
 ### Jail Types
 

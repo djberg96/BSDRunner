@@ -97,6 +97,9 @@ ShellRoot {
     property string previewName: "web"
     property string previewRelease: "15.0-RELEASE"
     property bool previewReleaseCustomized: false
+    property bool previewReleaseCustom: false
+    property bool releaseMenuOpen: false
+    property string previewJailType: "thick"
     property string previewAddress: "10.0.0.20/24"
     property bool previewAddressCustomized: false
     property bool previewAutostart: true
@@ -270,6 +273,80 @@ ShellRoot {
         return ""
     }
 
+    function normalizedHostRelease(value) {
+        var release = (value || "").replace(/^\s+|\s+$/g, "")
+        if (!/^[0-9]+\.[0-9]+-RELEASE(-p[0-9]+)?$/.test(release))
+            return ""
+        return release.replace(/-p[0-9]+$/, "")
+    }
+
+    function defaultPreviewRelease() {
+        var hostDefault = normalizedHostRelease(hostRelease)
+        if (hostDefault.length > 0)
+            return hostDefault
+        if (bastilleReleases.length > 0)
+            return bastilleReleases[bastilleReleases.length - 1]
+        return "15.0-RELEASE"
+    }
+
+    function releaseIsBootstrapped(value) {
+        for (var i = 0; i < bastilleReleases.length; i += 1) {
+            if (bastilleReleases[i] === value)
+                return true
+        }
+        return false
+    }
+
+    function releaseChoices() {
+        var choices = []
+        var seen = {}
+        var hostDefault = normalizedHostRelease(hostRelease)
+        if (hostDefault.length > 0) {
+            choices.push({"value": hostDefault, "label": hostDefault, "detail": "Host match • Recommended", "custom": false})
+            seen[hostDefault] = true
+        }
+        for (var i = bastilleReleases.length - 1; i >= 0; i -= 1) {
+            var release = bastilleReleases[i]
+            if (!release || seen[release])
+                continue
+            choices.push({"value": release, "label": release, "detail": "Bootstrapped • Ready", "custom": false})
+            seen[release] = true
+        }
+        choices.push({"value": "", "label": "Custom release…", "detail": "Enter another compatible FreeBSD release", "custom": true})
+        return choices
+    }
+
+    function releaseSelectionDetail() {
+        if (previewReleaseCustom)
+            return "Custom release"
+        if (previewRelease === normalizedHostRelease(hostRelease))
+            return "Host match • Recommended"
+        if (releaseIsBootstrapped(previewRelease))
+            return "Bootstrapped • Ready"
+        return "Selected release"
+    }
+
+    function chooseRelease(choice) {
+        releaseMenuOpen = false
+        if (choice.custom) {
+            previewReleaseCustom = true
+            previewReleaseCustomized = true
+            Qt.callLater(function () { previewReleaseInput.forceActiveFocus() })
+            return
+        }
+        previewRelease = choice.value
+        previewReleaseCustom = false
+        previewReleaseCustomized = true
+        invalidateCreatePlan()
+    }
+
+    function chooseJailType(jailType) {
+        if (jailType !== "thick" && jailType !== "thin")
+            return
+        previewJailType = jailType
+        invalidateCreatePlan()
+    }
+
     function statusDetailText() {
         if ((statusTone === "error" || lastResultTone === "error") && actionDetails.length > 0)
             return firstNonEmptyLine(actionDetails)
@@ -367,6 +444,7 @@ ShellRoot {
         networkSetupStage = "idle"
         networkSetupMessage = ""
         networkSetupDetails = ""
+        releaseMenuOpen = false
         chooseDefaultStoragePool()
         if (!previewAddressCustomized && networkInfo && networkInfo.recommended_address)
             previewAddress = networkInfo.recommended_address
@@ -375,6 +453,7 @@ ShellRoot {
     function closeCreatePreview() {
         if (wizardBusy)
             return
+        releaseMenuOpen = false
         createPreviewVisible = false
     }
 
@@ -541,6 +620,7 @@ ShellRoot {
 
     function previousWizardStep() {
         if (!wizardBusy && wizardStep > 0) {
+            releaseMenuOpen = false
             wizardStep -= 1
             creationConfirmation = ""
             creationStage = "idle"
@@ -552,6 +632,7 @@ ShellRoot {
     function nextWizardStep() {
         if (!wizardCanContinue())
             return
+        releaseMenuOpen = false
         if (wizardStep < 3) {
             wizardStep += 1
             return
@@ -682,7 +763,7 @@ ShellRoot {
             return storageLines.join("\n")
         }
         if (wizardStep === 1)
-            return "USERLAND\n\nChoose a FreeBSD release no newer than the host. The jail shares the host kernel but needs its own /bin, /etc, and /usr.\n\nHost: " + (hostRelease || "Unknown") + "\nBootstrapped: " + (bastilleReleases.length > 0 ? bastilleReleases.join(", ") : "None; the selected release will be downloaded.")
+            return "USERLAND\n\nChoose a FreeBSD release no newer than the host, then choose how Bastille stores the jail userland. Thick creates an independent copy and is recommended for beginners. Thin shares the bootstrapped release base and uses less space, but base updates require more care.\n\nSelected: " + previewRelease + " • " + previewJailType.charAt(0).toUpperCase() + previewJailType.slice(1) + "\nHost: " + (hostRelease || "Unknown") + "\nBootstrapped: " + (bastilleReleases.length > 0 ? bastilleReleases.join(", ") : "None; the selected release will be downloaded.")
         if (wizardStep === 2) {
             var networkLines = ["NETWORK", "", "The jail uses a private IPv4 address on Bastille's loopback interface. BSDRunner adds only the PF NAT and anchor rules needed for outbound access and future port redirects.", ""]
             networkLines.push((networkInfo.loopback_ready ? "[ok] " : "[!] ") + "Loopback " + (networkInfo.loopback_interface || "bastille0"))
@@ -821,8 +902,10 @@ ShellRoot {
         if (!previewAddressCustomized && networkInfo.recommended_address)
             previewAddress = networkInfo.recommended_address
         hostRelease = payload.host_release || ""
-        if (!previewReleaseCustomized && bastilleReleases.length > 0)
-            previewRelease = bastilleReleases[bastilleReleases.length - 1]
+        if (!previewReleaseCustomized) {
+            previewRelease = defaultPreviewRelease()
+            previewReleaseCustom = false
+        }
         runningJails = payload.running || []
         configuredJails = payload.configured || []
         bastilleJails = payload.bastille || []
@@ -931,7 +1014,7 @@ ShellRoot {
         id: createPreviewProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "preview", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no"]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "preview", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.previewJailType]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1017,7 +1100,7 @@ ShellRoot {
 
         command: root.provisionAction === "bootstrap"
             ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "bootstrap", root.previewRelease, root.previewRelease]
-            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "create", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation]
+            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "create", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation, root.previewJailType]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1944,7 +2027,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Guided thick jail • every setup or creation change requires typed confirmation"
+                                    text: "Guided " + root.previewJailType + " jail • every setup or creation change requires typed confirmation"
                                     color: root.palette.accent
                                     font.pixelSize: 12
                                     font.bold: true
@@ -2384,7 +2467,134 @@ ShellRoot {
                                     Rectangle {
                                         visible: root.wizardStep === 1
                                         width: parent.width
-                                        height: 40
+                                        height: 42
+                                        z: root.releaseMenuOpen ? 30 : 0
+                                        radius: 6
+                                        color: root.palette.cardBackground
+                                        border.width: 1
+                                        border.color: root.releaseMenuOpen ? root.palette.accent : root.palette.panelBorder
+
+                                        Row {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+
+                                            Column {
+                                                width: parent.width - 28
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                spacing: 1
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.previewRelease
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.releaseSelectionDetail()
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 8
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            Text {
+                                                width: 28
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                horizontalAlignment: Text.AlignRight
+                                                text: root.releaseMenuOpen ? "⌃" : "⌄"
+                                                color: root.palette.accent
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.releaseMenuOpen = !root.releaseMenuOpen
+                                        }
+
+                                        Rectangle {
+                                            visible: root.releaseMenuOpen
+                                            x: 0
+                                            y: parent.height + 4
+                                            width: parent.width
+                                            height: Math.min(root.releaseChoices().length * 50 + 8, 164)
+                                            z: 40
+                                            radius: 7
+                                            color: root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.palette.accent
+
+                                            Flickable {
+                                                anchors.fill: parent
+                                                anchors.margins: 4
+                                                contentWidth: width
+                                                contentHeight: releaseChoiceColumn.height
+                                                clip: true
+
+                                                Column {
+                                                    id: releaseChoiceColumn
+                                                    width: parent.width
+
+                                                    Repeater {
+                                                        model: root.releaseChoices()
+
+                                                        Rectangle {
+                                                            id: releaseChoice
+                                                            required property var modelData
+
+                                                            width: parent.width
+                                                            height: 50
+                                                            radius: 5
+                                                            color: releaseChoiceMouse.containsMouse ? root.palette.cardHover : "transparent"
+
+                                                            Column {
+                                                                anchors.fill: parent
+                                                                anchors.margins: 7
+                                                                spacing: 2
+
+                                                                Text {
+                                                                    width: parent.width
+                                                                    text: releaseChoice.modelData.label
+                                                                    color: root.palette.primaryText
+                                                                    font.pixelSize: 11
+                                                                    font.bold: true
+                                                                    elide: Text.ElideRight
+                                                                }
+
+                                                                Text {
+                                                                    width: parent.width
+                                                                    text: releaseChoice.modelData.detail
+                                                                    color: root.palette.mutedText
+                                                                    font.pixelSize: 9
+                                                                    elide: Text.ElideRight
+                                                                }
+                                                            }
+
+                                                            MouseArea {
+                                                                id: releaseChoiceMouse
+                                                                anchors.fill: parent
+                                                                hoverEnabled: true
+                                                                cursorShape: Qt.PointingHandCursor
+                                                                onClicked: root.chooseRelease(releaseChoice.modelData)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: root.wizardStep === 1 && root.previewReleaseCustom
+                                        width: parent.width
+                                        height: visible ? 40 : 0
                                         radius: 6
                                         color: root.palette.cardBackground
                                         border.width: 1
@@ -2398,7 +2608,7 @@ ShellRoot {
                                             color: root.palette.primaryText
                                             selectionColor: root.palette.accent
                                             selectedTextColor: root.palette.panelBackground
-                                            font.pixelSize: 13
+                                            font.pixelSize: 12
                                             verticalAlignment: TextInput.AlignVCenter
                                             clip: true
                                             onTextEdited: {
@@ -2412,7 +2622,75 @@ ShellRoot {
                                     Text {
                                         visible: root.wizardStep === 1
                                         width: parent.width
-                                        text: root.bastilleReleases.length > 0 ? "Bootstrapped: " + root.bastilleReleases.join(", ") : "No bootstrapped releases detected."
+                                        text: "Jail userland"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Row {
+                                        visible: root.wizardStep === 1
+                                        width: parent.width
+                                        height: 74
+                                        spacing: 8
+
+                                        Repeater {
+                                            model: [
+                                                {"id": "thick", "label": "Thick", "detail": "Independent copy • Recommended"},
+                                                {"id": "thin", "label": "Thin", "detail": "Shared base • Less disk"}
+                                            ]
+
+                                            Rectangle {
+                                                id: jailTypeChoice
+                                                required property var modelData
+                                                readonly property bool selected: root.previewJailType === modelData.id
+
+                                                width: (parent.width - 8) / 2
+                                                height: parent.height
+                                                radius: 7
+                                                color: jailTypeMouse.containsMouse ? root.palette.cardHover : selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.cardBackground
+                                                border.width: 1
+                                                border.color: selected ? root.palette.accent : root.palette.panelBorder
+
+                                                Column {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 9
+                                                    spacing: 5
+
+                                                    Text {
+                                                        width: parent.width
+                                                        text: (jailTypeChoice.selected ? "✓ " : "") + jailTypeChoice.modelData.label
+                                                        color: jailTypeChoice.selected ? root.palette.accent : root.palette.primaryText
+                                                        font.pixelSize: 12
+                                                        font.bold: true
+                                                    }
+
+                                                    Text {
+                                                        width: parent.width
+                                                        text: jailTypeChoice.modelData.detail
+                                                        color: root.palette.mutedText
+                                                        font.pixelSize: 9
+                                                        wrapMode: Text.WordWrap
+                                                        maximumLineCount: 2
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: jailTypeMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.chooseJailType(jailTypeChoice.modelData.id)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: root.wizardStep === 1
+                                        width: parent.width
+                                        text: root.bastilleReleases.length > 0 ? "Ready releases: " + root.bastilleReleases.join(", ") : "Selected release will be downloaded before creation."
                                         color: root.bastilleReleases.length > 0 ? root.palette.mutedText : root.palette.warning
                                         font.pixelSize: 9
                                         elide: Text.ElideRight

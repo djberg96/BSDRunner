@@ -200,7 +200,9 @@ configured FreeBSD jail host. The UI also includes a host-aware, read-only
 Bastille plan plus a guarded **Create Basic Jail** wizard that follows Storage,
 Userland, Network, Config, and Lifecycle. The Storage step can select an
 existing ZFS pool and configure Bastille's conventional `POOL/bastille`
-hierarchy. The separate Network step recommends a route-safe jail address and,
+hierarchy. Userland offers the host-matched and bootstrapped FreeBSD releases,
+plus guarded Thick and Thin jail choices. The separate Network step recommends
+a route-safe jail address and,
 after typed confirmation, can create Bastille's loopback interface and add its
 NAT and anchors to BSDRunner's managed PF profile. See `docs/jails.md` for
 backend commands, fixture-backed tests, current scope, and the creation model.
