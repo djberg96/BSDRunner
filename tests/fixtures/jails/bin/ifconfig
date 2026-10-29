@@ -22,6 +22,21 @@ case "${1:-}" in
         [ "$loopback_ready" = true ] || exit 1
         printf '%s\n' 'bastille0: flags=8049<UP,LOOPBACK,RUNNING,MULTICAST>'
         ;;
+    lo1)
+        [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE:-}" ] || exit 1
+        [ -f "$BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE" ] || exit 1
+        if [ "${2:-}" = "name" ] && [ "${3:-}" = "bastille0" ]; then
+            {
+                printf 'ifconfig'
+                printf ' %s' "$@"
+                printf '\n'
+            } >>"$BSDRUNNER_JAILS_TEST_LOG"
+            : >"$BSDRUNNER_JAILS_TEST_LOOPBACK_STATE"
+            rm -f "$BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE"
+        else
+            printf '%s\n' 'lo1: flags=8008<LOOPBACK,MULTICAST>'
+        fi
+        ;;
     *)
         exit 1
         ;;

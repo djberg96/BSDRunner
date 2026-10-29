@@ -45,6 +45,7 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_NETWORK_READY="${BSDRUNNER_JAILS_TEST_NETWORK_READY:-1}" \
     BSDRUNNER_JAILS_TEST_PF_STATE="${BSDRUNNER_JAILS_TEST_PF_STATE:-}" \
     BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="${BSDRUNNER_JAILS_TEST_LOOPBACK_STATE:-}" \
+    BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE="${BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE:-}" \
     sh "$backend" "$@"
 }
 
@@ -208,6 +209,22 @@ assert_json "$network_snapshot" \
     '.network.ready == true and .network.loopback_ready == true and .network.nat_ready == true and .network.rdr_anchor_ready == true and .network.filter_anchor_ready == true' \
     "network setup should satisfy the next readiness snapshot"
 pass "network setup is host-aware, confirmed, and split between Bastille and BSDRunner PF"
+
+: >"$command_log"
+rm -f "$loopback_state" "$pf_state"
+loopback_source_state="$test_root/loopback-source-ready"
+BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="$loopback_state" \
+BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE="$loopback_source_state" \
+BSDRUNNER_JAILS_TEST_NETWORK_READY=0 \
+BSDRUNNER_JAILS_TEST_PF_STATE="$pf_state" \
+run_backend network-setup 10.0.0.20/24 10.0.0.20/24 >"$network_setup"
+assert_json "$network_setup" \
+    '.ok == true and .message == "Configured Bastille jail networking."' \
+    "network setup should recover Bastille's configured but unrenamed loopback"
+grep -Fx 'mdo bastille setup --yes loopback' "$command_log" >/dev/null || fail "loopback recovery should begin with Bastille's supported setup command"
+grep -Fx 'mdo ifconfig lo1 name bastille0' "$command_log" >/dev/null || fail "loopback recovery should apply Bastille's explicit rc.conf rename"
+grep -Fx 'pf-backend jail-network bastille0 wlan0' "$command_log" >/dev/null || fail "recovered loopback should be passed to BSDRunner PF"
+pass "network setup repairs Bastille's configured but unrenamed loopback"
 
 : >"$command_log"
 configured_only_config="$test_root/configured-bastille.conf"

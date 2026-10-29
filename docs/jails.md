@@ -110,6 +110,12 @@ backend renders and syntax-checks the complete managed profile before installing
 and reloading it. If loopback setup succeeds but PF setup fails, the UI reports
 the partial result and leaves creation blocked until all readiness checks pass.
 
+Bastille 1.4.4 can leave the newly cloned `lo1` interface unrenamed even after
+writing `ifconfig_lo1_name="bastille0"` to `rc.conf`. When that exact configured
+mapping is present, BSDRunner safely applies the pending interface rename before
+verification and PF setup. It does not guess at interface names or restart the
+host's other network interfaces.
+
 Lifecycle actions are deliberately narrow:
 
 ```sh

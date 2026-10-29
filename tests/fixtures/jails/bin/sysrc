@@ -9,6 +9,20 @@ case "${2:-}" in
     bastille_enable)
         printf 'NO\n'
         ;;
+    cloned_interfaces)
+        if [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE:-}" ]; then
+            printf 'lo1\n'
+        else
+            printf 'unknown\n'
+        fi
+        ;;
+    ifconfig_lo1_name)
+        if [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE:-}" ]; then
+            printf 'bastille0\n'
+        else
+            printf 'unknown\n'
+        fi
+        ;;
     *)
         printf 'unknown\n'
         ;;

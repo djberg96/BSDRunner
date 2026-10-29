@@ -210,6 +210,35 @@ network_interface_exists() {
     ifconfig "$network_interface_name" >/dev/null 2>&1
 }
 
+bastille_loopback_source_value() {
+    desired_loopback="${1:-}"
+    [ -n "$desired_loopback" ] || return 1
+    command -v sysrc >/dev/null 2>&1 || return 1
+
+    cloned_interfaces="$(sysrc -n cloned_interfaces 2>/dev/null || true)"
+    for cloned_interface in $cloned_interfaces; do
+        cloned_interface="${cloned_interface%%:*}"
+        case "$cloned_interface" in
+            ""|*[!A-Za-z0-9_.-]*)
+                continue
+                ;;
+        esac
+        configured_name="$(sysrc -n "ifconfig_${cloned_interface}_name" 2>/dev/null || true)"
+        if [ "$configured_name" = "$desired_loopback" ] && network_interface_exists "$cloned_interface"; then
+            printf '%s\n' "$cloned_interface"
+            return 0
+        fi
+    done
+    return 1
+}
+
+activate_bastille_loopback() {
+    desired_loopback="${1:-}"
+    source_loopback="$(bastille_loopback_source_value "$desired_loopback" 2>/dev/null || true)"
+    [ -n "$source_loopback" ] || return 1
+    run_privileged ifconfig "$source_loopback" name "$desired_loopback"
+}
+
 pf_rules_capture() {
     rules_kind="$1"
     command -v pfctl >/dev/null 2>&1 || return 1
@@ -1110,6 +1139,7 @@ do_network_preview() {
     route_safe=false
     address_route_available "$address" && route_safe=true
     loopback_interface="$(bastille_loopback_value)"
+    loopback_source="$(bastille_loopback_source_value "$loopback_interface" 2>/dev/null || true)"
     external_interface="$(default_interface_value 2>/dev/null || true)"
     loopback_ready=false
     pf_running=false
@@ -1137,7 +1167,13 @@ do_network_preview() {
         "$loopback_ready" "$pf_running" "$nat_ready" "$rdr_ready" "$anchor_ready" "$route_safe"
     printf '"commands":['
     if [ "$loopback_ready" != true ]; then
-        printf '"bastille setup --yes loopback",'
+        if [ -n "$loopback_source" ]; then
+            printf '"ifconfig %s name %s",' \
+                "$(printf '%s' "$loopback_source" | json_escape)" \
+                "$(printf '%s' "$loopback_interface" | json_escape)"
+        else
+            printf '"bastille setup --yes loopback",'
+        fi
     fi
     printf '"bsdrunner-pf-backend.sh jail-network %s %s"],' \
         "$(printf '%s' "$loopback_interface" | json_escape)" \
@@ -1181,16 +1217,29 @@ do_network_setup() {
 
     loopback_interface="$(bastille_loopback_value)"
     loopback_output=""
+    repair_output=""
     if ! network_interface_exists "$loopback_interface"; then
-        if ! loopback_output="$(run_privileged bastille setup --yes loopback 2>&1)"; then
-            write_last_result "error" "Unable to configure the Bastille loopback."
-            emit_action_result false "Unable to configure the Bastille loopback." "$loopback_output"
-            exit 1
+        loopback_source="$(bastille_loopback_source_value "$loopback_interface" 2>/dev/null || true)"
+        if [ -z "$loopback_source" ]; then
+            if ! loopback_output="$(run_privileged bastille setup --yes loopback 2>&1)"; then
+                write_last_result "error" "Unable to configure the Bastille loopback."
+                emit_action_result false "Unable to configure the Bastille loopback." "$loopback_output"
+                exit 1
+            fi
+            loopback_interface="$(bastille_loopback_value)"
+            loopback_source="$(bastille_loopback_source_value "$loopback_interface" 2>/dev/null || true)"
         fi
-        loopback_interface="$(bastille_loopback_value)"
+        if ! network_interface_exists "$loopback_interface" && [ -n "$loopback_source" ]; then
+            if ! repair_output="$(activate_bastille_loopback "$loopback_interface" 2>&1)"; then
+                write_last_result "error" "Unable to activate Bastille's configured loopback name."
+                emit_action_result false "Unable to activate the Bastille loopback." "$repair_output"
+                exit 1
+            fi
+        fi
         if ! network_interface_exists "$loopback_interface"; then
             write_last_result "error" "Bastille reported success, but its loopback interface is unavailable."
-            emit_action_result false "Bastille loopback verification failed." "$loopback_output"
+            emit_action_result false "Bastille loopback verification failed." "$loopback_output
+$repair_output"
             exit 1
         fi
     fi
@@ -1208,6 +1257,7 @@ do_network_setup() {
 
     write_last_result "success" "Configured Bastille loopback and BSDRunner PF jail networking."
     emit_action_result true "Configured Bastille jail networking." "$loopback_output
+$repair_output
 $pf_output"
 }
 
