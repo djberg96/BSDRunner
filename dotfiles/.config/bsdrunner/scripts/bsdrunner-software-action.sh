@@ -160,18 +160,21 @@ run_preview() {
     stdout_file="$1"
     stderr_file="$2"
 
+    # Do not combine pkg's -n and -y flags here. They are opposing answer
+    # modes, and a trailing -y can turn the intended preview into a real
+    # package transaction before validate_preview has inspected the plan.
     case "$action" in
         install|upgrade)
-            pkg install -n -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            pkg install -n -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
         reinstall)
-            pkg install -n -f -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            pkg install -n -f -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
         upgrade-all)
-            pkg upgrade -n -y >"$stdout_file" 2>"$stderr_file"
+            pkg upgrade -n >"$stdout_file" 2>"$stderr_file"
             ;;
         remove)
-            pkg delete -n -y -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            pkg delete -n -- "$package_name" >"$stdout_file" 2>"$stderr_file"
             ;;
         *)
             return 1
@@ -196,7 +199,7 @@ validate_preview() {
             if [ -n "$planned_removals" ]; then
                 write_log_file "$log_file" /dev/null /dev/null "$preview_stdout_file" "$preview_stderr_file"
                 details="$(printf 'BSDRunner blocked this action because pkg planned to remove installed packages:\n%s\n\nUse the terminal if you intentionally want to resolve this conflict manually.' "$planned_removals")"
-                emit_json false "Blocked $action for $package_name because pkg planned removals." "$details" "$log_file"
+                emit_json false "Safety stop: pkg planned unexpected removals." "$details" "$log_file"
                 return 1
             fi
             ;;

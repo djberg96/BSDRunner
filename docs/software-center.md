@@ -369,7 +369,9 @@ Install flow:
 4. UI shows dependency and confirmation copy.
 5. UI starts the action backend.
 6. Backend runs a `pkg -n` dry run and blocks install, reinstall, or upgrade
-   actions that would remove installed packages.
+   actions that would remove installed packages. Preview commands must never
+   combine pkg's opposing `-n` and `-y` answer modes: a trailing `-y` can turn
+   the preview into a real transaction before the removal guard inspects it.
 7. Backend runs the validated install command through `mdo`.
 8. Progress text appears in a dedicated dialog or log pane.
 9. On success, the UI refreshes installed and update state.

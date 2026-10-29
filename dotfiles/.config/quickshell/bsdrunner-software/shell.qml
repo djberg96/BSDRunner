@@ -195,9 +195,9 @@ ShellRoot {
         case "reinstall":
             return "Reinstall " + pendingActionPackageName + " from the configured FreeBSD package repositories?"
         case "upgrade":
-            return "Upgrade " + pendingActionPackageName + " to the latest available package version?"
+            return "Upgrade " + pendingActionPackageName + " to the latest available package version? BSDRunner will preview the transaction and stop if pkg plans to remove any installed package."
         case "upgrade-all":
-            return "Upgrade all packages with available updates?"
+            return "Upgrade all packages with available updates? BSDRunner will preview the transaction and stop if pkg plans to remove any installed package."
         case "remove":
             return "Remove " + pendingActionPackageName + " from this system?"
         default:
