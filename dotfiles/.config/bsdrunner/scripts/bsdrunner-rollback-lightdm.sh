@@ -25,5 +25,10 @@ restore_or_remove /usr/local/etc/lightdm/lightdm.conf.d/50-bsdrunner.conf
 restore_or_remove /usr/local/etc/lightdm/lightdm-gtk-greeter.conf
 restore_or_remove /usr/local/share/xgreeters/bsdrunner-lightdm-gtk-greeter.desktop
 
+if [ -f /usr/local/etc/lightdm/lightdm.conf.pre-bsdrunner ]; then
+    mv /usr/local/etc/lightdm/lightdm.conf.pre-bsdrunner \
+        /usr/local/etc/lightdm/lightdm.conf
+fi
+
 echo ":: Disabled LightDM and restored the pre-BSDRunner LightDM configuration."
 echo ":: Console login remains available; run start-hyprland manually if needed."
