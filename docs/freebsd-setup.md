@@ -1,6 +1,6 @@
 # FreeBSD Setup
 
-This repo targets a minimal Hyprland `0.54.x` session on FreeBSD 15.
+This repo targets a minimal Hyprland `0.56.x` session on FreeBSD 15.
 
 ## Packages
 
@@ -121,7 +121,7 @@ To return to the neutral baseline:
 
 Do the first test with only the shipped BSDRunner stack:
 
-- `hyprland.conf`
+- `hyprland.lua`
 - autostarted `bsdrunner-start-waybar.sh`
 - autostarted `swww` wallpaper helper when a theme is active
 
@@ -207,8 +207,8 @@ Fully quit Dolphin and reopen it. To revert, restore the previous `color_scheme_
 
 The shipped config uses:
 
-- a fallback monitor rule: `monitor=,preferred,auto,1`
-- conservative touchpad options that are valid for Hyprland `0.54`
+- a fallback monitor rule using the preferred mode and automatic placement and scale
+- conservative touchpad options that are valid for Hyprland `0.56`
 - no custom GPU environment overrides
 - `brightnessctl` keybinds are still present in the current base config and may need a FreeBSD-specific replacement later
 
