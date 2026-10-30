@@ -145,6 +145,62 @@ backup_file() {
     fi
 }
 
+write_main_greeter_selection() {
+    source_conf="$1"
+    target_conf="$2"
+    temporary_conf="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-lightdm-conf.XXXXXX")"
+
+    if ! awk '
+        BEGIN {
+            in_seat = 0
+            found_seat = 0
+            wrote_greeter = 0
+        }
+
+        /^\[Seat:\*\][[:space:]]*$/ {
+            if (in_seat && !wrote_greeter)
+                print "greeter-session=bsdrunner-lightdm-gtk-greeter"
+            in_seat = 1
+            found_seat = 1
+            wrote_greeter = 0
+            print
+            next
+        }
+
+        /^\[/ {
+            if (in_seat && !wrote_greeter) {
+                print "greeter-session=bsdrunner-lightdm-gtk-greeter"
+                wrote_greeter = 1
+            }
+            in_seat = 0
+        }
+
+        in_seat && /^[[:space:]]*greeter-session[[:space:]]*=/ {
+            if (!wrote_greeter) {
+                print "greeter-session=bsdrunner-lightdm-gtk-greeter"
+                wrote_greeter = 1
+            }
+            next
+        }
+
+        { print }
+
+        END {
+            if (in_seat && !wrote_greeter)
+                print "greeter-session=bsdrunner-lightdm-gtk-greeter"
+            if (!found_seat)
+                exit 42
+        }
+    ' "$source_conf" > "$temporary_conf"; then
+        rm -f "$temporary_conf"
+        echo ":: Could not find [Seat:*] in $source_conf" >&2
+        exit 1
+    fi
+
+    install -m 644 "$temporary_conf" "$target_conf"
+    rm -f "$temporary_conf"
+}
+
 lightdm_etc="$install_prefix/etc/lightdm"
 lightdm_share="$install_prefix/share/bsdrunner/lightdm"
 xgreeters_share="$install_prefix/share/xgreeters"
@@ -153,12 +209,21 @@ install -d -m 755 "$lightdm_etc/lightdm.conf.d"
 install -d -m 755 "$lightdm_share/backgrounds"
 install -d -m 755 "$xgreeters_share"
 
+lightdm_main_conf="$lightdm_etc/lightdm.conf"
+[ -f "$lightdm_main_conf" ] || {
+    echo ":: Missing LightDM main config: $lightdm_main_conf" >&2
+    exit 1
+}
+
 for target in \
+    "$lightdm_main_conf" \
     "$lightdm_etc/lightdm.conf.d/50-bsdrunner.conf" \
     "$lightdm_etc/lightdm-gtk-greeter.conf" \
     "$xgreeters_share/bsdrunner-lightdm-gtk-greeter.desktop"; do
     backup_file "$target"
 done
+
+write_main_greeter_selection "$lightdm_main_conf" "$lightdm_main_conf"
 
 install -m 644 \
     "$bundle_root/etc/lightdm/lightdm.conf.d/50-bsdrunner.conf" \

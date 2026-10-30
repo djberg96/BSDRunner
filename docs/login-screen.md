@@ -63,6 +63,9 @@ sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh \
 
 LightDM remains disabled. The old ttyv0 startup remains in `.profile`, so a
 reboot at this point still uses the existing console-to-Hyprland path.
+The installer also updates the active `greeter-session` in LightDM's main
+configuration because that file takes precedence over `lightdm.conf.d`; the
+original main configuration is retained with a `.pre-bsdrunner` suffix.
 
 ## 4. Run the Read-Only Preflight
 

@@ -19,6 +19,12 @@ test_home="$test_root/home"
 bundle="$test_root/bundle"
 prefix="$test_root/usr/local"
 mkdir -p "$test_home"
+mkdir -p "$prefix/etc/lightdm"
+printf '%s\n' \
+    '[Seat:*]' \
+    'greeter-session=lightdm-gtk-greeter' \
+    'session-wrapper=/usr/local/etc/lightdm/Xsession' \
+    > "$prefix/etc/lightdm/lightdm.conf"
 
 HOME="$test_home" sh \
     "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-render-lightdm.sh" \
@@ -58,6 +64,12 @@ sh "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh" 
     fail "greeter config was not installed"
 [ -f "$prefix/share/xgreeters/bsdrunner-lightdm-gtk-greeter.desktop" ] || \
     fail "xgreeter entry was not installed"
+grep -Fx 'greeter-session=bsdrunner-lightdm-gtk-greeter' \
+    "$prefix/etc/lightdm/lightdm.conf" >/dev/null || \
+    fail "main config still overrides the BSDRunner greeter"
+grep -Fx 'greeter-session=lightdm-gtk-greeter' \
+    "$prefix/etc/lightdm/lightdm.conf.pre-bsdrunner" >/dev/null || \
+    fail "main LightDM config was not backed up"
 pass "installer copies every required LightDM component"
 
 mkdir -p "$prefix/sbin" "$prefix/share/wayland-sessions"
