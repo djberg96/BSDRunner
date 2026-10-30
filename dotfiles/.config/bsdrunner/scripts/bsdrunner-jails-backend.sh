@@ -10,6 +10,8 @@ if [ "$test_mode" = "1" ]; then
     bastille_config_file="${BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG:-$etc_dir/bastille/bastille.conf}"
     bastille_test_prefix="${BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX:-$etc_dir/bastille-root}"
     pf_backend="${BSDRUNNER_JAILS_TEST_PF_BACKEND:-${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh}"
+    host_resolv_conf="${BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF:-$etc_dir/resolv.conf}"
+    resolvconf_interfaces_dir="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$etc_dir/resolvconf/interfaces}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
@@ -17,6 +19,8 @@ else
     bastille_config_file="/usr/local/etc/bastille/bastille.conf"
     bastille_test_prefix=""
     pf_backend="${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh"
+    host_resolv_conf="/etc/resolv.conf"
+    resolvconf_interfaces_dir="/var/run/resolvconf/interfaces"
 fi
 export PATH
 
@@ -206,6 +210,46 @@ bastille_loopback_value() {
 default_interface_value() {
     command -v route >/dev/null 2>&1 || return 1
     route -n get default 2>/dev/null | awk '$1 == "interface:" { print $2; exit }'
+}
+
+resolver_has_usable_nameserver() {
+    resolver_file="$1"
+    [ -r "$resolver_file" ] || return 1
+    awk '
+        $1 == "nameserver" && $2 !~ /^127\./ && $2 != "::1" && $2 != "0.0.0.0" { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$resolver_file"
+}
+
+resolver_uses_loopback() {
+    resolver_file="$1"
+    [ -r "$resolver_file" ] || return 1
+    awk '
+        $1 == "nameserver" && ($2 ~ /^127\./ || $2 == "::1") { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$resolver_file"
+}
+
+jail_resolver_source_value() {
+    if resolver_has_usable_nameserver "$host_resolv_conf" && ! resolver_uses_loopback "$host_resolv_conf"; then
+        printf '%s\n' "$host_resolv_conf"
+        return 0
+    fi
+
+    resolver_interface="$(default_interface_value 2>/dev/null || true)"
+    if [ -n "$resolver_interface" ]; then
+        resolver_interface_file="${resolvconf_interfaces_dir}/${resolver_interface}"
+        if resolver_has_usable_nameserver "$resolver_interface_file"; then
+            printf '%s\n' "$resolver_interface_file"
+            return 0
+        fi
+    fi
+
+    if resolver_has_usable_nameserver "$host_resolv_conf"; then
+        printf '%s\n' "$host_resolv_conf"
+        return 0
+    fi
+    return 1
 }
 
 network_interface_exists() {
@@ -1063,9 +1107,12 @@ do_preview() {
     address_available=true
     address_route_safe=false
     network_ready=false
+    dns_ready=false
     host_compatible=true
     host_release="$(host_release_value | awk 'NF { print; exit }')"
     release_output=""
+    resolver_source="$(jail_resolver_source_value 2>/dev/null || true)"
+    [ -n "$resolver_source" ] && dns_ready=true
 
     if command -v bastille >/dev/null 2>&1; then
         bastille_installed=true
@@ -1098,7 +1145,7 @@ do_preview() {
     if [ "$bastille_installed" != true ] || [ "$storage_configured" != true ] || \
        [ "$name_available" != true ] || [ "$address_available" != true ] || \
        [ "$address_route_safe" != true ] || [ "$network_ready" != true ] || \
-       [ "$host_compatible" != true ]; then
+       [ "$dns_ready" != true ] || [ "$host_compatible" != true ]; then
         ready=false
     fi
 
@@ -1111,6 +1158,10 @@ do_preview() {
         create_command="${create_command} --no-boot"
     fi
     create_command="${create_command} ${name} ${release} ${address}"
+    dns_command=""
+    if [ "$dns_ready" = true ]; then
+        dns_command="bastille cp ${name} ${resolver_source} /etc/resolv.conf"
+    fi
 
     if [ "$bastille_installed" = true ] && [ "$bastille_setup" = true ]; then
         availability_note="Bastille is installed and its release inventory is readable."
@@ -1138,6 +1189,11 @@ do_preview() {
     else
         network_note="Configure the Bastille loopback and BSDRunner PF jail rules before creating the jail."
     fi
+    if [ "$dns_ready" = true ]; then
+        dns_note="After creation, BSDRunner will copy a reachable resolver configuration into the jail instead of a host-only loopback resolver."
+    else
+        dns_note="No non-loopback DNS resolver was detected. Connect the host to a configured network before creating the jail."
+    fi
     if [ "$host_compatible" = true ]; then
         host_note="The proposed release is compatible with the detected host release, or the host release is unknown."
     else
@@ -1159,25 +1215,30 @@ do_preview() {
         "$(printf '%s' "$release" | json_escape)" \
         "$(printf '%s' "$address" | json_escape)" \
         "$autostart" "$jail_type"
-    printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"storage_configured":%s,"network_ready":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"address_route_safe":%s,"host_release":"%s","host_compatible":%s},' \
-        "$bastille_installed" "$bastille_setup" "$storage_configured" "$network_ready" "$release_bootstrapped" "$name_available" "$address_available" "$address_route_safe" \
+    printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"storage_configured":%s,"network_ready":%s,"dns_ready":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"address_route_safe":%s,"host_release":"%s","host_compatible":%s},' \
+        "$bastille_installed" "$bastille_setup" "$storage_configured" "$network_ready" "$dns_ready" "$release_bootstrapped" "$name_available" "$address_available" "$address_route_safe" \
         "$(printf '%s' "$host_release" | json_escape)" "$host_compatible"
     printf '"commands":['
     if [ "$release_bootstrapped" != true ]; then
         printf '"%s",' "$(printf '%s' "$bootstrap_command" | json_escape)"
     fi
-    printf '"%s"],' "$(printf '%s' "$create_command" | json_escape)"
+    printf '"%s"' "$(printf '%s' "$create_command" | json_escape)"
+    if [ -n "$dns_command" ]; then
+        printf ',"%s"' "$(printf '%s' "$dns_command" | json_escape)"
+    fi
+    printf '],'
     if [ "$jail_type" = "thick" ]; then
         type_note="This plan creates a thick service jail with an independent userland copy; Bastille owns its storage and jail.conf entry."
     else
         type_note="This plan creates a thin service jail that shares the bootstrapped release base; Bastille owns its storage, mounts, and jail.conf entry."
     fi
-    printf '"notes":["%s","%s","%s","%s","%s","%s"]' \
+    printf '"notes":["%s","%s","%s","%s","%s","%s","%s"]' \
         "$(printf '%s' "$type_note" | json_escape)" \
         "$(printf '%s' "$availability_note" | json_escape)" \
         "$(printf '%s' "$release_note" | json_escape)" \
         "$(printf '%s' "$collision_note" | json_escape)" \
         "$(printf '%s' "$network_note" | json_escape)" \
+        "$(printf '%s' "$dns_note" | json_escape)" \
         "$(printf '%s' "$host_note" | json_escape)"
     printf '}\n'
 }
@@ -1514,6 +1575,11 @@ do_create() {
         emit_action_result false "Bastille jail networking is not ready." "Configure the Bastille loopback and BSDRunner PF jail rules first."
         exit 1
     fi
+    resolver_source="$(jail_resolver_source_value 2>/dev/null || true)"
+    if [ -z "$resolver_source" ]; then
+        emit_action_result false "No jail-safe DNS resolver was detected." "Connect the host to a configured network, then review the creation plan again."
+        exit 1
+    fi
 
     set -- bastille create
     if [ "$jail_type" = "thick" ]; then
@@ -1529,13 +1595,22 @@ do_create() {
         create_ok=false
     fi
 
-    if [ "$create_ok" = true ]; then
-        write_last_result "success" "Created ${name}."
-        emit_action_result true "Created ${name}." "$output"
-    else
+    if [ "$create_ok" != true ]; then
         write_last_result "error" "Unable to create ${name}."
         emit_action_result false "Unable to create ${name}." "$output"
         exit 1
+    fi
+
+    if dns_output="$(run_privileged bastille cp "$name" "$resolver_source" /etc/resolv.conf 2>&1)"; then
+        write_last_result "success" "Created ${name}."
+        emit_action_result true "Created ${name}." "$output
+Configured jail DNS from ${resolver_source}.
+$dns_output"
+    else
+        write_last_result "warning" "Created ${name}, but DNS setup needs attention."
+        emit_action_result true "Created ${name}, but DNS setup needs attention." "$output
+The jail exists, but BSDRunner could not copy ${resolver_source} to /etc/resolv.conf.
+$dns_output"
     fi
 }
 

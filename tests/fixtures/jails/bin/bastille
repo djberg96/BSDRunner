@@ -35,4 +35,10 @@ fi
     printf ' %s' "$@"
     printf '\n'
 } >>"$BSDRUNNER_JAILS_TEST_LOG"
+
+if [ "${1:-}" = "cp" ] && [ "${BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL:-0}" = "1" ]; then
+    printf 'Unable to copy resolver configuration.\n' >&2
+    exit 1
+fi
+
 printf 'Bastille action completed.\n'

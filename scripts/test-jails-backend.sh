@@ -42,6 +42,9 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG="${BSDRUNNER_JAILS_TEST_BASTILLE_CONFIG:-$fixtures/etc/bastille/bastille.conf}" \
     BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX="${BSDRUNNER_JAILS_TEST_BASTILLE_PREFIX:-$fixtures/etc/bastille-root}" \
     BSDRUNNER_JAILS_TEST_PF_BACKEND="$fixtures/bin/bsdrunner-pf-backend" \
+    BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF="${BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF:-$fixtures/etc/resolv.conf}" \
+    BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$fixtures/etc/resolvconf/interfaces}" \
+    BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL="${BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL:-0}" \
     BSDRUNNER_JAILS_TEST_NETWORK_READY="${BSDRUNNER_JAILS_TEST_NETWORK_READY:-1}" \
     BSDRUNNER_JAILS_TEST_PF_STATE="${BSDRUNNER_JAILS_TEST_PF_STATE:-}" \
     BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="${BSDRUNNER_JAILS_TEST_LOOPBACK_STATE:-}" \
@@ -64,7 +67,7 @@ pass "demo fixture satisfies the snapshot contract"
 demo_preview_output="$test_root/demo-preview.json"
 run_backend preview demo-web 15.0-RELEASE 10.0.0.40/24 no >"$demo_preview_output"
 assert_json "$demo_preview_output" \
-    '.ok == true and .mutates == false and .backend == "bastille" and .ready == true and .checks.release_bootstrapped == true and .commands == ["bastille create --thick --no-boot demo-web 15.0-RELEASE 10.0.0.40/24"]' \
+    '.ok == true and .mutates == false and .backend == "bastille" and .ready == true and .checks.release_bootstrapped == true and .checks.dns_ready == true and .commands[0] == "bastille create --thick --no-boot demo-web 15.0-RELEASE 10.0.0.40/24" and (.commands[1] | endswith("/etc/resolv.conf"))' \
     "demo mode should allow a read-only create preview"
 [ ! -s "$command_log" ] || fail "create preview should not execute fixture commands"
 pass "demo mode allows the read-only create preview"
@@ -247,21 +250,21 @@ pass "configured ZFS storage can be initialized by the first bootstrap"
 preview_output="$test_root/preview.json"
 run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$preview_output"
 assert_json "$preview_output" \
-    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"storage_configured":true,"network_ready":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"address_route_safe":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands == ["bastille create --thick web 15.0-RELEASE 10.0.0.20/24"]' \
+    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"storage_configured":true,"network_ready":true,"dns_ready":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"address_route_safe":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands[0] == "bastille create --thick web 15.0-RELEASE 10.0.0.20/24" and (.commands[1] | startswith("bastille cp web ") and endswith(" /etc/resolv.conf"))' \
     "create preview should return an exact non-mutating Bastille plan"
 [ ! -s "$command_log" ] || fail "create preview should not execute Bastille"
 
 thin_preview_output="$test_root/thin-preview.json"
 run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes thin >"$thin_preview_output"
 assert_json "$thin_preview_output" \
-    '.ok == true and .inputs.jail_type == "thin" and .commands == ["bastille create web 15.0-RELEASE 10.0.0.20/24"] and (.notes[0] | contains("thin service jail"))' \
+    '.ok == true and .inputs.jail_type == "thin" and .commands[0] == "bastille create web 15.0-RELEASE 10.0.0.20/24" and (.commands[1] | endswith("/etc/resolv.conf")) and (.notes[0] | contains("thin service jail"))' \
     "thin preview should omit Bastille's thick-jail flag and explain shared userland"
 [ ! -s "$command_log" ] || fail "thin preview should remain read-only"
 
 bootstrap_preview_output="$test_root/bootstrap-preview.json"
 run_backend preview web 14.4-RELEASE 10.0.0.20/24 no >"$bootstrap_preview_output"
 assert_json "$bootstrap_preview_output" \
-    '.ready == true and .checks.release_bootstrapped == false and .checks.host_compatible == true and .commands == ["bastille bootstrap --update 14.4-RELEASE","bastille create --thick --no-boot web 14.4-RELEASE 10.0.0.20/24"]' \
+    '.ready == true and .checks.release_bootstrapped == false and .checks.host_compatible == true and .commands[0:2] == ["bastille bootstrap --update 14.4-RELEASE","bastille create --thick --no-boot web 14.4-RELEASE 10.0.0.20/24"] and (.commands[2] | endswith("/etc/resolv.conf"))' \
     "create preview should bootstrap a missing compatible release"
 
 collision_preview_output="$test_root/collision-preview.json"
@@ -276,6 +279,15 @@ assert_json "$newer_preview_output" \
     '.ok == true and .ready == false and .checks.host_release == "15.0-RELEASE" and .checks.host_compatible == false' \
     "create preview should flag a jail release newer than the host"
 [ ! -s "$command_log" ] || fail "host-aware previews should remain read-only"
+
+missing_dns_preview_output="$test_root/missing-dns-preview.json"
+BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF="$test_root/missing-resolv.conf" \
+BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR="$test_root/missing-resolvconf" \
+run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$missing_dns_preview_output"
+assert_json "$missing_dns_preview_output" \
+    '.ok == true and .ready == false and .checks.dns_ready == false and any(.notes[]; contains("No non-loopback DNS resolver was detected"))' \
+    "create preview should block a jail with no reachable resolver"
+[ ! -s "$command_log" ] || fail "DNS readiness previews should remain read-only"
 
 invalid_preview_output="$test_root/invalid-preview.json"
 if run_backend preview 'bad name' 15.0-RELEASE 10.0.0.20 yes >"$invalid_preview_output"; then
@@ -312,10 +324,12 @@ pass "release bootstrap uses the guarded command path"
 create_output="$test_root/create.json"
 run_backend create basic 15.0-RELEASE 10.0.0.30/24 no basic >"$create_output"
 assert_json "$create_output" \
-    '.ok == true and .message == "Created basic." and .details == "Bastille action completed."' \
+    '.ok == true and .message == "Created basic." and (.details | contains("Configured jail DNS from"))' \
     "basic jail creation should return a structured success"
 grep -Fx 'mdo bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24' "$command_log" >/dev/null || fail "jail creation should use mdo"
 grep -Fx 'bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24' "$command_log" >/dev/null || fail "jail creation should call Bastille with exact arguments"
+grep -Fx "mdo bastille cp basic $fixtures/etc/resolvconf/interfaces/wlan0 /etc/resolv.conf" "$command_log" >/dev/null || fail "jail creation should install the reachable upstream resolver through mdo"
+grep -Fx "bastille cp basic $fixtures/etc/resolvconf/interfaces/wlan0 /etc/resolv.conf" "$command_log" >/dev/null || fail "jail creation should replace a host-only loopback resolver"
 
 run_backend create lean 15.0-RELEASE 10.0.0.31/24 yes lean thin >"$create_output"
 assert_json "$create_output" \
@@ -323,7 +337,19 @@ assert_json "$create_output" \
     "thin jail creation should return a structured success"
 grep -Fx 'mdo bastille create lean 15.0-RELEASE 10.0.0.31/24' "$command_log" >/dev/null || fail "thin jail creation should use Bastille's default thin mode through mdo"
 grep -Fx 'bastille create lean 15.0-RELEASE 10.0.0.31/24' "$command_log" >/dev/null || fail "thin jail creation should omit the thick-jail flag"
-pass "thick and thin jail creation use guarded command paths"
+grep -Fx "mdo bastille cp lean $fixtures/etc/resolvconf/interfaces/wlan0 /etc/resolv.conf" "$command_log" >/dev/null || fail "thin jail creation should install the same reachable resolver"
+pass "thick and thin jail creation use guarded command paths with working DNS"
+
+: >"$command_log"
+dns_copy_warning_output="$test_root/dns-copy-warning.json"
+BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL=1 \
+run_backend create dnswarn 15.0-RELEASE 10.0.0.32/24 yes dnswarn >"$dns_copy_warning_output"
+assert_json "$dns_copy_warning_output" \
+    '.ok == true and .message == "Created dnswarn, but DNS setup needs attention." and (.details | contains("The jail exists"))' \
+    "a post-create DNS copy failure should preserve and clearly report the created jail"
+grep -Fx 'mdo bastille create --thick dnswarn 15.0-RELEASE 10.0.0.32/24' "$command_log" >/dev/null || fail "DNS copy failure test should create the jail first"
+grep -Fx "mdo bastille cp dnswarn $fixtures/etc/resolvconf/interfaces/wlan0 /etc/resolv.conf" "$command_log" >/dev/null || fail "DNS copy failure test should attempt the resolver copy"
+pass "post-create DNS failures preserve the jail and report remediation"
 
 : >"$command_log"
 guarded_create_output="$test_root/guarded-create.json"
@@ -345,6 +371,14 @@ fi
 assert_json "$guarded_create_output" \
     '.ok == false and .message == "The jail name is already in use."' \
     "jail creation should reject a last-minute collision"
+if BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF="$test_root/missing-resolv.conf" \
+   BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR="$test_root/missing-resolvconf" \
+   run_backend create dnsless 15.0-RELEASE 10.0.0.32/24 yes dnsless >"$guarded_create_output"; then
+    fail "jail creation should require a reachable DNS resolver"
+fi
+assert_json "$guarded_create_output" \
+    '.ok == false and .message == "No jail-safe DNS resolver was detected."' \
+    "jail creation should explain missing DNS before invoking Bastille"
 [ ! -s "$command_log" ] || fail "rejected jail creation should not execute mutating commands"
 pass "jail creation revalidates confirmation, release, and collisions"
 

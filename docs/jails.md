@@ -152,9 +152,10 @@ commands. It does not invoke a mutating Bastille command, download a release,
 create storage, or write config. The preview checks whether Bastille is set up,
 whether the release is already bootstrapped, whether the jail name or address
 collides with detected jails, whether networking is ready, whether the proposed
-address overlaps a host route, and whether the proposed jail release is newer
-than the host. An existing release skips the redundant bootstrap command;
-otherwise the plan includes it.
+address overlaps a host route, whether a jail-safe DNS resolver is available,
+and whether the proposed jail release is newer than the host. An existing
+release skips the redundant bootstrap command; otherwise the plan includes it.
+The plan also shows the post-create `bastille cp` that installs the resolver.
 
 The optional final argument selects `thick` or `thin`; omitting it preserves the
 beginner-friendly `thick` default:
@@ -190,6 +191,16 @@ name, address, Bastille availability, and setup state again; it then passes each
 validated value to Bastille as a separate command argument. A successful release
 download followed by a failed create is reported as a partial result instead of
 being hidden.
+
+BSDRunner also makes DNS usable as part of creation. If the host resolver points
+at a loopback stub such as FreeBSD's `local_unbound` on `127.0.0.1`, that address
+would refer to the jail itself and package downloads would fail. BSDRunner reads
+the upstream resolver associated with the host's default interface and copies
+that resolver configuration into the new jail with `bastille cp`. If the host
+already uses a reachable non-loopback resolver, its normal resolver file is
+used. Creation is blocked before Bastille runs when no reachable resolver can be
+identified; if the post-create copy itself fails, the jail is retained and the
+result explicitly reports that DNS needs attention.
 
 If `mdo` is available, lifecycle commands use it for privilege escalation. If it
 is not available, the backend runs the command directly and expects the caller to

@@ -834,6 +834,7 @@ ShellRoot {
         lines.push((checks.bastille_installed ? "[ok] " : "[!] ") + "Bastille installed")
         lines.push((checks.storage_configured ? "[ok] " : "[!] ") + "Bastille storage configured")
         lines.push((checks.network_ready ? "[ok] " : "[!] ") + "Bastille loopback and PF jail rules ready")
+        lines.push((checks.dns_ready ? "[ok] " : "[!] ") + "Reachable DNS resolver available")
         lines.push((checks.bastille_setup ? "[ok] " : "[plan] ") + "Bastille inventory " + (checks.bastille_setup ? "readable" : "will initialize during bootstrap"))
         lines.push((checks.name_available ? "[ok] " : "[!] ") + "Jail name available")
         lines.push((checks.address_available ? "[ok] " : "[!] ") + "IP address available")
