@@ -47,6 +47,26 @@ path. Invalid or missing interface names fail closed. The Jails backend invokes
 only Bastille's narrow loopback setup; it does not let `bastille setup pf`
 replace the BSDRunner-managed ruleset.
 
+## Per-Jail Outbound Policy
+
+When jail networking is enabled, BSDRunner persists each Bastille jail's
+outbound policy in:
+
+```text
+~/.config/bsdrunner/pf/jail-policies.conf
+```
+
+The Jails UI manages this file through the PF backend. The renderer validates
+every jail name, IPv4 address, policy, and resolver; malformed entries are
+ignored instead of being inserted into `pf.conf`.
+
+Internet-only policies allow TCP/UDP DNS to the jail's configured resolver,
+block private, carrier-grade NAT, loopback, and link-local destinations, and
+then allow public IPv4 destinations. No-outbound policies block all new IPv4
+egress for that jail. LAN policies explicitly permit all IPv4 egress. These
+quick rules are emitted before the general desktop outbound rule, and existing
+PF states for the jail address are cleared after a successful policy change.
+
 The app also includes a small `pflog` viewer. PF only logs packets for rules
 that include `log`, so the viewer is useful after enabling the friendly
 `Log blocked inbound attempts` control and applying the profile.
@@ -71,6 +91,7 @@ The repository test for default and jail-enabled profile rendering is:
 
 ```sh
 sh scripts/test-pf-profile.sh
+sh scripts/test-pf-backend.sh
 ```
 
 Check the repo template before copying it into `/etc`:

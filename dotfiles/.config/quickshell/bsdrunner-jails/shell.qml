@@ -64,6 +64,7 @@ ShellRoot {
     property string activeActionId: ""
     property string activeActionName: ""
     property string activeActionBackend: ""
+    property string activeActionPolicy: ""
     property string activeActionLabel: ""
     property string pendingActionId: ""
     property string pendingActionLabel: ""
@@ -74,6 +75,7 @@ ShellRoot {
     property var runningJails: []
     property var configuredJails: []
     property var bastilleJails: []
+    property var outboundPolicies: []
     property var tools: ({})
     property var services: ({})
     property var bastilleReleases: []
@@ -100,6 +102,7 @@ ShellRoot {
     property bool previewReleaseCustom: false
     property bool releaseMenuOpen: false
     property string previewJailType: "thick"
+    property string previewOutboundPolicy: "internet-only"
     property string previewAddress: "10.0.0.20/24"
     property bool previewAddressCustomized: false
     property bool previewAutostart: true
@@ -116,6 +119,11 @@ ShellRoot {
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
     readonly property bool wizardBusy: createPreviewLoading || creationRunning || storageSetupRunning || networkSetupRunning
     readonly property var wizardSteps: ["Storage", "Userland", "Network", "Config", "Lifecycle"]
+    readonly property var outboundPolicyChoices: [
+        {"id": "internet-only", "label": "Internet only", "detail": "DNS + public • Recommended"},
+        {"id": "lan", "label": "LAN + Internet", "detail": "Private and public networks"},
+        {"id": "none", "label": "No outbound", "detail": "Block new connections"}
+    ]
     readonly property int wizardCaptionFontSize: 12
     readonly property int wizardBodyFontSize: 13
     readonly property int wizardControlFontSize: 14
@@ -353,6 +361,32 @@ ShellRoot {
         invalidateCreatePlan()
     }
 
+    function chooseOutboundPolicy(policy) {
+        if (policy !== "internet-only" && policy !== "lan" && policy !== "none")
+            return
+        previewOutboundPolicy = policy
+        invalidateCreatePlan()
+    }
+
+    function outboundPolicyFor(jail) {
+        if (!jail)
+            return "lan"
+        for (var i = 0; i < outboundPolicies.length; i += 1) {
+            var entry = outboundPolicies[i]
+            if (entry.name === jail.name || (entry.ipv4 && entry.ipv4 === jail.ipv4))
+                return entry.policy || "lan"
+        }
+        return "lan"
+    }
+
+    function outboundPolicyLabel(policy) {
+        if (policy === "internet-only")
+            return "Internet only"
+        if (policy === "none")
+            return "No outbound"
+        return "LAN + Internet"
+    }
+
     function statusDetailText() {
         if ((statusTone === "error" || lastResultTone === "error") && actionDetails.length > 0)
             return firstNonEmptyLine(actionDetails)
@@ -382,6 +416,8 @@ ShellRoot {
     function actionAvailable(actionId) {
         if (!selectedJail || runningAction)
             return false
+        if (actionId.indexOf("policy-set|") === 0)
+            return selectedJail.backend === "bastille" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
         if (actionId === "start")
             return canStart(selectedJail)
         if (actionId === "stop")
@@ -410,9 +446,15 @@ ShellRoot {
     function confirmPendingAction() {
         if (!pendingActionId || !selectedJail)
             return
-        activeActionId = pendingActionId
+        if (pendingActionId.indexOf("policy-set|") === 0) {
+            activeActionId = "policy-set"
+            activeActionPolicy = pendingActionId.split("|")[1]
+        } else {
+            activeActionId = pendingActionId
+            activeActionPolicy = ""
+        }
         activeActionName = selectedJail.name
-        activeActionBackend = selectedJail.backend || "native"
+        activeActionBackend = activeActionId === "policy-set" ? selectedJail.ipv4 : selectedJail.backend || "native"
         activeActionLabel = pendingActionLabel
         clearPendingAction()
         runActionProcess()
@@ -839,6 +881,7 @@ ShellRoot {
         lines.push((checks.name_available ? "[ok] " : "[!] ") + "Jail name available")
         lines.push((checks.address_available ? "[ok] " : "[!] ") + "IP address available")
         lines.push((checks.address_route_safe ? "[ok] " : "[!] ") + "IP address does not overlap an active host route")
+        lines.push("[plan] Outbound policy: " + outboundPolicyLabel(previewPayload.inputs ? previewPayload.inputs.outbound_policy : previewOutboundPolicy))
         lines.push((checks.host_compatible ? "[ok] " : "[!] ") + "Host release compatible" + (checks.host_release ? " (" + checks.host_release + ")" : ""))
         lines.push((checks.release_bootstrapped ? "[ok] " : "[plan] ") + "Release " + (checks.release_bootstrapped ? "already bootstrapped" : "will be bootstrapped"))
         lines.push("")
@@ -916,6 +959,7 @@ ShellRoot {
         runningJails = payload.running || []
         configuredJails = payload.configured || []
         bastilleJails = payload.bastille || []
+        outboundPolicies = payload.outbound_policies || []
         lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info"
         lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message
         lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : ""
@@ -955,6 +999,7 @@ ShellRoot {
         activeActionId = ""
         activeActionName = ""
         activeActionBackend = ""
+        activeActionPolicy = ""
         activeActionLabel = ""
         refreshSnapshot()
     }
@@ -993,7 +1038,9 @@ ShellRoot {
         id: actionProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
+        command: root.activeActionId === "policy-set"
+            ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "policy-set", root.activeActionName, root.activeActionBackend, root.activeActionPolicy, root.activeActionName]
+            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1021,7 +1068,7 @@ ShellRoot {
         id: createPreviewProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "preview", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.previewJailType]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "preview", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.previewJailType, root.previewOutboundPolicy]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1107,7 +1154,7 @@ ShellRoot {
 
         command: root.provisionAction === "bootstrap"
             ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "bootstrap", root.previewRelease, root.previewRelease]
-            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "create", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation, root.previewJailType]
+            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "create", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation, root.previewJailType, root.previewOutboundPolicy]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1624,6 +1671,83 @@ ShellRoot {
                                                 font.pixelSize: 13
                                                 elide: Text.ElideRight
                                             }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: "Outbound policy"
+                                color: root.palette.accent
+                                font.pixelSize: 14
+                                font.bold: true
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.selectedJail ? "Current: " + root.outboundPolicyLabel(root.outboundPolicyFor(root.selectedJail)) : "Select a Bastille jail to manage egress."
+                                color: root.palette.secondaryText
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Row {
+                                width: parent.width
+                                height: 82
+                                spacing: 6
+
+                                Repeater {
+                                    model: root.outboundPolicyChoices
+
+                                    Rectangle {
+                                        id: outboundPolicyCard
+                                        required property var modelData
+                                        readonly property bool selected: root.selectedJail && root.outboundPolicyFor(root.selectedJail) === modelData.id
+                                        readonly property string actionId: "policy-set|" + modelData.id
+
+                                        width: (parent.width - 12) / 3
+                                        height: parent.height
+                                        radius: 7
+                                        color: outboundPolicyMouse.containsMouse && root.actionAvailable(actionId) ? root.palette.cardHover : selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.panelBackground
+                                        opacity: root.actionAvailable(actionId) ? 1.0 : 0.45
+                                        border.width: 1
+                                        border.color: selected ? root.palette.accent : root.palette.panelBorder
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 7
+                                            spacing: 4
+
+                                            Text {
+                                                width: parent.width
+                                                text: (outboundPolicyCard.selected ? "✓ " : "") + outboundPolicyCard.modelData.label
+                                                color: outboundPolicyCard.selected ? root.palette.accent : root.palette.primaryText
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: outboundPolicyCard.modelData.detail
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 12
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: outboundPolicyMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: root.actionAvailable(outboundPolicyCard.actionId) && !outboundPolicyCard.selected
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.requestAction(outboundPolicyCard.actionId, "Change outbound policy", "Apply " + outboundPolicyCard.modelData.label + " to " + root.selectedJail.name + " and reload PF?")
                                         }
                                     }
                                 }
@@ -2462,6 +2586,74 @@ ShellRoot {
                                             onTextEdited: {
                                                 root.previewName = text
                                                 root.invalidateCreatePlan()
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: root.wizardStep === 3
+                                        width: parent.width
+                                        text: "Outbound access"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: root.wizardBodyFontSize
+                                        font.bold: true
+                                    }
+
+                                    Row {
+                                        visible: root.wizardStep === 3
+                                        width: parent.width
+                                        height: 76
+                                        spacing: 6
+
+                                        Repeater {
+                                            model: root.outboundPolicyChoices
+
+                                            Rectangle {
+                                                id: previewPolicyCard
+                                                required property var modelData
+                                                readonly property bool selected: root.previewOutboundPolicy === modelData.id
+
+                                                width: (parent.width - 12) / 3
+                                                height: parent.height
+                                                radius: 7
+                                                color: previewPolicyMouse.containsMouse ? root.palette.cardHover : selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.cardBackground
+                                                border.width: 1
+                                                border.color: selected ? root.palette.accent : root.palette.panelBorder
+
+                                                Column {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 7
+                                                    spacing: 4
+
+                                                    Text {
+                                                        width: parent.width
+                                                        text: (previewPolicyCard.selected ? "✓ " : "") + previewPolicyCard.modelData.label
+                                                        color: previewPolicyCard.selected ? root.palette.accent : root.palette.primaryText
+                                                        font.pixelSize: root.wizardBodyFontSize
+                                                        font.bold: true
+                                                        wrapMode: Text.WordWrap
+                                                        maximumLineCount: 2
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Text {
+                                                        width: parent.width
+                                                        text: previewPolicyCard.modelData.detail
+                                                        color: root.palette.mutedText
+                                                        font.pixelSize: root.wizardCaptionFontSize
+                                                        wrapMode: Text.WordWrap
+                                                        maximumLineCount: 2
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: previewPolicyMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.chooseOutboundPolicy(previewPolicyCard.modelData.id)
+                                                }
                                             }
                                         }
                                     }

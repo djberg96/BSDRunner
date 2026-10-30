@@ -84,6 +84,14 @@
       "release": "14.3-RELEASE"
     }
   ],
+  "outbound_policies": [
+    {
+      "name": "build",
+      "ipv4": "10.0.0.22",
+      "policy": "internet-only",
+      "resolver": "192.168.1.1"
+    }
+  ],
   "last_result": {
     "tone": "info",
     "message": "Demo mode uses sample data; management actions are disabled.",

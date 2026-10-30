@@ -23,9 +23,11 @@ pass() {
 base_profile="$test_root/base-profile.conf"
 nat_profile="$test_root/nat-profile.conf"
 invalid_profile="$test_root/invalid-profile.conf"
+policy_profile="$test_root/policy-profile.conf"
 base_rendered="$test_root/base-pf.conf"
 nat_rendered="$test_root/nat-pf.conf"
 invalid_rendered="$test_root/invalid-pf.conf"
+policy_rendered="$test_root/policy-pf.conf"
 
 printf '%s\n' \
     'allow_outbound=yes' \
@@ -60,6 +62,24 @@ grep -Fx 'nat on $jail_ext_if inet from <jails> to any -> ($jail_ext_if:0)' "$na
 grep -Fx 'rdr-anchor "rdr/*"' "$nat_rendered" >/dev/null || fail "jail NAT should expose Bastille's redirect anchor"
 grep -Fx 'anchor "bastille/*"' "$nat_rendered" >/dev/null || fail "jail NAT should expose Bastille's filter anchor"
 pass "enabled jail networking renders the conventional Bastille PF integration"
+
+cp "$nat_profile" "$policy_profile"
+printf '%s\n' \
+    'web|10.0.0.20|internet-only|192.168.1.254' \
+    'build|10.0.0.21|none|192.168.1.254' \
+    'media|10.0.0.22|lan|192.168.1.254' >"$test_root/jail-policies.conf"
+
+sh "$renderer" "$policy_profile" >"$policy_rendered"
+grep -F 'private_nets = "{ 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 }"' "$policy_rendered" >/dev/null || fail "internet-only policy should define blocked private destinations"
+grep -Fx 'pass out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.20 to 192.168.1.254 port 53 keep state' "$policy_rendered" >/dev/null || fail "internet-only policy should preserve DNS to the selected resolver"
+grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.20 to $private_nets' "$policy_rendered" >/dev/null || fail "internet-only policy should block private destinations"
+grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.20 to any keep state' "$policy_rendered" >/dev/null || fail "internet-only policy should allow public destinations"
+grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.21 to any' "$policy_rendered" >/dev/null || fail "no-outbound policy should block all destinations"
+grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.22 to any keep state' "$policy_rendered" >/dev/null || fail "LAN policy should allow all destinations"
+policy_rule_line="$(grep -nF 'block return out quick on $jail_ext_if inet from 10.0.0.21 to any' "$policy_rendered" | cut -d: -f1)"
+general_rule_line="$(grep -nF 'pass out all keep state' "$policy_rendered" | cut -d: -f1)"
+[ "$policy_rule_line" -lt "$general_rule_line" ] || fail "per-jail rules must be evaluated before the general outbound allow"
+pass "per-jail outbound policies render before the general host outbound rule"
 
 cp "$base_profile" "$invalid_profile"
 printf '%s\n' \

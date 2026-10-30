@@ -59,7 +59,7 @@ BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
 export BSDRUNNER_JAILS_FIXTURE
 run_backend snapshot >"$demo_output"
 assert_json "$demo_output" \
-    '.ok == true and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1' \
+    '.ok == true and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1 and .outbound_policies[0].policy == "internet-only"' \
     "demo fixture should satisfy the snapshot contract"
 pass "demo fixture satisfies the snapshot contract"
 
@@ -118,6 +118,9 @@ assert_json "$snapshot_output" \
 assert_json "$snapshot_output" \
     '(.bastille | length) == 2 and .bastille[0].state == "running" and .bastille[0].release == "15.0-RELEASE" and .bastille[0].autostart == "YES" and .bastille[1].state == "stopped" and .bastille[1].release == "14.3-RELEASE" and .bastille[1].autostart == "NO"' \
     "snapshot should parse rich Bastille metadata"
+assert_json "$snapshot_output" \
+    '.outbound_policies == [{"name":"cache","ipv4":"10.0.0.9","policy":"internet-only","resolver":"192.0.2.53"},{"name":"build","ipv4":"10.0.0.10","policy":"none","resolver":"192.0.2.53"}]' \
+    "snapshot should expose persisted jail outbound policies"
 pass "snapshot parses native and Bastille fixtures"
 
 unready_prefix="$test_root/unready-bastille"
@@ -250,7 +253,7 @@ pass "configured ZFS storage can be initialized by the first bootstrap"
 preview_output="$test_root/preview.json"
 run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes >"$preview_output"
 assert_json "$preview_output" \
-    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick"} and .checks == {"bastille_installed":true,"bastille_setup":true,"storage_configured":true,"network_ready":true,"dns_ready":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"address_route_safe":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands[0] == "bastille create --thick web 15.0-RELEASE 10.0.0.20/24" and (.commands[1] | startswith("bastille cp web ") and endswith(" /etc/resolv.conf"))' \
+    '.ok == true and .mutates == false and .ready == true and .inputs == {"name":"web","release":"15.0-RELEASE","address":"10.0.0.20/24","autostart":"yes","jail_type":"thick","outbound_policy":"internet-only"} and .checks == {"bastille_installed":true,"bastille_setup":true,"storage_configured":true,"network_ready":true,"dns_ready":true,"release_bootstrapped":true,"name_available":true,"address_available":true,"address_route_safe":true,"host_release":"15.0-RELEASE","host_compatible":true} and .commands[0] == "bastille create --thick web 15.0-RELEASE 10.0.0.20/24" and (.commands[1] | startswith("bastille cp web ") and endswith(" /etc/resolv.conf")) and .commands[2] == "bsdrunner-pf-backend.sh jail-policy web 10.0.0.20 internet-only 192.0.2.53"' \
     "create preview should return an exact non-mutating Bastille plan"
 [ ! -s "$command_log" ] || fail "create preview should not execute Bastille"
 
@@ -260,6 +263,13 @@ assert_json "$thin_preview_output" \
     '.ok == true and .inputs.jail_type == "thin" and .commands[0] == "bastille create web 15.0-RELEASE 10.0.0.20/24" and (.commands[1] | endswith("/etc/resolv.conf")) and (.notes[0] | contains("thin service jail"))' \
     "thin preview should omit Bastille's thick-jail flag and explain shared userland"
 [ ! -s "$command_log" ] || fail "thin preview should remain read-only"
+
+offline_preview_output="$test_root/offline-preview.json"
+run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes thick none >"$offline_preview_output"
+assert_json "$offline_preview_output" \
+    '.ok == true and .inputs.outbound_policy == "none" and .commands[2] == "bsdrunner-pf-backend.sh jail-policy web 10.0.0.20 none 192.0.2.53" and any(.notes[]; contains("No outbound"))' \
+    "create preview should expose the no-outbound policy"
+[ ! -s "$command_log" ] || fail "outbound policy previews should remain read-only"
 
 bootstrap_preview_output="$test_root/bootstrap-preview.json"
 run_backend preview web 14.4-RELEASE 10.0.0.20/24 no >"$bootstrap_preview_output"
@@ -308,6 +318,12 @@ fi
 assert_json "$invalid_preview_output" \
     '.ok == false and .message == "Invalid jail type."' \
     "create preview should reject unsupported jail types"
+if run_backend preview web 15.0-RELEASE 10.0.0.20/24 yes thick unrestricted >"$invalid_preview_output"; then
+    fail "create preview should reject unsupported outbound policies"
+fi
+assert_json "$invalid_preview_output" \
+    '.ok == false and .message == "Invalid outbound policy."' \
+    "create preview should reject unsupported outbound policies"
 pass "create preview is exact, read-only, and validated"
 
 : >"$command_log"
@@ -330,6 +346,7 @@ grep -Fx 'mdo bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24'
 grep -Fx 'bastille create --thick --no-boot basic 15.0-RELEASE 10.0.0.30/24' "$command_log" >/dev/null || fail "jail creation should call Bastille with exact arguments"
 grep -Fx "mdo bastille cp basic $fixtures/etc/resolvconf/interfaces/wlan0 /etc/resolv.conf" "$command_log" >/dev/null || fail "jail creation should install the reachable upstream resolver through mdo"
 grep -Fx "bastille cp basic $fixtures/etc/resolvconf/interfaces/wlan0 /etc/resolv.conf" "$command_log" >/dev/null || fail "jail creation should replace a host-only loopback resolver"
+grep -Fx 'pf-backend jail-policy basic 10.0.0.30 internet-only 192.0.2.53' "$command_log" >/dev/null || fail "jail creation should apply the recommended internet-only policy"
 
 run_backend create lean 15.0-RELEASE 10.0.0.31/24 yes lean thin >"$create_output"
 assert_json "$create_output" \
@@ -338,6 +355,7 @@ assert_json "$create_output" \
 grep -Fx 'mdo bastille create lean 15.0-RELEASE 10.0.0.31/24' "$command_log" >/dev/null || fail "thin jail creation should use Bastille's default thin mode through mdo"
 grep -Fx 'bastille create lean 15.0-RELEASE 10.0.0.31/24' "$command_log" >/dev/null || fail "thin jail creation should omit the thick-jail flag"
 grep -Fx "mdo bastille cp lean $fixtures/etc/resolvconf/interfaces/wlan0 /etc/resolv.conf" "$command_log" >/dev/null || fail "thin jail creation should install the same reachable resolver"
+grep -Fx 'pf-backend jail-policy lean 10.0.0.31 internet-only 192.0.2.53' "$command_log" >/dev/null || fail "thin jail creation should apply its outbound policy"
 pass "thick and thin jail creation use guarded command paths with working DNS"
 
 : >"$command_log"
@@ -407,6 +425,18 @@ assert_json "$native_action_output" \
 grep -Fx 'mdo service jail start api' "$command_log" >/dev/null || fail "native lifecycle action should use mdo"
 grep -Fx 'service jail start api' "$command_log" >/dev/null || fail "native lifecycle action should call service(8)"
 pass "native lifecycle action uses the guarded command path"
+
+: >"$command_log"
+policy_action_output="$test_root/policy-action.json"
+run_backend policy-set cache 10.0.0.9 none cache >"$policy_action_output"
+assert_json "$policy_action_output" \
+    '.ok == true and .message == "Applied outbound policy to cache."' \
+    "outbound policy changes should return a structured success"
+grep -Fx 'pf-backend jail-policy cache 10.0.0.9 none 192.0.2.53' "$command_log" >/dev/null || fail "outbound policy changes should delegate exact values to the PF backend"
+if run_backend policy-set cache 10.0.0.9 lan wrong >"$test_root/invalid-policy.json"; then
+    fail "outbound policy changes should require exact jail confirmation"
+fi
+pass "existing Bastille jails can apply guarded outbound policies"
 
 : >"$command_log"
 bastille_action_output="$test_root/bastille-action.json"

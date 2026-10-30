@@ -3,6 +3,7 @@
 set -eu
 
 profile_file="${1:-${HOME}/.config/bsdrunner/pf/profile.conf}"
+policy_file="$(dirname "$profile_file")/jail-policies.conf"
 
 allow_outbound="yes"
 block_unsolicited="yes"
@@ -50,6 +51,35 @@ normalize_bool() {
             printf 'no\n'
             ;;
     esac
+}
+
+valid_ipv4() {
+    printf '%s\n' "${1:-}" | awk -F '.' '
+        NF != 4 { exit 1 }
+        {
+            for (i = 1; i <= 4; i++)
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255)
+                    exit 1
+        }
+    '
+}
+
+emit_policies() {
+    [ -f "$policy_file" ] || return 0
+    while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+        case "$policy_name" in
+            ''|*[!A-Za-z0-9_.-]*)
+                continue
+                ;;
+        esac
+        valid_ipv4 "$policy_address" || continue
+        valid_ipv4 "$policy_resolver" || continue
+        case "$policy_mode" in
+            internet-only|lan|none)
+                printf '%s|%s|%s|%s\n' "$policy_name" "$policy_address" "$policy_mode" "$policy_resolver"
+                ;;
+        esac
+    done <"$policy_file"
 }
 
 load_profile() {
@@ -142,7 +172,10 @@ emit_settings() {
 }
 
 profile_checksum() {
-    emit_settings | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
+    {
+        emit_settings
+        emit_policies
+    } | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
 }
 
 render_profile() {
@@ -167,6 +200,11 @@ EOF
         cat <<'EOF'
 table <jails> persist
 EOF
+        if emit_policies | awk -F '|' '$3 == "internet-only" { found = 1 } END { exit found ? 0 : 1 }'; then
+            cat <<'EOF'
+private_nets = "{ 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 }"
+EOF
+        fi
     fi
 
     if [ "$allow_ssh_lan" = "yes" ]; then
@@ -234,6 +272,24 @@ EOF
     fi
 
     if [ "$allow_outbound" = "yes" ]; then
+        if [ "$jail_nat" = "yes" ]; then
+            emit_policies | while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+                printf '\n# Outbound policy for Bastille jail %s.\n' "$policy_name"
+                case "$policy_mode" in
+                    internet-only)
+                        printf 'pass out quick on $jail_ext_if inet proto { tcp udp } from %s to %s port 53 keep state\n' "$policy_address" "$policy_resolver"
+                        printf 'block return out quick on $jail_ext_if inet from %s to $private_nets\n' "$policy_address"
+                        printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
+                        ;;
+                    lan)
+                        printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
+                        ;;
+                    none)
+                        printf 'block return out quick on $jail_ext_if inet from %s to any\n' "$policy_address"
+                        ;;
+                esac
+            done
+        fi
         cat <<'EOF'
 
 # Allow connections started by this computer.

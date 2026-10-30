@@ -157,11 +157,12 @@ and whether the proposed jail release is newer than the host. An existing
 release skips the redundant bootstrap command; otherwise the plan includes it.
 The plan also shows the post-create `bastille cp` that installs the resolver.
 
-The optional final argument selects `thick` or `thin`; omitting it preserves the
-beginner-friendly `thick` default:
+The optional fifth argument selects `thick` or `thin`; omitting it preserves the
+beginner-friendly `thick` default. A sixth argument selects `internet-only` (the
+recommended default), `lan`, or `none`:
 
 ```sh
-bsdrunner-jails-backend.sh preview web 15.0-RELEASE 10.0.0.20/24 yes thin
+bsdrunner-jails-backend.sh preview web 15.0-RELEASE 10.0.0.20/24 yes thin internet-only
 ```
 
 Thick uses Bastille's `--thick` flag and gives the jail an independent userland
@@ -169,6 +170,18 @@ copy. Thin uses Bastille's default shared-base layout and omits that flag.
 Choosing no autostart adds Bastille's `--no-boot` option. A failed readiness check is shown
 as a warning and leaves the generated commands visible for inspection. Preview
 never executes them; the final Lifecycle step requires separate confirmation.
+
+Outbound policy is enforced per jail by the BSDRunner-managed PF profile:
+
+- **Internet only** allows the selected DNS resolver and public IPv4
+  destinations while blocking private, carrier-grade NAT, loopback, and
+  link-local destinations.
+- **LAN + Internet** permits private and public IPv4 destinations.
+- **No outbound** blocks new IPv4 connections from the jail.
+
+Existing Bastille jails expose the same choices in their detail panel. Changing
+a policy requires confirmation, regenerates and validates the managed PF
+profile, reloads PF, and clears existing states for that jail address.
 
 The beginner picker remains FreeBSD-only. Bastille's experimental Linux mode
 needs separate Linux compatibility and debootstrap setup, while Clone is a
@@ -180,11 +193,11 @@ may run two separately guarded actions:
 
 ```sh
 bsdrunner-jails-backend.sh bootstrap 15.0-RELEASE 15.0-RELEASE
-bsdrunner-jails-backend.sh create web 15.0-RELEASE 10.0.0.20/24 yes web thick
+bsdrunner-jails-backend.sh create web 15.0-RELEASE 10.0.0.20/24 yes web thick internet-only
 ```
 
-The last argument is an exact confirmation value. Bootstrap is skipped when the
-release already exists. A configured but empty ZFS installation is allowed to
+The repeated jail name is an exact confirmation value. Bootstrap is skipped
+when the release already exists. A configured but empty ZFS installation is allowed to
 bootstrap because that command is what initializes Bastille's dataset hierarchy.
 Before creation, the backend checks the release, jail
 name, address, Bastille availability, and setup state again; it then passes each
@@ -221,9 +234,10 @@ The **Create Basic Jail** wizard follows those five concepts directly. Storage
 selects and configures a ZFS pool when necessary, Userland selects or
 bootstraps a release, presents common release choices, and selects a Thick or
 Thin userland. Network validates the address and can configure the narrow
-Bastille/PF prerequisites, Config collects the name/startup policy, and Lifecycle
-presents the exact plan and typed confirmation. Thick remains the recommended
-default; Thin is available for users comfortable managing a shared release base.
+Bastille/PF prerequisites, Config collects the name, startup behavior, and
+outbound policy, and Lifecycle presents the exact plan and typed confirmation.
+Thick and Internet only remain the recommended defaults; Thin and broader or
+fully blocked egress are explicit choices.
 A future native workflow will need
 separate validation around datasets, release extraction, `devfs`, network
 settings, and generated `/etc/jail.conf.d/NAME.conf` files.

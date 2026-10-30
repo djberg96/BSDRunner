@@ -12,6 +12,7 @@ if [ "$test_mode" = "1" ]; then
     pf_backend="${BSDRUNNER_JAILS_TEST_PF_BACKEND:-${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh}"
     host_resolv_conf="${BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF:-$etc_dir/resolv.conf}"
     resolvconf_interfaces_dir="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$etc_dir/resolvconf/interfaces}"
+    jail_policy_file="${BSDRUNNER_JAILS_TEST_POLICY_FILE:-$etc_dir/jail-policies.conf}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
@@ -21,6 +22,7 @@ else
     pf_backend="${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-backend.sh"
     host_resolv_conf="/etc/resolv.conf"
     resolvconf_interfaces_dir="/var/run/resolvconf/interfaces"
+    jail_policy_file="${HOME}/.config/bsdrunner/pf/jail-policies.conf"
 fi
 export PATH
 
@@ -252,6 +254,17 @@ jail_resolver_source_value() {
     return 1
 }
 
+jail_resolver_address_value() {
+    resolver_source="${1:-}"
+    [ -r "$resolver_source" ] || return 1
+    awk '
+        $1 == "nameserver" && $2 !~ /^127\./ && $2 != "::1" && $2 != "0.0.0.0" {
+            print $2
+            exit
+        }
+    ' "$resolver_source"
+}
+
 network_interface_exists() {
     network_interface_name="$1"
     command -v ifconfig >/dev/null 2>&1 || return 1
@@ -423,6 +436,17 @@ valid_release() {
 valid_jail_type() {
     case "${1:-}" in
         thick|thin)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+valid_outbound_policy() {
+    case "${1:-}" in
+        internet-only|lan|none)
             return 0
             ;;
         *)
@@ -717,6 +741,27 @@ bastille_releases_json() {
     '
 }
 
+outbound_policies_json() {
+    if [ ! -r "$jail_policy_file" ]; then
+        printf '[]'
+        return
+    fi
+    awk -F '|' '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        BEGIN { printf "["; first = 1 }
+        $1 ~ /^[A-Za-z0-9_.-]+$/ && $2 ~ /^[0-9.]+$/ && ($3 == "internet-only" || $3 == "lan" || $3 == "none") && $4 ~ /^[0-9.]+$/ {
+            if (!first) printf ","
+            first = 0
+            printf "{\"name\":\"%s\",\"ipv4\":\"%s\",\"policy\":\"%s\",\"resolver\":\"%s\"}", esc($1), esc($2), esc($3), esc($4)
+        }
+        END { printf "]" }
+    ' "$jail_policy_file"
+}
+
 bastille_inventory() {
     if command -v jq >/dev/null 2>&1; then
         json_output="$(run_bastille_list_json 2>/dev/null || true)"
@@ -940,6 +985,8 @@ emit_snapshot() {
     configured_jails_json
     printf ',"bastille":'
     bastille_jails_json
+    printf ',"outbound_policies":'
+    outbound_policies_json
     printf ',"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
         "$(printf '%s' "$last_tone" | json_escape)" \
         "$(printf '%s' "$last_message" | json_escape)" \
@@ -1008,6 +1055,84 @@ do_lifecycle() {
     fi
 }
 
+bastille_jail_matches() {
+    match_name="$1"
+    match_address="$2"
+    inventory_json="$(run_bastille_list_json 2>/dev/null || true)"
+    if command -v jq >/dev/null 2>&1 && printf '%s\n' "$inventory_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        printf '%s\n' "$inventory_json" | jq -e --arg name "$match_name" --arg address "$match_address" '
+            any(.[];
+                ((.Name // "") | tostring) == $name and
+                (((.["IP Address"] // "") | tostring | split("|") | last | split("/") | first) == $address)
+            )
+        ' >/dev/null
+        return
+    fi
+
+    run_bastille_list_all | awk -v name="$match_name" -v address="$match_address" '
+        /^[[:space:]]*$/ || /^[[:space:]]*JID[[:space:]]/ || /^[[:space:]]*-/ { next }
+        {
+            ip = $2
+            sub(/\/.*/, "", ip)
+            if ($3 == name && ip == address)
+                found = 1
+        }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+apply_outbound_policy() {
+    policy_name="$1"
+    policy_address="$(address_ipv4_value "$2")"
+    policy_mode="$3"
+    policy_resolver_source="$(jail_resolver_source_value 2>/dev/null || true)"
+    policy_resolver="$(jail_resolver_address_value "$policy_resolver_source" 2>/dev/null || true)"
+
+    [ -r "$pf_backend" ] || return 1
+    [ -n "$policy_resolver" ] || return 1
+    policy_output="$(sh "$pf_backend" jail-policy "$policy_name" "$policy_address" "$policy_mode" "$policy_resolver" 2>&1)" || return 1
+    printf '%s\n' "$policy_output" | grep -q '"ok":true' || return 1
+    printf '%s\n' "$policy_output"
+}
+
+do_policy_set() {
+    name="${1:-}"
+    address="${2:-}"
+    policy="${3:-}"
+    confirmation="${4:-}"
+
+    valid_name "$name" || {
+        emit_action_result false "Invalid jail name." "Use the selected Bastille jail."
+        exit 1
+    }
+    policy_address="$(address_ipv4_value "$address")"
+    valid_jail_ipv4 "${policy_address}/32" || {
+        emit_action_result false "Invalid jail address." "$address"
+        exit 1
+    }
+    valid_outbound_policy "$policy" || {
+        emit_action_result false "Invalid outbound policy." "Choose Internet only, LAN + Internet, or No outbound."
+        exit 1
+    }
+    [ "$confirmation" = "$name" ] || {
+        emit_action_result false "Outbound policy confirmation did not match." "Return to the selected jail and confirm again."
+        exit 1
+    }
+    bastille_jail_matches "$name" "$policy_address" || {
+        emit_action_result false "The selected Bastille jail could not be verified." "Refresh the inventory before changing its outbound policy."
+        exit 1
+    }
+
+    if output="$(apply_outbound_policy "$name" "$policy_address" "$policy" 2>&1)"; then
+        write_last_result "success" "Applied outbound policy to ${name}."
+        emit_action_result true "Applied outbound policy to ${name}." "$output"
+    else
+        write_last_result "error" "Unable to apply outbound policy to ${name}."
+        emit_action_result false "Unable to apply outbound policy to ${name}." "$output"
+        exit 1
+    fi
+}
+
 do_console() {
     name="$1"
     backend="${2:-native}"
@@ -1069,6 +1194,7 @@ do_preview() {
     address="${3:-}"
     autostart="${4:-yes}"
     jail_type="${5:-thick}"
+    outbound_policy="${6:-internet-only}"
 
     valid_name "$name" || {
         emit_action_result false "Invalid jail name." "Use letters, numbers, dots, underscores, or hyphens."
@@ -1096,6 +1222,10 @@ do_preview() {
     esac
     valid_jail_type "$jail_type" || {
         emit_action_result false "Invalid jail type." "Choose thick or thin."
+        exit 1
+    }
+    valid_outbound_policy "$outbound_policy" || {
+        emit_action_result false "Invalid outbound policy." "Choose Internet only, LAN + Internet, or No outbound."
         exit 1
     }
 
@@ -1162,6 +1292,11 @@ do_preview() {
     if [ "$dns_ready" = true ]; then
         dns_command="bastille cp ${name} ${resolver_source} /etc/resolv.conf"
     fi
+    policy_command=""
+    resolver_address="$(jail_resolver_address_value "$resolver_source" 2>/dev/null || true)"
+    if [ -n "$resolver_address" ]; then
+        policy_command="bsdrunner-pf-backend.sh jail-policy ${name} $(address_ipv4_value "$address") ${outbound_policy} ${resolver_address}"
+    fi
 
     if [ "$bastille_installed" = true ] && [ "$bastille_setup" = true ]; then
         availability_note="Bastille is installed and its release inventory is readable."
@@ -1194,6 +1329,17 @@ do_preview() {
     else
         dns_note="No non-loopback DNS resolver was detected. Connect the host to a configured network before creating the jail."
     fi
+    case "$outbound_policy" in
+        internet-only)
+            policy_note="Internet only allows DNS and public destinations while blocking private and link-local networks."
+            ;;
+        lan)
+            policy_note="LAN + Internet allows the jail to connect to private networks and public destinations."
+            ;;
+        none)
+            policy_note="No outbound blocks new connections from the jail."
+            ;;
+    esac
     if [ "$host_compatible" = true ]; then
         host_note="The proposed release is compatible with the detected host release, or the host release is unknown."
     else
@@ -1210,11 +1356,11 @@ do_preview() {
     printf '"ok":true,'
     printf '"message":"%s",' "$(printf '%s' "$preview_message" | json_escape)"
     printf '"backend":"bastille","mutates":false,"ready":%s,' "$ready"
-    printf '"inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","jail_type":"%s"},' \
+    printf '"inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","jail_type":"%s","outbound_policy":"%s"},' \
         "$(printf '%s' "$name" | json_escape)" \
         "$(printf '%s' "$release" | json_escape)" \
         "$(printf '%s' "$address" | json_escape)" \
-        "$autostart" "$jail_type"
+        "$autostart" "$jail_type" "$outbound_policy"
     printf '"checks":{"bastille_installed":%s,"bastille_setup":%s,"storage_configured":%s,"network_ready":%s,"dns_ready":%s,"release_bootstrapped":%s,"name_available":%s,"address_available":%s,"address_route_safe":%s,"host_release":"%s","host_compatible":%s},' \
         "$bastille_installed" "$bastille_setup" "$storage_configured" "$network_ready" "$dns_ready" "$release_bootstrapped" "$name_available" "$address_available" "$address_route_safe" \
         "$(printf '%s' "$host_release" | json_escape)" "$host_compatible"
@@ -1226,19 +1372,23 @@ do_preview() {
     if [ -n "$dns_command" ]; then
         printf ',"%s"' "$(printf '%s' "$dns_command" | json_escape)"
     fi
+    if [ -n "$policy_command" ]; then
+        printf ',"%s"' "$(printf '%s' "$policy_command" | json_escape)"
+    fi
     printf '],'
     if [ "$jail_type" = "thick" ]; then
         type_note="This plan creates a thick service jail with an independent userland copy; Bastille owns its storage and jail.conf entry."
     else
         type_note="This plan creates a thin service jail that shares the bootstrapped release base; Bastille owns its storage, mounts, and jail.conf entry."
     fi
-    printf '"notes":["%s","%s","%s","%s","%s","%s","%s"]' \
+    printf '"notes":["%s","%s","%s","%s","%s","%s","%s","%s"]' \
         "$(printf '%s' "$type_note" | json_escape)" \
         "$(printf '%s' "$availability_note" | json_escape)" \
         "$(printf '%s' "$release_note" | json_escape)" \
         "$(printf '%s' "$collision_note" | json_escape)" \
         "$(printf '%s' "$network_note" | json_escape)" \
         "$(printf '%s' "$dns_note" | json_escape)" \
+        "$(printf '%s' "$policy_note" | json_escape)" \
         "$(printf '%s' "$host_note" | json_escape)"
     printf '}\n'
 }
@@ -1509,6 +1659,7 @@ do_create() {
     autostart="${4:-yes}"
     confirmation="${5:-}"
     jail_type="${6:-thick}"
+    outbound_policy="${7:-internet-only}"
 
     valid_name "$name" || {
         emit_action_result false "Invalid jail name." "Use letters, numbers, dots, underscores, or hyphens."
@@ -1536,6 +1687,10 @@ do_create() {
     esac
     valid_jail_type "$jail_type" || {
         emit_action_result false "Invalid jail type." "Choose thick or thin."
+        exit 1
+    }
+    valid_outbound_policy "$outbound_policy" || {
+        emit_action_result false "Invalid outbound policy." "Choose Internet only, LAN + Internet, or No outbound."
         exit 1
     }
     [ "$confirmation" = "$name" ] || {
@@ -1601,16 +1756,43 @@ do_create() {
         exit 1
     fi
 
+    dns_ok=false
+    policy_ok=false
+    dns_output=""
+    policy_output=""
     if dns_output="$(run_privileged bastille cp "$name" "$resolver_source" /etc/resolv.conf 2>&1)"; then
+        dns_ok=true
+    fi
+    if policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" 2>&1)"; then
+        policy_ok=true
+    fi
+
+    if [ "$dns_ok" = true ] && [ "$policy_ok" = true ]; then
         write_last_result "success" "Created ${name}."
         emit_action_result true "Created ${name}." "$output
 Configured jail DNS from ${resolver_source}.
-$dns_output"
-    else
+$dns_output
+Applied ${outbound_policy} outbound policy.
+$policy_output"
+    elif [ "$dns_ok" != true ] && [ "$policy_ok" = true ]; then
         write_last_result "warning" "Created ${name}, but DNS setup needs attention."
         emit_action_result true "Created ${name}, but DNS setup needs attention." "$output
 The jail exists, but BSDRunner could not copy ${resolver_source} to /etc/resolv.conf.
-$dns_output"
+$dns_output
+$policy_output"
+    elif [ "$dns_ok" = true ]; then
+        write_last_result "warning" "Created ${name}, but its outbound policy needs attention."
+        emit_action_result true "Created ${name}, but its outbound policy needs attention." "$output
+Configured jail DNS from ${resolver_source}.
+$dns_output
+The jail exists, but BSDRunner could not apply the ${outbound_policy} outbound policy.
+$policy_output"
+    else
+        write_last_result "warning" "Created ${name}, but post-create setup needs attention."
+        emit_action_result true "Created ${name}, but post-create setup needs attention." "$output
+The jail exists, but BSDRunner could not configure DNS or apply the outbound policy.
+$dns_output
+$policy_output"
     fi
 }
 
@@ -1643,8 +1825,11 @@ case "$action" in
     console)
         do_console "${2:-}" "${3:-native}"
         ;;
+    policy-set)
+        do_policy_set "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+        ;;
     preview)
-        do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-thick}"
+        do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-thick}" "${7:-internet-only}"
         ;;
     storage-preview)
         do_storage_preview "${2:-}"
@@ -1662,7 +1847,7 @@ case "$action" in
         do_bootstrap "${2:-}" "${3:-}"
         ;;
     create)
-        do_create "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-}" "${7:-thick}"
+        do_create "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-}" "${7:-thick}" "${8:-internet-only}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'pfctl'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_PF_TEST_LOG"
+
+if [ "${BSDRUNNER_PF_TEST_VALIDATE_FAIL:-0}" = "1" ] && [ "${1:-}" = "-vnf" ]; then
+    printf 'fixture validation failed\n' >&2
+    exit 1
+fi
+
+printf 'PF fixture command completed.\n'

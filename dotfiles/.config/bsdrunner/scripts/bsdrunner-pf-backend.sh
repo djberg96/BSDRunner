@@ -3,11 +3,13 @@
 set -eu
 
 action="${1:-snapshot}"
-profile_dir="${HOME}/.config/bsdrunner/pf"
+profile_dir="${BSDRUNNER_PF_PROFILE_DIR:-${HOME}/.config/bsdrunner/pf}"
 profile_file="$profile_dir/profile.conf"
-profile_script="${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-profile.sh"
+profile_script="${BSDRUNNER_PF_PROFILE_SCRIPT:-${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-profile.sh}"
+pf_config_file="${BSDRUNNER_PF_CONFIG_FILE:-/etc/pf.conf}"
 state_file="$profile_dir/last-result.conf"
 applied_state_file="$profile_dir/applied-profile.conf"
+jail_policy_file="$profile_dir/jail-policies.conf"
 managed_marker="bsdrunner_pf_profile_version=1"
 
 allow_outbound="yes"
@@ -36,6 +38,50 @@ valid_interface() {
             return 0
             ;;
     esac
+}
+
+valid_jail_name() {
+    case "${1:-}" in
+        ''|*[!A-Za-z0-9_.-]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+valid_ipv4() {
+    printf '%s\n' "${1:-}" | awk -F '.' '
+        NF != 4 { exit 1 }
+        {
+            for (i = 1; i <= 4; i++)
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255)
+                    exit 1
+        }
+    '
+}
+
+valid_jail_policy() {
+    case "${1:-}" in
+        internet-only|lan|none)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+emit_jail_policies() {
+    [ -f "$jail_policy_file" ] || return 0
+    while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+        valid_jail_name "$policy_name" || continue
+        valid_ipv4 "$policy_address" || continue
+        valid_jail_policy "$policy_mode" || continue
+        valid_ipv4 "$policy_resolver" || continue
+        printf '%s|%s|%s|%s\n' "$policy_name" "$policy_address" "$policy_mode" "$policy_resolver"
+    done <"$jail_policy_file"
 }
 
 valid_real_ssh_port() {
@@ -209,7 +255,10 @@ emit_settings() {
 }
 
 profile_checksum() {
-    emit_settings | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
+    {
+        emit_settings
+        emit_jail_policies
+    } | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
 }
 
 set_setting_value() {
@@ -396,9 +445,9 @@ write_applied_state() {
 }
 
 installed_config_state() {
-    if [ ! -e /etc/pf.conf ]; then
+    if [ ! -e "$pf_config_file" ]; then
         printf 'missing\n'
-    elif run_privileged grep -q "$managed_marker" /etc/pf.conf >/dev/null 2>&1; then
+    elif run_privileged grep -q "$managed_marker" "$pf_config_file" >/dev/null 2>&1; then
         printf 'managed\n'
     elif [ "$(applied_state_value state)" = "managed" ]; then
         printf 'managed\n'
@@ -408,8 +457,8 @@ installed_config_state() {
 }
 
 installed_config_checksum() {
-    [ -e /etc/pf.conf ] || return 0
-    checksum="$(run_privileged_capture awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' /etc/pf.conf || true)"
+    [ -e "$pf_config_file" ] || return 0
+    checksum="$(run_privileged_capture awk -F '=' '/bsdrunner_pf_profile_checksum=/ { print $2; exit }' "$pf_config_file" || true)"
     if [ -n "$checksum" ]; then
         printf '%s\n' "$checksum"
     else
@@ -480,6 +529,23 @@ rules_summary_json() {
     printf ']'
 }
 
+jail_policies_json() {
+    emit_jail_policies | awk -F '|' '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        BEGIN { printf "["; first = 1 }
+        {
+            if (!first) printf ","
+            first = 0
+            printf "{\"name\":\"%s\",\"ipv4\":\"%s\",\"policy\":\"%s\",\"resolver\":\"%s\"}", esc($1), esc($2), esc($3), esc($4)
+        }
+        END { printf "]" }
+    '
+}
+
 emit_snapshot() {
     load_profile
     pf_state="$(pf_running_state)"
@@ -543,6 +609,9 @@ emit_snapshot() {
     printf '},'
     printf '"rules":'
     rules_summary_json
+    printf ','
+    printf '"jail_policies":'
+    jail_policies_json
     printf ','
     printf '"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
         "$(printf '%s' "$last_tone" | json_escape)" \
@@ -756,9 +825,9 @@ do_validate() {
 install_rendered_profile() {
     rendered="$1"
     if command -v mdo >/dev/null 2>&1; then
-        mdo install -m 0600 "$rendered" /etc/pf.conf
+        mdo install -m 0600 "$rendered" "$pf_config_file"
     else
-        install -m 0600 "$rendered" /etc/pf.conf
+        install -m 0600 "$rendered" "$pf_config_file"
     fi
 }
 
@@ -1021,6 +1090,63 @@ do_jail_network() {
     do_apply normal
 }
 
+do_jail_policy() {
+    requested_name="${1:-}"
+    requested_address="${2:-}"
+    requested_policy="${3:-}"
+    requested_resolver="${4:-}"
+
+    valid_jail_name "$requested_name" || {
+        emit_action_result false "Invalid jail name." "$requested_name"
+        exit 1
+    }
+    valid_ipv4 "$requested_address" || {
+        emit_action_result false "Invalid jail address." "$requested_address"
+        exit 1
+    }
+    valid_jail_policy "$requested_policy" || {
+        emit_action_result false "Invalid jail outbound policy." "$requested_policy"
+        exit 1
+    }
+    valid_ipv4 "$requested_resolver" || {
+        emit_action_result false "Invalid jail DNS resolver." "$requested_resolver"
+        exit 1
+    }
+
+    load_profile
+    if [ "$jail_nat" != "yes" ]; then
+        emit_action_result false "Bastille jail networking is not enabled in the managed PF profile." "Configure jail networking before applying an outbound policy."
+        exit 1
+    fi
+
+    mkdir -p "$profile_dir"
+    previous_policies="$(cat "$jail_policy_file" 2>/dev/null || true)"
+    policy_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-jail-policy.XXXXXX")"
+    trap 'rm -f "$policy_tmp"' EXIT HUP INT TERM
+    emit_jail_policies | awk -F '|' -v name="$requested_name" -v address="$requested_address" \
+        '$1 != name && $2 != address { print }' >"$policy_tmp"
+    printf '%s|%s|%s|%s\n' "$requested_name" "$requested_address" "$requested_policy" "$requested_resolver" >>"$policy_tmp"
+    mv "$policy_tmp" "$jail_policy_file"
+    trap - EXIT HUP INT TERM
+
+    if apply_output="$(sh "$0" apply 2>&1)" && printf '%s\n' "$apply_output" | grep -q '"ok":true'; then
+        state_output="$(run_privileged_capture pfctl -k "$requested_address" || true)"
+        write_last_result "success" "Applied ${requested_policy} outbound policy to ${requested_name}."
+        emit_action_result true "Applied outbound policy to ${requested_name}." "$apply_output
+$state_output"
+        return
+    fi
+
+    if [ -n "$previous_policies" ]; then
+        printf '%s\n' "$previous_policies" >"$jail_policy_file"
+    else
+        rm -f "$jail_policy_file"
+    fi
+    write_last_result "error" "Unable to apply outbound policy to ${requested_name}."
+    emit_action_result false "Unable to apply outbound policy to ${requested_name}." "$apply_output"
+    exit 1
+}
+
 do_enable() {
     load_profile
     if [ "$allow_ssh_tarpit" = "yes" ]; then
@@ -1124,6 +1250,9 @@ case "$action" in
         ;;
     jail-network)
         do_jail_network "${2:-}" "${3:-}"
+        ;;
+    jail-policy)
+        do_jail_policy "${2:-}" "${3:-}" "${4:-}" "${5:-}"
         ;;
     set)
         load_profile
