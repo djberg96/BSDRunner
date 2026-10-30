@@ -2241,18 +2241,23 @@ ShellRoot {
 
                                         Rectangle {
                                             readonly property string verb: root.selectedSimpleService && !root.selectedSimpleService.installed ? "install" : root.selectedSimpleService && root.selectedSimpleService.running ? "restart" : "start"
+                                            readonly property bool available: root.actionAvailable("service-action|nginx|" + verb)
 
                                             width: root.selectedSimpleService && root.selectedSimpleService.running ? (parent.width - 6) / 2 : parent.width
                                             height: parent.height
+                                            opacity: available ? 1.0 : 0.45
                                             radius: 6
-                                            color: servicePrimaryMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.14)
+                                            color: available ? (servicePrimaryMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.14)) : root.palette.panelBackground
                                             border.width: 1
-                                            border.color: root.palette.accent
+                                            border.color: available ? root.palette.accent : root.palette.panelBorder
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: root.selectedSimpleService && !root.selectedSimpleService.installed ? "Install + start" : root.selectedSimpleService && root.selectedSimpleService.running ? "Restart" : "Start"
-                                                color: root.palette.primaryText
+                                                text: root.selectedJail && (root.selectedJail.state || "").toLowerCase() !== "running"
+                                                    ? "Start jail first"
+                                                    : root.selectedSimpleService && !root.selectedSimpleService.installed ? "Install + start"
+                                                    : root.selectedSimpleService && root.selectedSimpleService.running ? "Restart" : "Start"
+                                                color: parent.available ? root.palette.primaryText : root.palette.mutedText
                                                 font.pixelSize: 12
                                                 font.bold: true
                                             }
@@ -2262,7 +2267,7 @@ ShellRoot {
 
                                                 anchors.fill: parent
                                                 hoverEnabled: true
-                                                enabled: root.actionAvailable("service-action|nginx|" + parent.verb)
+                                                enabled: parent.available
                                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                                 onClicked: root.requestServiceAction(parent.verb)
                                             }
@@ -2279,7 +2284,7 @@ ShellRoot {
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: "Stop"
+                                                text: "Stop " + (root.selectedSimpleService ? (root.selectedSimpleService.label || root.selectedSimpleService.service || "service") : "service")
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 12
                                                 font.bold: true
@@ -2304,17 +2309,20 @@ ShellRoot {
                                         spacing: 6
 
                                         Rectangle {
+                                            readonly property bool available: root.actionAvailable("service-action|nginx|boot")
+
                                             width: (parent.width - 6) / 2
                                             height: parent.height
+                                            opacity: available ? 1.0 : 0.45
                                             radius: 6
-                                            color: serviceBootMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                            color: available && serviceBootMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
                                             border.width: 1
                                             border.color: root.palette.panelBorder
 
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: root.selectedSimpleService && root.selectedSimpleService.enabled ? "Disable at boot" : "Enable at boot"
-                                                color: root.palette.secondaryText
+                                                color: parent.available ? root.palette.secondaryText : root.palette.mutedText
                                                 font.pixelSize: 11
                                                 font.bold: true
                                             }
@@ -2324,7 +2332,7 @@ ShellRoot {
 
                                                 anchors.fill: parent
                                                 hoverEnabled: true
-                                                enabled: root.actionAvailable("service-action|nginx|boot")
+                                                enabled: parent.available
                                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                                 onClicked: root.requestServiceAction(root.selectedSimpleService.enabled ? "disable" : "enable")
                                             }
