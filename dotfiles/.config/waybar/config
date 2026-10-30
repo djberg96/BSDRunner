@@ -16,7 +16,7 @@
     "ext/workspaces": {
       "all-outputs": true,
       "active-only": false,
-      "sort-by-id": true,
+      "sort-by-name": true,
       "on-click": "activate",
       "format": "{icon}",
       "format-icons": {
