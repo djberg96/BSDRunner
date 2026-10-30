@@ -132,6 +132,10 @@ if [ "$enable_service" = true ]; then
         echo ":: seatd_enable must be YES before enabling LightDM." >&2
         exit 1
     }
+    if service lightdm status >/dev/null 2>&1; then
+        echo ":: Refusing activation while LightDM is already running." >&2
+        exit 1
+    fi
 fi
 
 backup_file() {
@@ -178,6 +182,19 @@ find "$bundle_root/share/bsdrunner/lightdm/backgrounds" -type f -maxdepth 1 | \
     done
 
 if [ "$enable_service" = true ]; then
+    combined_config="$(/usr/local/sbin/lightdm --show-config 2>&1)" || {
+        echo ":: LightDM rejected the installed configuration." >&2
+        exit 1
+    }
+    printf '%s\n' "$combined_config" | \
+        grep -F 'greeter-session=bsdrunner-lightdm-gtk-greeter' >/dev/null || {
+            echo ":: Installed LightDM config does not select the BSDRunner greeter." >&2
+            exit 1
+        }
+    printf '%s\n' "$combined_config" | grep -F 'user-session=hyprland' >/dev/null || {
+        echo ":: Installed LightDM config does not select Hyprland." >&2
+        exit 1
+    }
     sysrc greetd_enable=NO >/dev/null
     sysrc lightdm_enable=YES >/dev/null
 fi
@@ -186,5 +203,5 @@ echo ":: Installed the BSDRunner LightDM bundle under $install_prefix"
 if [ "$enable_service" = true ]; then
     echo ":: LightDM is enabled for the next boot; it was not started now."
 else
-    echo ":: LightDM was not enabled. Re-run with --enable after validation."
+    echo ":: LightDM was not enabled. Run bsdrunner-preflight-lightdm.sh before activation."
 fi

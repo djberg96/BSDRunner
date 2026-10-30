@@ -16,9 +16,11 @@ The setup is intentionally split into checked steps:
 - rendering does not need root access
 - the profile migration only removes the recognized ttyv0 autostart block and
   retains the original profile
-- the system installer verifies both packages, the Hyprland session entry, the
-  rendered bundle, `dbus`, `seatd`, and the migrated profile
-- installation enables LightDM for the next boot but never starts it underneath
+- system files are staged while LightDM remains disabled and the existing
+  console startup still works
+- a read-only preflight verifies both packages, the Hyprland session entry, the
+  combined LightDM configuration, `dbus`, and `seatd`
+- activation enables LightDM for the next boot but never starts it underneath
   the current graphical session
 - a rollback helper is available from a text console
 
@@ -50,7 +52,34 @@ The bundle is written to `~/.config/bsdrunner/lightdm/`. It contains:
 - a BSDRunner greeter wrapper and desktop entry
 - static BSDRunner wallpapers and a random wallpaper picker
 
-## 3. Remove Console Autostart
+## 3. Stage the System Files While Keeping the Current Boot Path
+
+Install the bundle without `--enable`:
+
+```sh
+sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh \
+  --bundle "$HOME/.config/bsdrunner/lightdm"
+```
+
+LightDM remains disabled. The old ttyv0 startup remains in `.profile`, so a
+reboot at this point still uses the existing console-to-Hyprland path.
+
+## 4. Run the Read-Only Preflight
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh \
+  --profile "$HOME/.profile"
+```
+
+The preflight does not start or enable LightDM. It checks the installed package
+and executable paths, the xgreeter entry, the Hyprland session, the combined
+LightDM configuration, and the required services. It should report that staging
+is safe but activation is not yet ready because the old console autostart still
+exists.
+
+Stop here if any check fails.
+
+## 5. Prepare a Console Recovery Shell
 
 First verify that the expected block can be migrated:
 
@@ -73,7 +102,18 @@ The original is retained as:
 After this change, logging in on a text console gives you a normal shell.
 Hyprland can always be started manually with `start-hyprland`.
 
-## 4. Install and Enable for the Next Boot
+Run the stricter preflight before changing `rc.conf`:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh \
+  --profile "$HOME/.profile" \
+  --activation-ready
+```
+
+Before continuing, switch to a different text VT, log in, confirm that you get a
+shell prompt, and exit. This proves the recovery route before LightDM is enabled.
+
+## 6. Enable for the Next Boot
 
 ```sh
 sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh \
@@ -82,9 +122,9 @@ sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh \
   --enable
 ```
 
-This copies the complete bundle into `/usr/local`, sets
-`lightdm_enable=YES`, and sets the stale `greetd_enable` value to `NO`.
-Existing LightDM configuration files receive `.pre-bsdrunner` backups.
+This revalidates the staged bundle and recovery profile, then sets
+`lightdm_enable=YES` and the stale `greetd_enable` value to `NO`. Existing
+LightDM configuration files receive `.pre-bsdrunner` backups.
 
 The script does not start LightDM. Finish your work and reboot normally:
 

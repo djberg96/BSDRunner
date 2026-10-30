@@ -60,6 +60,15 @@ sh "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh" 
     fail "xgreeter entry was not installed"
 pass "installer copies every required LightDM component"
 
+mkdir -p "$prefix/sbin" "$prefix/share/wayland-sessions"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$prefix/sbin/lightdm-gtk-greeter"
+chmod 755 "$prefix/sbin/lightdm-gtk-greeter"
+printf '%s\n' '[Desktop Entry]' 'Exec=start-hyprland' \
+    > "$prefix/share/wayland-sessions/hyprland.desktop"
+sh "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh" \
+    --prefix "$prefix" >/dev/null
+pass "preflight validates the staged bundle without starting LightDM"
+
 refused_prefix="$test_root/refused-prefix"
 if sh "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh" \
     --bundle "$bundle" --prefix "$refused_prefix" --enable >/dev/null 2>&1; then
@@ -93,6 +102,10 @@ grep -F '. "$HOME/.cargo/env"' "$profile" >/dev/null || \
 grep -F 'exec start-hyprland' "$profile.pre-bsdrunner-lightdm" >/dev/null || \
     fail "profile backup does not contain the original block"
 pass "profile migration removes only the ttyv0 autostart block"
+
+sh "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh" \
+    --prefix "$prefix" --profile "$profile" --activation-ready >/dev/null
+pass "activation preflight accepts a migrated recovery profile"
 
 if grep -F 'vidcontrol' "$repo_root/dotfiles/.config/wlogout/layout" >/dev/null; then
     fail "logout still forces a VT switch"
