@@ -56,6 +56,18 @@ run_privileged() {
     fi
 }
 
+run_jail_privileged() {
+    if command -v mdo >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+        mdo sudo -n "$@"
+    elif command -v mdo >/dev/null 2>&1; then
+        mdo "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo -n "$@"
+    else
+        "$@"
+    fi
+}
+
 run_bastille_read() {
     if bastille "$@" 2>/dev/null; then
         return 0
@@ -477,6 +489,10 @@ valid_port() {
     [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
 }
 
+valid_simple_service() {
+    [ "${1:-}" = "nginx" ]
+}
+
 valid_address() {
     case "${1:-}" in
         inherit)
@@ -805,6 +821,104 @@ port_forwards_json() {
     ' "$jail_forward_file"
 }
 
+bastille_service_inventory() {
+    if command -v jq >/dev/null 2>&1; then
+        service_json_output="$(run_bastille_list_json 2>/dev/null || true)"
+        if printf '%s\n' "$service_json_output" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            printf '%s\n' "$service_json_output" |
+            jq -r '.[]
+                | select(((.Name // "") | tostring) != "" and ((.Name // "") | tostring) != "-")
+                | [
+                    ((.Name // "") | tostring),
+                    ((.["IP Address"] // "") | tostring | split("|") | last | split("/") | first),
+                    (if ((.State // "") | tostring | ascii_downcase) == "up" then "running" else "stopped" end),
+                    ((.JID // "") | tostring)
+                  ]
+                | @tsv'
+            return
+        fi
+    fi
+
+    run_bastille_list_all |
+    awk '
+        /^[[:space:]]*$/ || /^[[:space:]]*JID[[:space:]]/ || /^[[:space:]]*-/ { next }
+        NF >= 3 {
+            ip = $2
+            sub(/\/.*/, "", ip)
+            state = ($1 == "0" || $1 == "-") ? "stopped" : "running"
+            printf "%s\t%s\t%s\t%s\n", $3, ip, state, $1
+        }
+    '
+}
+
+probe_nginx_service() {
+    probe_name="$1"
+    probe_state="${2:-running}"
+    probe_jid="${3:-}"
+    probe_prefix="$(bastille_prefix_value 2>/dev/null || true)"
+    [ -n "$probe_prefix" ] || probe_prefix="/usr/local/bastille"
+    probe_root="${probe_prefix}/jails/${probe_name}/root"
+
+    run_privileged test -d "$probe_root" >/dev/null 2>&1 || return 1
+    probe_installed=false
+    probe_enabled=false
+    probe_running=false
+    run_privileged test -f "$probe_root/usr/local/etc/rc.d/nginx" >/dev/null 2>&1 && probe_installed=true
+    probe_enable_value="$(run_privileged sysrc -R "$probe_root" -n nginx_enable 2>/dev/null || true)"
+    [ "$probe_enable_value" = "YES" ] && probe_enabled=true
+    if [ "$test_mode" = "1" ]; then
+        [ "$probe_state" = "running" ] && [ -f "$probe_root/var/run/nginx.pid" ] && probe_running=true
+    elif [ "$probe_state" = "running" ] && printf '%s\n' "$probe_jid" | grep -Eq '^[0-9]+$' && pgrep -j "$probe_jid" -x nginx >/dev/null 2>&1; then
+        probe_running=true
+    fi
+    printf 'BSDRUNNER_SERVICE|nginx|%s|%s|%s\n' "$probe_installed" "$probe_enabled" "$probe_running"
+}
+
+simple_services_json() {
+    if ! command -v bastille >/dev/null 2>&1; then
+        printf '[]'
+        return
+    fi
+
+    printf '['
+    service_first=true
+    tab="$(printf '\t')"
+    bastille_service_inventory | while IFS="$tab" read -r service_jail service_address service_jail_state service_jid; do
+        valid_name "$service_jail" || continue
+        service_address="$(address_ipv4_value "$service_address")"
+        valid_jail_ipv4 "${service_address}/32" || continue
+
+        service_known=false
+        service_installed=false
+        service_enabled=false
+        service_running=false
+        service_probe="$(probe_nginx_service "$service_jail" "$service_jail_state" "$service_jid" 2>/dev/null || true)"
+        if [ -n "$service_probe" ]; then
+            old_ifs="$IFS"
+            IFS='|'
+            set -- $service_probe
+            IFS="$old_ifs"
+            if [ "${1:-}" = "BSDRUNNER_SERVICE" ] && [ "${2:-}" = "nginx" ]; then
+                service_known=true
+                [ "${3:-false}" = "true" ] && service_installed=true
+                [ "${4:-false}" = "true" ] && service_enabled=true
+                [ "${5:-false}" = "true" ] && service_running=true
+            fi
+        fi
+
+        if [ "$service_first" = true ]; then
+            service_first=false
+        else
+            printf ','
+        fi
+        printf '{"name":"%s","ipv4":"%s","service":"nginx","package":"nginx","label":"nginx","description":"Static web server and reverse proxy","port":80,"status_known":%s,"installed":%s,"enabled":%s,"running":%s}' \
+            "$(printf '%s' "$service_jail" | json_escape)" \
+            "$(printf '%s' "$service_address" | json_escape)" \
+            "$service_known" "$service_installed" "$service_enabled" "$service_running"
+    done
+    printf ']'
+}
+
 bastille_inventory() {
     if command -v jq >/dev/null 2>&1; then
         json_output="$(run_bastille_list_json 2>/dev/null || true)"
@@ -1032,6 +1146,8 @@ emit_snapshot() {
     outbound_policies_json
     printf ',"port_forwards":'
     port_forwards_json
+    printf ',"simple_services":'
+    simple_services_json
     printf ',"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
         "$(printf '%s' "$last_tone" | json_escape)" \
         "$(printf '%s' "$last_message" | json_escape)" \
@@ -1120,6 +1236,33 @@ bastille_jail_matches() {
             ip = $2
             sub(/\/.*/, "", ip)
             if ($3 == name && ip == address)
+                found = 1
+        }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+bastille_jail_running_matches() {
+    running_name="$1"
+    running_address="$2"
+    running_inventory_json="$(run_bastille_list_json 2>/dev/null || true)"
+    if command -v jq >/dev/null 2>&1 && printf '%s\n' "$running_inventory_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        printf '%s\n' "$running_inventory_json" | jq -e --arg name "$running_name" --arg address "$running_address" '
+            any(.[];
+                ((.Name // "") | tostring) == $name and
+                (((.["IP Address"] // "") | tostring | split("|") | last | split("/") | first) == $address) and
+                (((.State // "") | tostring | ascii_downcase) == "up")
+            )
+        ' >/dev/null
+        return
+    fi
+
+    run_bastille_list_all | awk -v name="$running_name" -v address="$running_address" '
+        /^[[:space:]]*$/ || /^[[:space:]]*JID[[:space:]]/ || /^[[:space:]]*-/ { next }
+        {
+            ip = $2
+            sub(/\/.*/, "", ip)
+            if ($1 != "0" && $1 != "-" && $3 == name && ip == address)
                 found = 1
         }
         END { exit found ? 0 : 1 }
@@ -1247,6 +1390,119 @@ do_port_forward() {
         emit_action_result false "$message" "$output"
         exit 1
     fi
+}
+
+nginx_installed_in_jail() {
+    installed_name="$1"
+    installed_probe="$(probe_nginx_service "$installed_name" 2>/dev/null || true)"
+    printf '%s\n' "$installed_probe" | awk -F '|' '
+        $1 == "BSDRUNNER_SERVICE" && $2 == "nginx" && $3 == "true" { found = 1 }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+do_simple_service() {
+    name="${1:-}"
+    address="${2:-}"
+    service_name="${3:-}"
+    service_action="${4:-}"
+    confirmation="${5:-}"
+
+    valid_name "$name" || {
+        emit_action_result false "Invalid jail name." "Use the selected Bastille jail."
+        exit 1
+    }
+    service_address="$(address_ipv4_value "$address")"
+    valid_jail_ipv4 "${service_address}/32" || {
+        emit_action_result false "Invalid jail address." "$address"
+        exit 1
+    }
+    valid_simple_service "$service_name" || {
+        emit_action_result false "Unsupported guided service." "The first guided service release supports nginx only."
+        exit 1
+    }
+    case "$service_action" in
+        install|start|stop|restart|enable|disable)
+            ;;
+        *)
+            emit_action_result false "Invalid service action." "$service_action"
+            exit 1
+            ;;
+    esac
+    [ "$confirmation" = "$name" ] || {
+        emit_action_result false "Service confirmation did not match." "Return to the selected jail and confirm again."
+        exit 1
+    }
+    bastille_jail_running_matches "$name" "$service_address" || {
+        emit_action_result false "The selected Bastille jail is not running or could not be verified." "Start the jail and refresh before managing services."
+        exit 1
+    }
+
+    if [ "$service_action" != install ] && ! nginx_installed_in_jail "$name"; then
+        emit_action_result false "nginx is not installed in ${name}." "Use Install + start first."
+        exit 1
+    fi
+
+    case "$service_action" in
+        install)
+            if ! package_output="$(run_jail_privileged bastille pkg -y "$name" install nginx 2>&1)"; then
+                write_last_result "error" "Unable to install nginx in ${name}."
+                emit_action_result false "Unable to install nginx in ${name}." "$package_output"
+                exit 1
+            fi
+            if ! enable_output="$(run_jail_privileged bastille sysrc "$name" nginx_enable=YES 2>&1)"; then
+                write_last_result "warning" "Installed nginx in ${name}, but could not enable it."
+                emit_action_result false "Installed nginx, but could not enable it in ${name}." "$package_output
+$enable_output"
+                exit 1
+            fi
+            if ! service_output="$(run_jail_privileged bastille service "$name" nginx start 2>&1)"; then
+                write_last_result "warning" "Installed and enabled nginx in ${name}, but could not start it."
+                emit_action_result false "Installed nginx, but could not start it in ${name}." "$package_output
+$enable_output
+$service_output"
+                exit 1
+            fi
+            message="Installed, enabled, and started nginx in ${name}."
+            details="$package_output
+$enable_output
+$service_output"
+            ;;
+        start|stop|restart)
+            if ! service_output="$(run_jail_privileged bastille service "$name" nginx "$service_action" 2>&1)"; then
+                write_last_result "error" "Unable to ${service_action} nginx in ${name}."
+                emit_action_result false "Unable to ${service_action} nginx in ${name}." "$service_output"
+                exit 1
+            fi
+            case "$service_action" in
+                start) message="Started nginx in ${name}." ;;
+                stop) message="Stopped nginx in ${name}." ;;
+                restart) message="Restarted nginx in ${name}." ;;
+            esac
+            details="$service_output"
+            ;;
+        enable)
+            if ! service_output="$(run_jail_privileged bastille sysrc "$name" nginx_enable=YES 2>&1)"; then
+                write_last_result "error" "Unable to enable nginx at boot in ${name}."
+                emit_action_result false "Unable to enable nginx at boot in ${name}." "$service_output"
+                exit 1
+            fi
+            message="Enabled nginx at boot in ${name}."
+            details="$service_output"
+            ;;
+        disable)
+            if ! service_output="$(run_jail_privileged bastille sysrc "$name" nginx_enable=NO 2>&1)"; then
+                write_last_result "error" "Unable to disable nginx at boot in ${name}."
+                emit_action_result false "Unable to disable nginx at boot in ${name}." "$service_output"
+                exit 1
+            fi
+            message="Disabled nginx at boot in ${name}."
+            details="$service_output"
+            ;;
+    esac
+
+    write_last_result "success" "$message"
+    emit_action_result true "$message" "$details"
 }
 
 do_console() {
@@ -1949,6 +2205,9 @@ case "$action" in
         ;;
     forward-remove)
         do_port_forward remove "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}"
+        ;;
+    service-action)
+        do_simple_service "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
         ;;
     preview)
         do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-thick}" "${7:-internet-only}"

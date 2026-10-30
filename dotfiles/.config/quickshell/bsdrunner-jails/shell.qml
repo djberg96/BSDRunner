@@ -68,6 +68,8 @@ ShellRoot {
     property string activeActionProtocol: ""
     property string activeActionHostPort: ""
     property string activeActionJailPort: ""
+    property string activeActionService: ""
+    property string activeActionServiceVerb: ""
     property string activeActionLabel: ""
     property string pendingActionId: ""
     property string pendingActionLabel: ""
@@ -80,6 +82,7 @@ ShellRoot {
     property var bastilleJails: []
     property var outboundPolicies: []
     property var portForwards: []
+    property var simpleServices: []
     property var tools: ({})
     property var services: ({})
     property var bastilleReleases: []
@@ -124,6 +127,8 @@ ShellRoot {
 
     readonly property var jails: mergedJails()
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
+    readonly property var selectedSimpleService: simpleServiceFor(selectedJail, "nginx")
+    readonly property var selectedServiceForwards: serviceForwardsFor(selectedJail, selectedSimpleService)
     readonly property bool wizardBusy: createPreviewLoading || creationRunning || storageSetupRunning || networkSetupRunning
     readonly property var wizardSteps: ["Storage", "Userland", "Network", "Config", "Lifecycle"]
     readonly property var outboundPolicyChoices: [
@@ -426,6 +431,70 @@ ShellRoot {
                       "Expose host " + forwardHostPort + "/" + forwardProtocol.toUpperCase() + " to " + selectedJail.name + ":" + forwardJailPort + " and reload PF?")
     }
 
+    function simpleServiceFor(jail, serviceName) {
+        if (!jail)
+            return null
+        for (var i = 0; i < simpleServices.length; i += 1) {
+            var entry = simpleServices[i]
+            if (entry.service === serviceName && (entry.name === jail.name || (entry.ipv4 && entry.ipv4 === jail.ipv4)))
+                return entry
+        }
+        return null
+    }
+
+    function serviceForwardsFor(jail, service) {
+        var matches = []
+        if (!jail || !service)
+            return matches
+        var jailForwards = portForwardsFor(jail)
+        for (var i = 0; i < jailForwards.length; i += 1) {
+            var entry = jailForwards[i]
+            if (String(entry.protocol || "").toLowerCase() === "tcp" && Number(entry.jail_port) === Number(service.port))
+                matches.push(entry)
+        }
+        return matches
+    }
+
+    function serviceForwardLabel(forwards, service) {
+        if (!forwards || forwards.length === 0 || !service)
+            return "Create port forward"
+        var hostPorts = []
+        for (var i = 0; i < forwards.length; i += 1)
+            hostPorts.push(String(forwards[i].host_port))
+        return "Host :" + hostPorts.join(", :") + " → nginx :" + service.port
+    }
+
+    function serviceVerbLabel(verb) {
+        if (verb === "install")
+            return "Install + start"
+        if (verb === "enable")
+            return "Enable at boot"
+        if (verb === "disable")
+            return "Disable at boot"
+        return verb.charAt(0).toUpperCase() + verb.slice(1)
+    }
+
+    function requestServiceAction(verb) {
+        if (!selectedSimpleService)
+            return
+        var label = serviceVerbLabel(verb)
+        var description = verb === "install"
+            ? "Install nginx in " + selectedJail.name + ", enable it at boot, and start it now? This downloads packages inside the jail."
+            : label + " nginx in " + selectedJail.name + "?"
+        requestAction("service-action|nginx|" + verb, label + " nginx", description)
+    }
+
+    function prepareServiceForward() {
+        if (!selectedSimpleService)
+            return
+        forwardProtocol = "tcp"
+        forwardJailPort = String(selectedSimpleService.port || 80)
+        if (!validForwardPort(forwardHostPort))
+            forwardHostPort = "8080"
+        statusTone = "info"
+        statusMessage = "Prepared TCP forwarding fields for nginx."
+    }
+
     function statusDetailText() {
         if ((statusTone === "error" || lastResultTone === "error") && actionDetails.length > 0)
             return firstNonEmptyLine(actionDetails)
@@ -459,6 +528,8 @@ ShellRoot {
             return selectedJail.backend === "bastille" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
         if (actionId.indexOf("forward-add|") === 0 || actionId.indexOf("forward-remove|") === 0)
             return selectedJail.backend === "bastille" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
+        if (actionId.indexOf("service-action|") === 0)
+            return selectedJail.backend === "bastille" && (selectedJail.state || "").toLowerCase() === "running" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown" && selectedSimpleService && selectedSimpleService.status_known
         if (actionId === "start")
             return canStart(selectedJail)
         if (actionId === "stop")
@@ -493,6 +564,8 @@ ShellRoot {
             activeActionProtocol = ""
             activeActionHostPort = ""
             activeActionJailPort = ""
+            activeActionService = ""
+            activeActionServiceVerb = ""
         } else if (pendingActionId.indexOf("forward-add|") === 0 || pendingActionId.indexOf("forward-remove|") === 0) {
             var forwardParts = pendingActionId.split("|")
             activeActionId = forwardParts[0]
@@ -500,15 +573,28 @@ ShellRoot {
             activeActionProtocol = forwardParts[1]
             activeActionHostPort = forwardParts[2]
             activeActionJailPort = forwardParts[3]
+            activeActionService = ""
+            activeActionServiceVerb = ""
+        } else if (pendingActionId.indexOf("service-action|") === 0) {
+            var serviceParts = pendingActionId.split("|")
+            activeActionId = serviceParts[0]
+            activeActionPolicy = ""
+            activeActionProtocol = ""
+            activeActionHostPort = ""
+            activeActionJailPort = ""
+            activeActionService = serviceParts[1]
+            activeActionServiceVerb = serviceParts[2]
         } else {
             activeActionId = pendingActionId
             activeActionPolicy = ""
             activeActionProtocol = ""
             activeActionHostPort = ""
             activeActionJailPort = ""
+            activeActionService = ""
+            activeActionServiceVerb = ""
         }
         activeActionName = selectedJail.name
-        activeActionBackend = activeActionId === "policy-set" || activeActionId.indexOf("forward-") === 0 ? selectedJail.ipv4 : selectedJail.backend || "native"
+        activeActionBackend = activeActionId === "policy-set" || activeActionId.indexOf("forward-") === 0 || activeActionId === "service-action" ? selectedJail.ipv4 : selectedJail.backend || "native"
         activeActionLabel = pendingActionLabel
         clearPendingAction()
         runActionProcess()
@@ -1015,6 +1101,7 @@ ShellRoot {
         bastilleJails = payload.bastille || []
         outboundPolicies = payload.outbound_policies || []
         portForwards = payload.port_forwards || []
+        simpleServices = payload.simple_services || []
         lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info"
         lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message
         lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : ""
@@ -1058,6 +1145,8 @@ ShellRoot {
         activeActionProtocol = ""
         activeActionHostPort = ""
         activeActionJailPort = ""
+        activeActionService = ""
+        activeActionServiceVerb = ""
         activeActionLabel = ""
         refreshSnapshot()
     }
@@ -1100,6 +1189,8 @@ ShellRoot {
             ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "policy-set", root.activeActionName, root.activeActionBackend, root.activeActionPolicy, root.activeActionName]
             : root.activeActionId === "forward-add" || root.activeActionId === "forward-remove"
                 ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend, root.activeActionProtocol, root.activeActionHostPort, root.activeActionJailPort, root.activeActionName]
+                : root.activeActionId === "service-action"
+                    ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "service-action", root.activeActionName, root.activeActionBackend, root.activeActionService, root.activeActionServiceVerb, root.activeActionName]
                 : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
         stdout: StdioCollector {
             waitForEnd: true
@@ -2060,6 +2151,217 @@ ShellRoot {
                                                 onClicked: root.requestAction(forwardRow.removeActionId,
                                                                               "Remove port forward",
                                                                               "Stop forwarding host " + forwardRow.modelData.host_port + "/" + forwardRow.modelData.protocol.toUpperCase() + " to " + root.selectedJail.name + ":" + forwardRow.modelData.jail_port + " and reload PF?")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: "Simple services"
+                                color: root.palette.accent
+                                font.pixelSize: 14
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                id: simpleServiceCard
+
+                                width: parent.width
+                                height: !root.selectedSimpleService ? 92 : !root.selectedSimpleService.status_known ? 122 : root.selectedSimpleService.installed ? 202 : 154
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.selectedSimpleService && root.selectedSimpleService.running ? root.palette.success : root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 7
+
+                                    Row {
+                                        width: parent.width
+                                        height: 22
+                                        spacing: 8
+
+                                        Text {
+                                            width: parent.width - 90
+                                            text: root.selectedSimpleService ? "nginx" : "nginx web server"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            width: 82
+                                            horizontalAlignment: Text.AlignRight
+                                            text: root.selectedSimpleService && root.selectedSimpleService.status_known
+                                                ? (root.selectedJail.state || "").toLowerCase() !== "running" ? "Jail stopped" : root.selectedSimpleService.running ? "Running" : root.selectedSimpleService.installed ? "Stopped" : "Available"
+                                                : ""
+                                            color: root.selectedSimpleService && root.selectedSimpleService.running ? root.palette.success : root.palette.mutedText
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: !root.selectedJail || root.selectedJail.backend !== "bastille"
+                                            ? "Guided services are available for Bastille jails."
+                                            : (root.selectedJail.state || "").toLowerCase() !== "running"
+                                                ? "Start this jail to inspect and manage nginx."
+                                                : !root.selectedSimpleService || !root.selectedSimpleService.status_known
+                                                    ? "Service status is temporarily unavailable. Refresh to try again."
+                                                : root.selectedSimpleService.installed
+                                                    ? "Static web server and reverse proxy • TCP 80"
+                                                    : "Install nginx, enable it at boot, and start it with one confirmed action."
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    Text {
+                                        visible: root.selectedSimpleService && root.selectedSimpleService.status_known
+                                        width: parent.width
+                                        text: root.selectedSimpleService
+                                            ? (root.selectedSimpleService.installed ? "Installed" : "Not installed") + "  •  " + (root.selectedSimpleService.enabled ? "Boot enabled" : "Boot disabled")
+                                            : ""
+                                        color: root.selectedSimpleService && root.selectedSimpleService.installed ? root.palette.primaryText : root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Row {
+                                        visible: root.selectedSimpleService && root.selectedSimpleService.status_known
+                                        width: parent.width
+                                        height: visible ? 34 : 0
+                                        spacing: 6
+
+                                        Rectangle {
+                                            readonly property string verb: root.selectedSimpleService && !root.selectedSimpleService.installed ? "install" : root.selectedSimpleService && root.selectedSimpleService.running ? "restart" : "start"
+
+                                            width: root.selectedSimpleService && root.selectedSimpleService.running ? (parent.width - 6) / 2 : parent.width
+                                            height: parent.height
+                                            radius: 6
+                                            color: servicePrimaryMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.14)
+                                            border.width: 1
+                                            border.color: root.palette.accent
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: root.selectedSimpleService && !root.selectedSimpleService.installed ? "Install + start" : root.selectedSimpleService && root.selectedSimpleService.running ? "Restart" : "Start"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: servicePrimaryMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: root.actionAvailable("service-action|nginx|" + parent.verb)
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.requestServiceAction(parent.verb)
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            visible: root.selectedSimpleService && root.selectedSimpleService.running
+                                            width: visible ? (parent.width - 6) / 2 : 0
+                                            height: parent.height
+                                            radius: 6
+                                            color: serviceStopMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.warning, 0.14)
+                                            border.width: 1
+                                            border.color: root.palette.warning
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Stop"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: serviceStopMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: root.actionAvailable("service-action|nginx|stop")
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.requestServiceAction("stop")
+                                            }
+                                        }
+                                    }
+
+                                    Row {
+                                        visible: root.selectedSimpleService && root.selectedSimpleService.status_known && root.selectedSimpleService.installed
+                                        width: parent.width
+                                        height: visible ? 32 : 0
+                                        spacing: 6
+
+                                        Rectangle {
+                                            width: (parent.width - 6) / 2
+                                            height: parent.height
+                                            radius: 6
+                                            color: serviceBootMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.palette.panelBorder
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: root.selectedSimpleService && root.selectedSimpleService.enabled ? "Disable at boot" : "Enable at boot"
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: serviceBootMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: root.actionAvailable("service-action|nginx|boot")
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.requestServiceAction(root.selectedSimpleService.enabled ? "disable" : "enable")
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            readonly property bool published: root.selectedServiceForwards.length > 0
+
+                                            width: (parent.width - 6) / 2
+                                            height: parent.height
+                                            radius: 6
+                                            color: published ? Qt.alpha(root.palette.success, 0.14) : serviceForwardMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: published ? root.palette.success : root.palette.panelBorder
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                anchors.leftMargin: 6
+                                                anchors.rightMargin: 6
+                                                text: root.serviceForwardLabel(root.selectedServiceForwards, root.selectedSimpleService)
+                                                color: parent.published ? root.palette.success : root.palette.secondaryText
+                                                font.pixelSize: parent.published ? 10 : 11
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                elide: Text.ElideRight
+                                            }
+
+                                            MouseArea {
+                                                id: serviceForwardMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: !parent.published && root.actionAvailable("forward-add|draft")
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.prepareServiceForward()
                                             }
                                         }
                                     }

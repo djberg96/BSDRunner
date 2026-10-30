@@ -59,7 +59,7 @@ BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
 export BSDRUNNER_JAILS_FIXTURE
 run_backend snapshot >"$demo_output"
 assert_json "$demo_output" \
-    '.ok == true and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1 and .outbound_policies[0].policy == "internet-only" and .port_forwards == [{"name":"build","ipv4":"10.0.0.22","protocol":"tcp","host_port":8080,"jail_port":80}]' \
+    '.ok == true and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1 and .outbound_policies[0].policy == "internet-only" and .port_forwards == [{"name":"build","ipv4":"10.0.0.22","protocol":"tcp","host_port":8080,"jail_port":80}] and .simple_services[0].service == "nginx"' \
     "demo fixture should satisfy the snapshot contract"
 pass "demo fixture satisfies the snapshot contract"
 
@@ -124,6 +124,9 @@ assert_json "$snapshot_output" \
 assert_json "$snapshot_output" \
     '.port_forwards == [{"name":"cache","ipv4":"10.0.0.9","protocol":"tcp","host_port":8080,"jail_port":80},{"name":"build","ipv4":"10.0.0.10","protocol":"udp","host_port":5353,"jail_port":5353}]' \
     "snapshot should expose persisted jail port forwards"
+assert_json "$snapshot_output" \
+    '(.simple_services | length) == 2 and (.simple_services[] | select(.name == "cache")) == {"name":"cache","ipv4":"10.0.0.9","service":"nginx","package":"nginx","label":"nginx","description":"Static web server and reverse proxy","port":80,"status_known":true,"installed":true,"enabled":true,"running":true} and (.simple_services[] | select(.name == "build")) == {"name":"build","ipv4":"10.0.0.10","service":"nginx","package":"nginx","label":"nginx","description":"Static web server and reverse proxy","port":80,"status_known":true,"installed":false,"enabled":false,"running":false}' \
+    "snapshot should expose guarded nginx service status for Bastille jails"
 pass "snapshot parses native and Bastille fixtures"
 
 unready_prefix="$test_root/unready-bastille"
@@ -460,6 +463,35 @@ if run_backend forward-add cache 10.0.0.9 sctp 8443 443 cache >"$test_root/inval
     fail "port-forward changes should reject unsupported protocols"
 fi
 pass "existing Bastille jails can add and remove guarded port forwards"
+
+: >"$command_log"
+service_install_output="$test_root/service-install.json"
+run_backend service-action cache 10.0.0.9 nginx install cache >"$service_install_output"
+assert_json "$service_install_output" \
+    '.ok == true and .message == "Installed, enabled, and started nginx in cache."' \
+    "guided nginx installation should return a structured success"
+grep -Fx 'mdo sudo -n bastille pkg -y cache install nginx' "$command_log" >/dev/null || fail "guided install should cross the jail attachment boundary through the narrow privilege path"
+grep -Fx 'bastille pkg -y cache install nginx' "$command_log" >/dev/null || fail "guided install should use Bastille pkg auto-confirmation"
+grep -Fx 'bastille sysrc cache nginx_enable=YES' "$command_log" >/dev/null || fail "guided install should enable nginx inside the jail"
+grep -Fx 'bastille service cache nginx start' "$command_log" >/dev/null || fail "guided install should start nginx inside the jail"
+
+: >"$command_log"
+run_backend service-action cache 10.0.0.9 nginx restart cache >"$test_root/service-restart.json"
+grep -Fx 'bastille service cache nginx restart' "$command_log" >/dev/null || fail "guided service lifecycle should delegate through Bastille"
+run_backend service-action cache 10.0.0.9 nginx disable cache >"$test_root/service-disable.json"
+grep -Fx 'bastille sysrc cache nginx_enable=NO' "$command_log" >/dev/null || fail "guided service boot changes should delegate through Bastille sysrc"
+if run_backend service-action cache 10.0.0.9 sshd start cache >"$test_root/unsupported-service.json"; then
+    fail "guided service actions should reject services outside the curated allowlist"
+fi
+if run_backend service-action cache 10.0.0.9 nginx start wrong >"$test_root/invalid-service-confirmation.json"; then
+    fail "guided service actions should require exact jail confirmation"
+fi
+: >"$command_log"
+if run_backend service-action build 10.0.0.10 nginx start build >"$test_root/stopped-service-jail.json"; then
+    fail "guided service actions should require a running Bastille jail"
+fi
+[ ! -s "$command_log" ] || fail "stopped jail validation should block service mutations"
+pass "guided nginx actions are confirmed, allowlisted, and require a running jail"
 
 : >"$command_log"
 bastille_action_output="$test_root/bastille-action.json"

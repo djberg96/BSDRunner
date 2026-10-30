@@ -101,6 +101,21 @@
       "jail_port": 80
     }
   ],
+  "simple_services": [
+    {
+      "name": "build",
+      "ipv4": "10.0.0.22",
+      "service": "nginx",
+      "package": "nginx",
+      "label": "nginx",
+      "description": "Static web server and reverse proxy",
+      "port": 80,
+      "status_known": false,
+      "installed": false,
+      "enabled": false,
+      "running": false
+    }
+  ],
   "last_result": {
     "tone": "info",
     "message": "Demo mode uses sample data; management actions are disabled.",

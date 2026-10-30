@@ -2,6 +2,20 @@
 
 set -eu
 
+if [ "${1:-}" = "-R" ] && [ -n "${2:-}" ] && [ "${3:-}" = "-n" ] && [ -n "${4:-}" ]; then
+    awk -F '=' -v key="$4" '
+        $1 == key {
+            value = substr($0, index($0, "=") + 1)
+            gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, "", value)
+            print value
+            found = 1
+            exit
+        }
+        END { if (!found) print "NO" }
+    ' "$2/etc/rc.conf" 2>/dev/null || printf 'NO\n'
+    exit 0
+fi
+
 case "${2:-}" in
     jail_enable)
         printf 'YES\n'

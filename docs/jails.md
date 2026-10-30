@@ -32,8 +32,8 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh --demo
 ```
 
 Demo mode shows running native, configured native, and stopped Bastille-backed
-jails. It is read-only: the backend rejects start, stop, restart, and console
-requests while the demo fixture is active. The installed fixture lives at
+jails. It is read-only: the backend rejects lifecycle, policy, port-forward,
+and guided-service mutations while the demo fixture is active. The installed fixture lives at
 `~/.config/bsdrunner/jails/demo-snapshot.json`.
 
 The **Create Basic Jail** wizard remains available in demo mode so every step and
@@ -60,6 +60,7 @@ The snapshot action returns JSON with:
 - Bastille jail hostname, path, address, release, and boot setting from
   `bastille config ALL get ...`, with `bastille list all` and the deprecated
   `bastille list -a` form as compatibility fallbacks
+- nginx installation, boot, and runtime status for running Bastille jails
 - the last action result
 
 Some Bastille releases require root even for inventory commands. The backend
@@ -193,6 +194,46 @@ path as outbound policy changes. Port forwards are not added automatically
 during basic jail creation; first install and verify the service inside the
 jail, then publish only the port it needs.
 
+## Guided Services
+
+The first guided service is nginx. For a running Bastille jail, the detail panel
+uses a fixed read-only probe to report whether nginx is installed, enabled at
+boot, and currently running. The probe does not accept commands from the UI.
+Stopped jails show an unknown service state until they are started.
+
+The guarded backend action accepts only the `nginx` service and the
+`install`, `start`, `stop`, `restart`, `enable`, or `disable` verbs:
+
+```sh
+bsdrunner-jails-backend.sh service-action web 10.0.0.20 nginx install web
+bsdrunner-jails-backend.sh service-action web 10.0.0.20 nginx restart web
+```
+
+Before any mutation, the backend validates the jail name and address against a
+currently running Bastille jail and requires the jail name again as exact
+confirmation. **Install + start** runs the documented Bastille commands in
+order: `bastille pkg -y TARGET install nginx`, `bastille sysrc TARGET
+nginx_enable=YES`, and `bastille service TARGET nginx start`. If a later step
+fails, the UI reports the partial result instead of claiming the entire action
+failed cleanly. Existing installations expose start, stop, restart, and a
+separate boot enable/disable control.
+
+FreeBSD's `mac_do` policy can allow `mdo` to establish UID 0 while still denying
+`jail_attach(2)` to that process tree. When both tools are installed, BSDRunner
+therefore runs only these fixed in-jail Bastille operations through `mdo sudo
+-n`; `mdo` has already established root credentials, so `sudo` does not prompt,
+and its new process context can attach to the jail. Hosts where plain `mdo`
+already works retain the fallback path. The allowlist and live jail validation
+run before either privilege path.
+
+The service card checks the existing port-forward inventory for TCP rules that
+target nginx's jail port 80. When one exists, it shows the mapped host port
+(for example, `Host :8080 → nginx :80`) instead of offering a duplicate rule.
+Otherwise it can prepare the existing port-forward form, but it never publishes
+the service automatically. This keeps package installation, service activation,
+and network exposure as separate confirmed decisions. Arbitrary packages,
+service names, and in-jail shell commands remain outside this beginner workflow.
+
 The beginner picker remains FreeBSD-only. Bastille's experimental Linux mode
 needs separate Linux compatibility and debootstrap setup, while Clone is a
 ZFS-specific workflow; both are intentionally deferred to a future Advanced
@@ -280,7 +321,8 @@ compatibility, demo-mode guards, guarded bootstrap and creation dispatch, typed
 confirmations, last-second validation failures, lifecycle dispatch, and
 persisted action status. It also covers fixture-backed port-forward inventory,
 guarded add/remove dispatch, duplicate host-port rejection, PF rendering, and
-rollback on validation failure.
+rollback on validation failure, plus guided nginx status and allowlisted,
+confirmed package/service dispatch.
 
 The suite requires `jq`:
 
