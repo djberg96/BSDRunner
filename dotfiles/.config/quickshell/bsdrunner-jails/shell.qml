@@ -2279,7 +2279,7 @@ ShellRoot {
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: "Stop"
+                                                text: "Stop nginx"
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 12
                                                 font.bold: true
