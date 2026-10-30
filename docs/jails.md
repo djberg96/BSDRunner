@@ -183,6 +183,16 @@ Existing Bastille jails expose the same choices in their detail panel. Changing
 a policy requires confirmation, regenerates and validates the managed PF
 profile, reloads PF, and clears existing states for that jail address.
 
+Existing Bastille jails also expose guarded TCP/UDP port forwarding in the
+detail panel. Enter a host port and the service's jail port, review the explicit
+external-interface exposure, then confirm the change. The backend verifies the
+selected jail against live Bastille inventory before delegating to the PF
+backend. Host protocol/port pairs are unique, ports must be in `1..65535`, and
+add/remove operations use the same render, validation, reload, and rollback
+path as outbound policy changes. Port forwards are not added automatically
+during basic jail creation; first install and verify the service inside the
+jail, then publish only the port it needs.
+
 The beginner picker remains FreeBSD-only. Bastille's experimental Linux mode
 needs separate Linux compatibility and debootstrap setup, while Clone is a
 ZFS-specific workflow; both are intentionally deferred to a future Advanced
@@ -268,7 +278,9 @@ bootstrapped and missing-release plans, exact thick/thin commands, invalid type
 rejection, name and address collisions, host
 compatibility, demo-mode guards, guarded bootstrap and creation dispatch, typed
 confirmations, last-second validation failures, lifecycle dispatch, and
-persisted action status.
+persisted action status. It also covers fixture-backed port-forward inventory,
+guarded add/remove dispatch, duplicate host-port rejection, PF rendering, and
+rollback on validation failure.
 
 The suite requires `jq`:
 

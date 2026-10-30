@@ -59,7 +59,7 @@ BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
 export BSDRUNNER_JAILS_FIXTURE
 run_backend snapshot >"$demo_output"
 assert_json "$demo_output" \
-    '.ok == true and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1 and .outbound_policies[0].policy == "internet-only"' \
+    '.ok == true and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 1 and (.configured | length) == 1 and (.bastille | length) == 1 and .outbound_policies[0].policy == "internet-only" and .port_forwards == [{"name":"build","ipv4":"10.0.0.22","protocol":"tcp","host_port":8080,"jail_port":80}]' \
     "demo fixture should satisfy the snapshot contract"
 pass "demo fixture satisfies the snapshot contract"
 
@@ -121,6 +121,9 @@ assert_json "$snapshot_output" \
 assert_json "$snapshot_output" \
     '.outbound_policies == [{"name":"cache","ipv4":"10.0.0.9","policy":"internet-only","resolver":"192.0.2.53"},{"name":"build","ipv4":"10.0.0.10","policy":"none","resolver":"192.0.2.53"}]' \
     "snapshot should expose persisted jail outbound policies"
+assert_json "$snapshot_output" \
+    '.port_forwards == [{"name":"cache","ipv4":"10.0.0.9","protocol":"tcp","host_port":8080,"jail_port":80},{"name":"build","ipv4":"10.0.0.10","protocol":"udp","host_port":5353,"jail_port":5353}]' \
+    "snapshot should expose persisted jail port forwards"
 pass "snapshot parses native and Bastille fixtures"
 
 unready_prefix="$test_root/unready-bastille"
@@ -437,6 +440,26 @@ if run_backend policy-set cache 10.0.0.9 lan wrong >"$test_root/invalid-policy.j
     fail "outbound policy changes should require exact jail confirmation"
 fi
 pass "existing Bastille jails can apply guarded outbound policies"
+
+: >"$command_log"
+forward_action_output="$test_root/forward-action.json"
+run_backend forward-add cache 10.0.0.9 tcp 8443 443 cache >"$forward_action_output"
+assert_json "$forward_action_output" \
+    '.ok == true and .message == "Added port forward for cache."' \
+    "port-forward additions should return a structured success"
+grep -Fx 'pf-backend jail-forward-add cache 10.0.0.9 tcp 8443 443' "$command_log" >/dev/null || fail "port-forward additions should delegate exact values to the PF backend"
+run_backend forward-remove cache 10.0.0.9 tcp 8443 443 cache >"$test_root/forward-remove.json"
+assert_json "$test_root/forward-remove.json" \
+    '.ok == true and .message == "Removed port forward from cache."' \
+    "port-forward removals should return a structured success"
+grep -Fx 'pf-backend jail-forward-remove cache 10.0.0.9 tcp 8443 443' "$command_log" >/dev/null || fail "port-forward removals should delegate exact values to the PF backend"
+if run_backend forward-add cache 10.0.0.9 tcp 8443 443 wrong >"$test_root/invalid-forward-confirmation.json"; then
+    fail "port-forward changes should require exact jail confirmation"
+fi
+if run_backend forward-add cache 10.0.0.9 sctp 8443 443 cache >"$test_root/invalid-forward-protocol.json"; then
+    fail "port-forward changes should reject unsupported protocols"
+fi
+pass "existing Bastille jails can add and remove guarded port forwards"
 
 : >"$command_log"
 bastille_action_output="$test_root/bastille-action.json"

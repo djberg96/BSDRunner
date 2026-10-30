@@ -65,6 +65,9 @@ ShellRoot {
     property string activeActionName: ""
     property string activeActionBackend: ""
     property string activeActionPolicy: ""
+    property string activeActionProtocol: ""
+    property string activeActionHostPort: ""
+    property string activeActionJailPort: ""
     property string activeActionLabel: ""
     property string pendingActionId: ""
     property string pendingActionLabel: ""
@@ -76,6 +79,7 @@ ShellRoot {
     property var configuredJails: []
     property var bastilleJails: []
     property var outboundPolicies: []
+    property var portForwards: []
     property var tools: ({})
     property var services: ({})
     property var bastilleReleases: []
@@ -103,6 +107,9 @@ ShellRoot {
     property bool releaseMenuOpen: false
     property string previewJailType: "thick"
     property string previewOutboundPolicy: "internet-only"
+    property string forwardProtocol: "tcp"
+    property string forwardHostPort: "8080"
+    property string forwardJailPort: "80"
     property string previewAddress: "10.0.0.20/24"
     property bool previewAddressCustomized: false
     property bool previewAutostart: true
@@ -387,6 +394,38 @@ ShellRoot {
         return "LAN + Internet"
     }
 
+    function portForwardsFor(jail) {
+        var matches = []
+        if (!jail)
+            return matches
+        for (var i = 0; i < portForwards.length; i += 1) {
+            var entry = portForwards[i]
+            if (entry.name === jail.name || (entry.ipv4 && entry.ipv4 === jail.ipv4))
+                matches.push(entry)
+        }
+        return matches
+    }
+
+    function validForwardPort(value) {
+        var text = String(value || "")
+        if (!/^[0-9]+$/.test(text))
+            return false
+        var port = Number(text)
+        return port >= 1 && port <= 65535
+    }
+
+    function forwardInputValid() {
+        return validForwardPort(forwardHostPort) && validForwardPort(forwardJailPort)
+    }
+
+    function requestForwardAdd() {
+        if (!forwardInputValid())
+            return
+        requestAction("forward-add|" + forwardProtocol + "|" + forwardHostPort + "|" + forwardJailPort,
+                      "Add port forward",
+                      "Expose host " + forwardHostPort + "/" + forwardProtocol.toUpperCase() + " to " + selectedJail.name + ":" + forwardJailPort + " and reload PF?")
+    }
+
     function statusDetailText() {
         if ((statusTone === "error" || lastResultTone === "error") && actionDetails.length > 0)
             return firstNonEmptyLine(actionDetails)
@@ -417,6 +456,8 @@ ShellRoot {
         if (!selectedJail || runningAction)
             return false
         if (actionId.indexOf("policy-set|") === 0)
+            return selectedJail.backend === "bastille" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
+        if (actionId.indexOf("forward-add|") === 0 || actionId.indexOf("forward-remove|") === 0)
             return selectedJail.backend === "bastille" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
         if (actionId === "start")
             return canStart(selectedJail)
@@ -449,12 +490,25 @@ ShellRoot {
         if (pendingActionId.indexOf("policy-set|") === 0) {
             activeActionId = "policy-set"
             activeActionPolicy = pendingActionId.split("|")[1]
+            activeActionProtocol = ""
+            activeActionHostPort = ""
+            activeActionJailPort = ""
+        } else if (pendingActionId.indexOf("forward-add|") === 0 || pendingActionId.indexOf("forward-remove|") === 0) {
+            var forwardParts = pendingActionId.split("|")
+            activeActionId = forwardParts[0]
+            activeActionPolicy = ""
+            activeActionProtocol = forwardParts[1]
+            activeActionHostPort = forwardParts[2]
+            activeActionJailPort = forwardParts[3]
         } else {
             activeActionId = pendingActionId
             activeActionPolicy = ""
+            activeActionProtocol = ""
+            activeActionHostPort = ""
+            activeActionJailPort = ""
         }
         activeActionName = selectedJail.name
-        activeActionBackend = activeActionId === "policy-set" ? selectedJail.ipv4 : selectedJail.backend || "native"
+        activeActionBackend = activeActionId === "policy-set" || activeActionId.indexOf("forward-") === 0 ? selectedJail.ipv4 : selectedJail.backend || "native"
         activeActionLabel = pendingActionLabel
         clearPendingAction()
         runActionProcess()
@@ -960,6 +1014,7 @@ ShellRoot {
         configuredJails = payload.configured || []
         bastilleJails = payload.bastille || []
         outboundPolicies = payload.outbound_policies || []
+        portForwards = payload.port_forwards || []
         lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info"
         lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message
         lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : ""
@@ -1000,6 +1055,9 @@ ShellRoot {
         activeActionName = ""
         activeActionBackend = ""
         activeActionPolicy = ""
+        activeActionProtocol = ""
+        activeActionHostPort = ""
+        activeActionJailPort = ""
         activeActionLabel = ""
         refreshSnapshot()
     }
@@ -1040,7 +1098,9 @@ ShellRoot {
 
         command: root.activeActionId === "policy-set"
             ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "policy-set", root.activeActionName, root.activeActionBackend, root.activeActionPolicy, root.activeActionName]
-            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
+            : root.activeActionId === "forward-add" || root.activeActionId === "forward-remove"
+                ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend, root.activeActionProtocol, root.activeActionHostPort, root.activeActionJailPort, root.activeActionName]
+                : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1748,6 +1808,259 @@ ShellRoot {
                                             enabled: root.actionAvailable(outboundPolicyCard.actionId) && !outboundPolicyCard.selected
                                             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                             onClicked: root.requestAction(outboundPolicyCard.actionId, "Change outbound policy", "Apply " + outboundPolicyCard.modelData.label + " to " + root.selectedJail.name + " and reload PF?")
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: "Port forwarding"
+                                color: root.palette.accent
+                                font.pixelSize: 14
+                                font.bold: true
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.selectedJail && root.selectedJail.backend === "bastille"
+                                    ? "Expose a port on " + (root.networkInfo.external_interface || "the host uplink") + " to this jail. Only add services you intend other machines to reach."
+                                    : "Select a Bastille jail to manage inbound ports."
+                                color: root.palette.secondaryText
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Row {
+                                width: parent.width
+                                height: 58
+                                spacing: 6
+                                opacity: root.actionAvailable("forward-add|draft") ? 1.0 : 0.45
+
+                                Column {
+                                    width: 72
+                                    spacing: 4
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Protocol"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 38
+                                        radius: 6
+                                        color: forwardProtocolMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.accent
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.forwardProtocol.toUpperCase()
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: forwardProtocolMouse
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: root.actionAvailable("forward-add|draft")
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.forwardProtocol = root.forwardProtocol === "tcp" ? "udp" : "tcp"
+                                        }
+                                    }
+                                }
+
+                                Column {
+                                    width: (parent.width - 96) / 2
+                                    spacing: 4
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Host port"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 38
+                                        radius: 6
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: forwardHostPortInput.activeFocus ? root.palette.accent : root.validForwardPort(root.forwardHostPort) ? root.palette.panelBorder : root.palette.danger
+
+                                        TextInput {
+                                            id: forwardHostPortInput
+
+                                            anchors.fill: parent
+                                            anchors.margins: 9
+                                            text: root.forwardHostPort
+                                            enabled: root.actionAvailable("forward-add|draft")
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.pixelSize: 13
+                                            maximumLength: 5
+                                            inputMethodHints: Qt.ImhDigitsOnly
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            onTextEdited: root.forwardHostPort = text
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: 6
+                                    height: parent.height
+                                    text: "→"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 13
+                                    verticalAlignment: Text.AlignBottom
+                                    bottomPadding: 10
+                                }
+
+                                Column {
+                                    width: (parent.width - 96) / 2
+                                    spacing: 4
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Jail port"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 38
+                                        radius: 6
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: forwardJailPortInput.activeFocus ? root.palette.accent : root.validForwardPort(root.forwardJailPort) ? root.palette.panelBorder : root.palette.danger
+
+                                        TextInput {
+                                            id: forwardJailPortInput
+
+                                            anchors.fill: parent
+                                            anchors.margins: 9
+                                            text: root.forwardJailPort
+                                            enabled: root.actionAvailable("forward-add|draft")
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.pixelSize: 13
+                                            maximumLength: 5
+                                            inputMethodHints: Qt.ImhDigitsOnly
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            onTextEdited: root.forwardJailPort = text
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 36
+                                radius: 6
+                                color: forwardAddMouse.enabled ? (forwardAddMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.18)) : root.palette.panelBackground
+                                border.width: 1
+                                border.color: forwardAddMouse.enabled ? root.palette.success : root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Add port forward"
+                                    color: forwardAddMouse.enabled ? root.palette.primaryText : root.palette.mutedText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: forwardAddMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: root.actionAvailable("forward-add|draft") && root.forwardInputValid()
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.requestForwardAdd()
+                                }
+                            }
+
+                            Text {
+                                visible: root.portForwardsFor(root.selectedJail).length === 0
+                                width: parent.width
+                                text: "No port forwards for this jail."
+                                color: root.palette.mutedText
+                                font.pixelSize: 12
+                            }
+
+                            Repeater {
+                                model: root.portForwardsFor(root.selectedJail)
+
+                                Rectangle {
+                                    id: forwardRow
+                                    required property var modelData
+                                    readonly property string removeActionId: "forward-remove|" + modelData.protocol + "|" + modelData.host_port + "|" + modelData.jail_port
+
+                                    width: parent.width
+                                    height: 46
+                                    radius: 7
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Row {
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        spacing: 8
+
+                                        Text {
+                                            width: parent.width - 74
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: forwardRow.modelData.host_port + "/" + forwardRow.modelData.protocol.toUpperCase() + "  →  " + forwardRow.modelData.ipv4 + ":" + forwardRow.modelData.jail_port
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Rectangle {
+                                            width: 66
+                                            height: 28
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            radius: 6
+                                            color: forwardRemoveMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.danger, 0.12)
+                                            border.width: 1
+                                            border.color: root.palette.danger
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Remove"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: forwardRemoveMouse
+
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: root.actionAvailable(forwardRow.removeActionId)
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.requestAction(forwardRow.removeActionId,
+                                                                              "Remove port forward",
+                                                                              "Stop forwarding host " + forwardRow.modelData.host_port + "/" + forwardRow.modelData.protocol.toUpperCase() + " to " + root.selectedJail.name + ":" + forwardRow.modelData.jail_port + " and reload PF?")
+                                            }
                                         }
                                     }
                                 }

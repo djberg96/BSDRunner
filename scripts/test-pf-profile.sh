@@ -68,6 +68,11 @@ printf '%s\n' \
     'web|10.0.0.20|internet-only|192.168.1.254' \
     'build|10.0.0.21|none|192.168.1.254' \
     'media|10.0.0.22|lan|192.168.1.254' >"$test_root/jail-policies.conf"
+printf '%s\n' \
+    'web|10.0.0.20|tcp|8080|80' \
+    'media|10.0.0.22|udp|5353|5353' \
+    'bad name|10.0.0.99|tcp|9000|90' \
+    'build|10.0.0.21|sctp|9001|91' >"$test_root/jail-port-forwards.conf"
 
 sh "$renderer" "$policy_profile" >"$policy_rendered"
 grep -F 'private_nets = "{ 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 }"' "$policy_rendered" >/dev/null || fail "internet-only policy should define blocked private destinations"
@@ -76,10 +81,19 @@ grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.20 to $private
 grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.20 to any keep state' "$policy_rendered" >/dev/null || fail "internet-only policy should allow public destinations"
 grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.21 to any' "$policy_rendered" >/dev/null || fail "no-outbound policy should block all destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.22 to any keep state' "$policy_rendered" >/dev/null || fail "LAN policy should allow all destinations"
+grep -Fx 'rdr pass on $jail_ext_if inet proto tcp from any to ($jail_ext_if) port 8080 -> 10.0.0.20 port 80' "$policy_rendered" >/dev/null || fail "TCP port forwards should render into PF"
+grep -Fx 'rdr pass on $jail_ext_if inet proto udp from any to ($jail_ext_if) port 5353 -> 10.0.0.22 port 5353' "$policy_rendered" >/dev/null || fail "UDP port forwards should render into PF"
+if grep -Eq '9000|9001|sctp|bad name' "$policy_rendered"; then
+    fail "invalid port forwards should be ignored"
+fi
+forward_rule_line="$(grep -nF 'rdr pass on $jail_ext_if inet proto tcp from any to ($jail_ext_if) port 8080 -> 10.0.0.20 port 80' "$policy_rendered" | cut -d: -f1)"
+block_rule_line="$(grep -nF 'block all' "$policy_rendered" | cut -d: -f1)"
+[ "$forward_rule_line" -lt "$block_rule_line" ] || fail "port translation must render before filtering rules"
 policy_rule_line="$(grep -nF 'block return out quick on $jail_ext_if inet from 10.0.0.21 to any' "$policy_rendered" | cut -d: -f1)"
 general_rule_line="$(grep -nF 'pass out all keep state' "$policy_rendered" | cut -d: -f1)"
 [ "$policy_rule_line" -lt "$general_rule_line" ] || fail "per-jail rules must be evaluated before the general outbound allow"
 pass "per-jail outbound policies render before the general host outbound rule"
+pass "validated jail port forwards render before filtering rules"
 
 cp "$base_profile" "$invalid_profile"
 printf '%s\n' \

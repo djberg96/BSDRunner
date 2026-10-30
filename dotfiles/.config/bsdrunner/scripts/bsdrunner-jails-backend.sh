@@ -13,6 +13,7 @@ if [ "$test_mode" = "1" ]; then
     host_resolv_conf="${BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF:-$etc_dir/resolv.conf}"
     resolvconf_interfaces_dir="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$etc_dir/resolvconf/interfaces}"
     jail_policy_file="${BSDRUNNER_JAILS_TEST_POLICY_FILE:-$etc_dir/jail-policies.conf}"
+    jail_forward_file="${BSDRUNNER_JAILS_TEST_FORWARD_FILE:-$etc_dir/jail-port-forwards.conf}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
@@ -23,6 +24,7 @@ else
     host_resolv_conf="/etc/resolv.conf"
     resolvconf_interfaces_dir="/var/run/resolvconf/interfaces"
     jail_policy_file="${HOME}/.config/bsdrunner/pf/jail-policies.conf"
+    jail_forward_file="${HOME}/.config/bsdrunner/pf/jail-port-forwards.conf"
 fi
 export PATH
 
@@ -455,6 +457,26 @@ valid_outbound_policy() {
     esac
 }
 
+valid_port_protocol() {
+    case "${1:-}" in
+        tcp|udp)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+valid_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
 valid_address() {
     case "${1:-}" in
         inherit)
@@ -762,6 +784,27 @@ outbound_policies_json() {
     ' "$jail_policy_file"
 }
 
+port_forwards_json() {
+    if [ ! -r "$jail_forward_file" ]; then
+        printf '[]'
+        return
+    fi
+    awk -F '|' '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        BEGIN { printf "["; first = 1 }
+        $1 ~ /^[A-Za-z0-9_.-]+$/ && $2 ~ /^[0-9.]+$/ && ($3 == "tcp" || $3 == "udp") && $4 ~ /^[0-9]+$/ && $4 >= 1 && $4 <= 65535 && $5 ~ /^[0-9]+$/ && $5 >= 1 && $5 <= 65535 {
+            if (!first) printf ","
+            first = 0
+            printf "{\"name\":\"%s\",\"ipv4\":\"%s\",\"protocol\":\"%s\",\"host_port\":%s,\"jail_port\":%s}", esc($1), esc($2), esc($3), $4, $5
+        }
+        END { printf "]" }
+    ' "$jail_forward_file"
+}
+
 bastille_inventory() {
     if command -v jq >/dev/null 2>&1; then
         json_output="$(run_bastille_list_json 2>/dev/null || true)"
@@ -987,6 +1030,8 @@ emit_snapshot() {
     bastille_jails_json
     printf ',"outbound_policies":'
     outbound_policies_json
+    printf ',"port_forwards":'
+    port_forwards_json
     printf ',"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
         "$(printf '%s' "$last_tone" | json_escape)" \
         "$(printf '%s' "$last_message" | json_escape)" \
@@ -1129,6 +1174,77 @@ do_policy_set() {
     else
         write_last_result "error" "Unable to apply outbound policy to ${name}."
         emit_action_result false "Unable to apply outbound policy to ${name}." "$output"
+        exit 1
+    fi
+}
+
+do_port_forward() {
+    operation="$1"
+    name="${2:-}"
+    address="${3:-}"
+    protocol="${4:-}"
+    host_port="${5:-}"
+    jail_port="${6:-}"
+    confirmation="${7:-}"
+
+    case "$operation" in
+        add|remove)
+            ;;
+        *)
+            emit_action_result false "Invalid port-forward action." "$operation"
+            exit 1
+            ;;
+    esac
+    valid_name "$name" || {
+        emit_action_result false "Invalid jail name." "Use the selected Bastille jail."
+        exit 1
+    }
+    forward_address="$(address_ipv4_value "$address")"
+    valid_jail_ipv4 "${forward_address}/32" || {
+        emit_action_result false "Invalid jail address." "$address"
+        exit 1
+    }
+    valid_port_protocol "$protocol" || {
+        emit_action_result false "Invalid port-forward protocol." "Choose TCP or UDP."
+        exit 1
+    }
+    valid_port "$host_port" || {
+        emit_action_result false "Invalid host port." "Use a port from 1 through 65535."
+        exit 1
+    }
+    valid_port "$jail_port" || {
+        emit_action_result false "Invalid jail port." "Use a port from 1 through 65535."
+        exit 1
+    }
+    [ "$confirmation" = "$name" ] || {
+        emit_action_result false "Port-forward confirmation did not match." "Return to the selected jail and confirm again."
+        exit 1
+    }
+    bastille_jail_matches "$name" "$forward_address" || {
+        emit_action_result false "The selected Bastille jail could not be verified." "Refresh the inventory before changing its port forwards."
+        exit 1
+    }
+    [ -r "$pf_backend" ] || {
+        emit_action_result false "The BSDRunner firewall backend is unavailable." "$pf_backend"
+        exit 1
+    }
+
+    if output="$(sh "$pf_backend" "jail-forward-${operation}" "$name" "$forward_address" "$protocol" "$host_port" "$jail_port" 2>&1)" && printf '%s\n' "$output" | grep -q '"ok":true'; then
+        if [ "$operation" = add ]; then
+            message="Added port forward for ${name}."
+        else
+            message="Removed port forward from ${name}."
+        fi
+        write_last_result "success" "$message"
+        emit_action_result true "$message" "$output"
+    else
+        if [ "$operation" = add ]; then
+            message="Unable to add port forward for ${name}."
+        else
+            message="Unable to remove port forward from ${name}."
+        fi
+        write_last_result "error" "$message"
+        emit_action_result false "$message" "$output"
         exit 1
     fi
 }
@@ -1827,6 +1943,12 @@ case "$action" in
         ;;
     policy-set)
         do_policy_set "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+        ;;
+    forward-add)
+        do_port_forward add "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}"
+        ;;
+    forward-remove)
+        do_port_forward remove "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}"
         ;;
     preview)
         do_preview "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-thick}" "${7:-internet-only}"

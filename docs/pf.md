@@ -67,6 +67,36 @@ egress for that jail. LAN policies explicitly permit all IPv4 egress. These
 quick rules are emitted before the general desktop outbound rule, and existing
 PF states for the jail address are cleared after a successful policy change.
 
+## Per-Jail Port Forwarding
+
+The Jails detail panel can publish a TCP or UDP service from a Bastille jail on
+the host's detected external interface. BSDRunner stores those mappings in:
+
+```text
+~/.config/bsdrunner/pf/jail-port-forwards.conf
+```
+
+Each validated entry records the jail name and IPv4 address, protocol, host
+port, and jail port. The renderer emits an `rdr pass` rule before the filtering
+rules, for example:
+
+```pf
+rdr pass on $jail_ext_if inet proto tcp from any to ($jail_ext_if) port 8080 -> 10.0.0.20 port 80
+```
+
+That host port is reachable anywhere the external interface is reachable, so
+the UI describes forwarding as an explicit exposure rather than a convenience
+default. TCP and UDP are separate mappings. BSDRunner rejects a second mapping
+for the same protocol and host port, validates both ports as `1..65535`, and
+requires the selected Bastille jail name and address to match current
+inventory. Adding or removing a mapping regenerates, validates, installs, and
+reloads the managed PF profile. Persistence is restored if applying the new
+profile fails; removing a mapping also clears existing PF states for the jail.
+
+BSDRunner-owned redirects coexist with Bastille's `rdr/*` anchor. Conflicts
+with redirects created outside BSDRunner are not automatically imported, so
+inspect the complete ruleset when combining both management paths.
+
 The app also includes a small `pflog` viewer. PF only logs packets for rules
 that include `log`, so the viewer is useful after enabling the friendly
 `Log blocked inbound attempts` control and applying the profile.

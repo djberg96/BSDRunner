@@ -10,6 +10,7 @@ pf_config_file="${BSDRUNNER_PF_CONFIG_FILE:-/etc/pf.conf}"
 state_file="$profile_dir/last-result.conf"
 applied_state_file="$profile_dir/applied-profile.conf"
 jail_policy_file="$profile_dir/jail-policies.conf"
+jail_forward_file="$profile_dir/jail-port-forwards.conf"
 managed_marker="bsdrunner_pf_profile_version=1"
 
 allow_outbound="yes"
@@ -73,6 +74,26 @@ valid_jail_policy() {
     esac
 }
 
+valid_port_protocol() {
+    case "${1:-}" in
+        tcp|udp)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+valid_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
 emit_jail_policies() {
     [ -f "$jail_policy_file" ] || return 0
     while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
@@ -82,6 +103,18 @@ emit_jail_policies() {
         valid_ipv4 "$policy_resolver" || continue
         printf '%s|%s|%s|%s\n' "$policy_name" "$policy_address" "$policy_mode" "$policy_resolver"
     done <"$jail_policy_file"
+}
+
+emit_jail_forwards() {
+    [ -f "$jail_forward_file" ] || return 0
+    while IFS='|' read -r forward_name forward_address forward_protocol forward_host_port forward_jail_port; do
+        valid_jail_name "$forward_name" || continue
+        valid_ipv4 "$forward_address" || continue
+        valid_port_protocol "$forward_protocol" || continue
+        valid_port "$forward_host_port" || continue
+        valid_port "$forward_jail_port" || continue
+        printf '%s|%s|%s|%s|%s\n' "$forward_name" "$forward_address" "$forward_protocol" "$forward_host_port" "$forward_jail_port"
+    done <"$jail_forward_file"
 }
 
 valid_real_ssh_port() {
@@ -258,6 +291,7 @@ profile_checksum() {
     {
         emit_settings
         emit_jail_policies
+        emit_jail_forwards
     } | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
 }
 
@@ -546,6 +580,23 @@ jail_policies_json() {
     '
 }
 
+jail_forwards_json() {
+    emit_jail_forwards | awk -F '|' '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        BEGIN { printf "["; first = 1 }
+        {
+            if (!first) printf ","
+            first = 0
+            printf "{\"name\":\"%s\",\"ipv4\":\"%s\",\"protocol\":\"%s\",\"host_port\":%s,\"jail_port\":%s}", esc($1), esc($2), esc($3), $4, $5
+        }
+        END { printf "]" }
+    '
+}
+
 emit_snapshot() {
     load_profile
     pf_state="$(pf_running_state)"
@@ -612,6 +663,9 @@ emit_snapshot() {
     printf ','
     printf '"jail_policies":'
     jail_policies_json
+    printf ','
+    printf '"jail_port_forwards":'
+    jail_forwards_json
     printf ','
     printf '"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
         "$(printf '%s' "$last_tone" | json_escape)" \
@@ -1147,6 +1201,145 @@ $state_output"
     exit 1
 }
 
+restore_jail_forwards() {
+    previous_forwards="$1"
+    previous_file_present="$2"
+    if [ "$previous_file_present" = true ]; then
+        printf '%s\n' "$previous_forwards" >"$jail_forward_file"
+    else
+        rm -f "$jail_forward_file"
+    fi
+}
+
+do_jail_forward_add() {
+    requested_name="${1:-}"
+    requested_address="${2:-}"
+    requested_protocol="${3:-}"
+    requested_host_port="${4:-}"
+    requested_jail_port="${5:-}"
+
+    valid_jail_name "$requested_name" || {
+        emit_action_result false "Invalid jail name." "$requested_name"
+        exit 1
+    }
+    valid_ipv4 "$requested_address" || {
+        emit_action_result false "Invalid jail address." "$requested_address"
+        exit 1
+    }
+    valid_port_protocol "$requested_protocol" || {
+        emit_action_result false "Invalid port-forward protocol." "$requested_protocol"
+        exit 1
+    }
+    valid_port "$requested_host_port" || {
+        emit_action_result false "Invalid host port." "$requested_host_port"
+        exit 1
+    }
+    valid_port "$requested_jail_port" || {
+        emit_action_result false "Invalid jail port." "$requested_jail_port"
+        exit 1
+    }
+
+    load_profile
+    if [ "$jail_nat" != "yes" ]; then
+        emit_action_result false "Bastille jail networking is not enabled in the managed PF profile." "Configure jail networking before adding a port forward."
+        exit 1
+    fi
+
+    if emit_jail_forwards | awk -F '|' -v protocol="$requested_protocol" -v host_port="$requested_host_port" \
+        '$3 == protocol && $4 == host_port { found = 1 } END { exit found ? 0 : 1 }'; then
+        if emit_jail_forwards | awk -F '|' -v name="$requested_name" -v address="$requested_address" -v protocol="$requested_protocol" -v host_port="$requested_host_port" -v jail_port="$requested_jail_port" \
+            '$1 == name && $2 == address && $3 == protocol && $4 == host_port && $5 == jail_port { found = 1 } END { exit found ? 0 : 1 }'; then
+            emit_action_result true "Port forward already exists for ${requested_name}." "${requested_protocol}/${requested_host_port} -> ${requested_address}:${requested_jail_port}"
+            return
+        fi
+        emit_action_result false "Host port ${requested_host_port}/${requested_protocol} is already forwarded." "Choose another host port or remove the existing forward first."
+        exit 1
+    fi
+
+    mkdir -p "$profile_dir"
+    previous_file_present=false
+    [ -f "$jail_forward_file" ] && previous_file_present=true
+    previous_forwards="$(cat "$jail_forward_file" 2>/dev/null || true)"
+    forward_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-jail-forward.XXXXXX")"
+    trap 'rm -f "$forward_tmp"' EXIT HUP INT TERM
+    emit_jail_forwards >"$forward_tmp"
+    printf '%s|%s|%s|%s|%s\n' "$requested_name" "$requested_address" "$requested_protocol" "$requested_host_port" "$requested_jail_port" >>"$forward_tmp"
+    mv "$forward_tmp" "$jail_forward_file"
+    trap - EXIT HUP INT TERM
+
+    if apply_output="$(sh "$0" apply 2>&1)" && printf '%s\n' "$apply_output" | grep -q '"ok":true'; then
+        write_last_result "success" "Forwarded ${requested_host_port}/${requested_protocol} to ${requested_name}:${requested_jail_port}."
+        emit_action_result true "Added port forward for ${requested_name}." "$apply_output"
+        return
+    fi
+
+    restore_jail_forwards "$previous_forwards" "$previous_file_present"
+    write_last_result "error" "Unable to add port forward for ${requested_name}."
+    emit_action_result false "Unable to add port forward for ${requested_name}." "$apply_output"
+    exit 1
+}
+
+do_jail_forward_remove() {
+    requested_name="${1:-}"
+    requested_address="${2:-}"
+    requested_protocol="${3:-}"
+    requested_host_port="${4:-}"
+    requested_jail_port="${5:-}"
+
+    valid_jail_name "$requested_name" || {
+        emit_action_result false "Invalid jail name." "$requested_name"
+        exit 1
+    }
+    valid_ipv4 "$requested_address" || {
+        emit_action_result false "Invalid jail address." "$requested_address"
+        exit 1
+    }
+    valid_port_protocol "$requested_protocol" || {
+        emit_action_result false "Invalid port-forward protocol." "$requested_protocol"
+        exit 1
+    }
+    valid_port "$requested_host_port" || {
+        emit_action_result false "Invalid host port." "$requested_host_port"
+        exit 1
+    }
+    valid_port "$requested_jail_port" || {
+        emit_action_result false "Invalid jail port." "$requested_jail_port"
+        exit 1
+    }
+
+    load_profile
+    if [ "$jail_nat" != "yes" ]; then
+        emit_action_result false "Bastille jail networking is not enabled in the managed PF profile." "Configure jail networking before changing port forwards."
+        exit 1
+    fi
+    if ! emit_jail_forwards | awk -F '|' -v name="$requested_name" -v address="$requested_address" -v protocol="$requested_protocol" -v host_port="$requested_host_port" -v jail_port="$requested_jail_port" \
+        '$1 == name && $2 == address && $3 == protocol && $4 == host_port && $5 == jail_port { found = 1 } END { exit found ? 0 : 1 }'; then
+        emit_action_result false "Port forward was not found for ${requested_name}." "Refresh the jail inventory and try again."
+        exit 1
+    fi
+
+    previous_forwards="$(cat "$jail_forward_file" 2>/dev/null || true)"
+    forward_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-jail-forward.XXXXXX")"
+    trap 'rm -f "$forward_tmp"' EXIT HUP INT TERM
+    emit_jail_forwards | awk -F '|' -v name="$requested_name" -v address="$requested_address" -v protocol="$requested_protocol" -v host_port="$requested_host_port" -v jail_port="$requested_jail_port" \
+        '!( $1 == name && $2 == address && $3 == protocol && $4 == host_port && $5 == jail_port ) { print }' >"$forward_tmp"
+    mv "$forward_tmp" "$jail_forward_file"
+    trap - EXIT HUP INT TERM
+
+    if apply_output="$(sh "$0" apply 2>&1)" && printf '%s\n' "$apply_output" | grep -q '"ok":true'; then
+        state_output="$(run_privileged_capture pfctl -k "$requested_address" || true)"
+        write_last_result "success" "Removed ${requested_host_port}/${requested_protocol} forward from ${requested_name}."
+        emit_action_result true "Removed port forward from ${requested_name}." "$apply_output
+$state_output"
+        return
+    fi
+
+    restore_jail_forwards "$previous_forwards" true
+    write_last_result "error" "Unable to remove port forward from ${requested_name}."
+    emit_action_result false "Unable to remove port forward from ${requested_name}." "$apply_output"
+    exit 1
+}
+
 do_enable() {
     load_profile
     if [ "$allow_ssh_tarpit" = "yes" ]; then
@@ -1253,6 +1446,12 @@ case "$action" in
         ;;
     jail-policy)
         do_jail_policy "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+        ;;
+    jail-forward-add)
+        do_jail_forward_add "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
+        ;;
+    jail-forward-remove)
+        do_jail_forward_remove "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
         ;;
     set)
         load_profile

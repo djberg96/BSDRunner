@@ -21,5 +21,15 @@ if [ "${1:-}" = "jail-policy" ]; then
     exit 0
 fi
 
+if [ "${1:-}" = "jail-forward-add" ]; then
+    printf '%s\n' '{"ok":true,"message":"Added port forward.","details":"PF port-forward fixture applied."}'
+    exit 0
+fi
+
+if [ "${1:-}" = "jail-forward-remove" ]; then
+    printf '%s\n' '{"ok":true,"message":"Removed port forward.","details":"PF port-forward fixture removed."}'
+    exit 0
+fi
+
 printf '%s\n' '{"ok":false,"message":"Unknown fixture action."}'
 exit 1

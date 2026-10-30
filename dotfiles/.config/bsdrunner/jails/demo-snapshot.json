@@ -92,6 +92,15 @@
       "resolver": "192.168.1.1"
     }
   ],
+  "port_forwards": [
+    {
+      "name": "build",
+      "ipv4": "10.0.0.22",
+      "protocol": "tcp",
+      "host_port": 8080,
+      "jail_port": 80
+    }
+  ],
   "last_result": {
     "tone": "info",
     "message": "Demo mode uses sample data; management actions are disabled.",

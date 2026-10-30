@@ -4,6 +4,7 @@ set -eu
 
 profile_file="${1:-${HOME}/.config/bsdrunner/pf/profile.conf}"
 policy_file="$(dirname "$profile_file")/jail-policies.conf"
+forward_file="$(dirname "$profile_file")/jail-port-forwards.conf"
 
 allow_outbound="yes"
 block_unsolicited="yes"
@@ -80,6 +81,37 @@ emit_policies() {
                 ;;
         esac
     done <"$policy_file"
+}
+
+valid_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+emit_forwards() {
+    [ -f "$forward_file" ] || return 0
+    while IFS='|' read -r forward_name forward_address forward_protocol forward_host_port forward_jail_port; do
+        case "$forward_name" in
+            ''|*[!A-Za-z0-9_.-]*)
+                continue
+                ;;
+        esac
+        valid_ipv4 "$forward_address" || continue
+        case "$forward_protocol" in
+            tcp|udp)
+                ;;
+            *)
+                continue
+                ;;
+        esac
+        valid_port "$forward_host_port" || continue
+        valid_port "$forward_jail_port" || continue
+        printf '%s|%s|%s|%s|%s\n' "$forward_name" "$forward_address" "$forward_protocol" "$forward_host_port" "$forward_jail_port"
+    done <"$forward_file"
 }
 
 load_profile() {
@@ -175,6 +207,7 @@ profile_checksum() {
     {
         emit_settings
         emit_policies
+        emit_forwards
     } | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
 }
 
@@ -246,6 +279,13 @@ EOF
 # Translate traffic from running Bastille jails on the current uplink.
 # Bastille adds and removes jail addresses from <jails> as jails start and stop.
 nat on $jail_ext_if inet from <jails> to any -> ($jail_ext_if:0)
+EOF
+        emit_forwards | while IFS='|' read -r forward_name forward_address forward_protocol forward_host_port forward_jail_port; do
+            printf '# Forward %s/%s on the host to Bastille jail %s.\n' "$forward_host_port" "$forward_protocol" "$forward_name"
+            printf 'rdr pass on $jail_ext_if inet proto %s from any to ($jail_ext_if) port %s -> %s port %s\n' \
+                "$forward_protocol" "$forward_host_port" "$forward_address" "$forward_jail_port"
+        done
+        cat <<'EOF'
 rdr-anchor "rdr/*"
 
 EOF
