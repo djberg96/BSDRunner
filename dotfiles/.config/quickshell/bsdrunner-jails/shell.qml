@@ -1910,23 +1910,6 @@ ShellRoot {
                                 }
                             }
 
-                            Rectangle {
-                                width: parent.width
-                                height: 76
-                                radius: 8
-                                color: root.palette.panelBackground
-                                border.width: 1
-                                border.color: root.palette.frameBorder
-
-                                Text {
-                                    anchors.fill: parent
-                                    anchors.margins: 10
-                                    text: root.selectedJail ? "Tip: start with a service jail for things like Postgres, Redis, nginx, or a development daemon. Desktop app jails need extra display, audio, and file permissions." : "Pick a jail from the inventory to see safe lifecycle actions."
-                                    color: root.palette.secondaryText
-                                    font.pixelSize: 12
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
                             }
                         }
                     }
@@ -1959,6 +1942,26 @@ ShellRoot {
                                 color: root.palette.accent
                                 font.pixelSize: 14
                                 font.bold: true
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: Math.max(76, beginnerTipText.implicitHeight + 20)
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Text {
+                                    id: beginnerTipText
+
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    text: root.selectedJail ? "Tip: start with a service jail for things like Postgres, Redis, nginx, or a development daemon. Desktop app jails need extra display, audio, and file permissions." : "Pick a jail from the inventory to see safe lifecycle actions."
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    wrapMode: Text.WordWrap
+                                }
                             }
 
                             Repeater {
