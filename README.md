@@ -44,6 +44,7 @@ The goal is a nice, bootable base session for Hyprland `0.56.x` on FreeBSD.
 - `docs/freebsd-dev-lab.md`
 - `docs/themes.md`
 - `docs/software-center.md`
+- `docs/login-screen.md`
 - `docs/pf.md`
 - `docs/dns.md`
 
@@ -174,6 +175,13 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-dns.sh
 ```
 
 The GUI starts in read-only status mode until you choose an action. See `docs/dns.md` for backend commands and manual acceptance checks.
+
+## Graphical Login
+
+BSDRunner supports `LightDM` with `lightdm-gtk-greeter` as its graphical login
+path on FreeBSD. This gives Hyprland a real session owner to return to on
+logout. See [docs/login-screen.md](docs/login-screen.md) for the guarded
+installation and rollback procedure.
 
 ## ZFS
 
