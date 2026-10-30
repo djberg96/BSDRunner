@@ -27,6 +27,12 @@ hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
+-- Keep the first four workspaces visible in ext/workspaces. Waybar 0.15's
+-- Hyprland module still uses the legacy dispatcher syntax for mouse clicks.
+for i = 1, 4 do
+    hl.workspace_rule({ workspace = tostring(i), persistent = true })
+end
+
 hl.config({
     general = {
         gaps_in = 5,

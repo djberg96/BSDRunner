@@ -9,14 +9,15 @@
     "margin-top": 8,
     "margin-left": 10,
     "margin-right": 10,
-    "modules-left": ["custom/theme", "custom/apps", "hyprland/workspaces", "custom/wallpaper-animation", "hyprland/window"],
+    "modules-left": ["custom/theme", "custom/apps", "ext/workspaces", "custom/wallpaper-animation", "hyprland/window"],
     "modules-center": [],
     "modules-right": ["cpu", "custom/memory", "disk", "pulseaudio", "custom/network", "custom/battery", "custom/clock", "tray", "custom/power"],
 
-    "hyprland/workspaces": {
-      "disable-scroll": true,
+    "ext/workspaces": {
       "all-outputs": true,
-      "on-click-right": "sh ~/.config/bsdrunner/scripts/bsdrunner-toggle-workspace-animation.sh",
+      "active-only": false,
+      "sort-by-id": true,
+      "on-click": "activate",
       "format": "{icon}",
       "format-icons": {
         "1": "1",
@@ -31,9 +32,6 @@
         "10": "10",
         "active": "*",
         "default": "-"
-      },
-      "persistent-workspaces": {
-        "*": 4
       }
     },
 
