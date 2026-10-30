@@ -2279,7 +2279,7 @@ ShellRoot {
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: "Stop nginx"
+                                                text: "Stop " + (root.selectedSimpleService ? (root.selectedSimpleService.label || root.selectedSimpleService.service || "service") : "service")
                                                 color: root.palette.primaryText
                                                 font.pixelSize: 12
                                                 font.bold: true
