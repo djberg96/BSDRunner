@@ -27,11 +27,11 @@ This repo is intentionally small:
 - no generated monitor config
 - a neutral base with optional corp theme layers
 
-The goal is a nice, bootable base session for Hyprland `0.54.x` on FreeBSD.
+The goal is a nice, bootable base session for Hyprland `0.56.x` on FreeBSD.
 
 ## Files
 
-- `dotfiles/.config/hypr/hyprland.conf`
+- `dotfiles/.config/hypr/hyprland.lua`
 - `dotfiles/.config/hypr/conf/`
 - `dotfiles/.config/kitty/kitty.conf`
 - `dotfiles/.config/quickshell/`
@@ -212,7 +212,7 @@ backend commands, fixture-backed tests, current scope, and the creation model.
 This starter is targeted at:
 
 - FreeBSD 15
-- Hyprland `0.54.x`
+- Hyprland `0.56.x`
 - ThinkPad X1 Gen 9
 
 The current repo already includes a working Waybar autostart and `swww` wallpaper path. The next risky layers are things like lockscreen, idle, extra desktop daemons, or deeper Qt/KDE theming.

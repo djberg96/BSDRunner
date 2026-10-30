@@ -27,27 +27,44 @@ write_hypr_theme() {
     selected_theme="$2"
     target_dir="$(dirname "$target")"
     tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-hypr-theme.XXXXXX")"
+    lua_target="${target%.conf}.lua"
+    lua_tmp_file="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-hypr-theme-lua.XXXXXX")"
 
     case "$selected_theme" in
         jinteki)
             active_border='rgba(c61f3aee) rgba(7f1325ee) 45deg'
             inactive_border='rgba(6a2a35cc)'
+            active_color_1='rgba(c61f3aee)'
+            active_color_2='rgba(7f1325ee)'
+            inactive_color='rgba(6a2a35cc)'
             ;;
         haas-bioroid)
             active_border='rgba(2f5f8eee) rgba(17324aee) 45deg'
             inactive_border='rgba(344652cc)'
+            active_color_1='rgba(2f5f8eee)'
+            active_color_2='rgba(17324aee)'
+            inactive_color='rgba(344652cc)'
             ;;
         nbn)
             active_border='rgba(f3c316ee) rgba(8d6513ee) 45deg'
             inactive_border='rgba(5a4316cc)'
+            active_color_1='rgba(f3c316ee)'
+            active_color_2='rgba(8d6513ee)'
+            inactive_color='rgba(5a4316cc)'
             ;;
         weyland)
             active_border='rgba(5d8c45ee) rgba(5b4f24ee) 45deg'
             inactive_border='rgba(45543acc)'
+            active_color_1='rgba(5d8c45ee)'
+            active_color_2='rgba(5b4f24ee)'
+            inactive_color='rgba(45543acc)'
             ;;
         *)
             active_border='rgba(5a7fa0ee) rgba(2e4658ee) 45deg'
             inactive_border='rgba(3c4652cc)'
+            active_color_1='rgba(5a7fa0ee)'
+            active_color_2='rgba(2e4658ee)'
+            inactive_color='rgba(3c4652cc)'
             ;;
     esac
 
@@ -56,8 +73,16 @@ write_hypr_theme() {
 \$bsdrunner_inactive_border = $inactive_border
 EOF
 
+    cat > "$lua_tmp_file" <<EOF
+return {
+    active_border = { colors = { "$active_color_1", "$active_color_2" }, angle = 45 },
+    inactive_border = "$inactive_color",
+}
+EOF
+
     mkdir -p "$target_dir"
     mv "$tmp_file" "$target"
+    mv "$lua_tmp_file" "$lua_target"
 }
 
 write_wlogout_style() {

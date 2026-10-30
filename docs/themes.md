@@ -13,7 +13,7 @@ The goal is not to recreate card art directly, but to build a desktop language t
 
 Keep function and theme separate.
 
-- `hyprland.conf` should stay stable and mostly about behavior
+- `hyprland.lua` should stay stable and mostly about behavior
 - corp identity should live in theme files and theme assets
 - a broken theme should never prevent the desktop from starting
 
@@ -117,7 +117,7 @@ Current implementation:
 - Waybar can also use a theme-specific `waybar-config` override when a theme genuinely needs a different layout instead of only different colors
 - if a theme ships `wallpapers/`, install writes a matching `~/.config/bsdrunner/current-wallpaper`
 - when a theme ships multiple wallpapers, the `swww` helper rotates them by workspace number
-- Hyprland border colors are generated into `~/.config/hypr/bsdrunner-theme.conf`
+- Hyprland border colors are generated into `~/.config/hypr/bsdrunner-theme.lua`
 - Dolphin theming is not automated yet; `.colors` files are theme assets for manual testing
 - qt6ct theming is not automated yet; `qt6ct.conf` assets are for manual testing first
 - wallpapers are bundled as theme assets and can be activated through `swww` during install
@@ -132,7 +132,7 @@ Firefox notes:
 
 Important:
 
-- switching themes should never replace `hyprland.conf`
+- switching themes should never replace `hyprland.lua`
 - theme switching should not be required for the desktop to boot
 - a broken theme should be recoverable by switching back to `default`
 - `swww` is treated as part of the expected themed runtime
