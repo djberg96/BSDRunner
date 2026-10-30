@@ -92,12 +92,24 @@ V1 should not deeply edit jail networking, template systems, or desktop app
 permissions. Those are later features once the status and lifecycle workflow
 feels trustworthy.
 
+The first follow-up UI milestone began as a read-only creation preview and now
+drives a guarded `Create Basic Jail` wizard. It teaches Storage, Userland,
+Network, Config, and Lifecycle in sequence, emits an exact Bastille thick- or
+thin-jail plan, and requires typed confirmation for storage, network, and jail
+creation.
+The Network stage recommends a non-overlapping private address, configures only
+Bastille's loopback prerequisite, and delegates NAT and anchors to BSDRunner's
+managed PF profile. Storage setup, network setup, bootstrap, and create run as
+separate stages so partial completion remains visible. A future native
+mode should add storage and hostname fields plus the generated
+`/etc/jail.conf.d/NAME.conf` content.
+
 ### Provisioning Model
 
 Plain jails share the host kernel but still need a provisioned userland root.
-BSDRunner should make this explicit in the UI. A future `Create Jail` workflow
-should visibly perform the provisioning steps rather than implying that
-`jail(8)` creates a filesystem automatically.
+BSDRunner makes this explicit in the guided Bastille workflow. A future native
+workflow should preserve the same visible provisioning steps rather than
+implying that `jail(8)` creates a filesystem automatically.
 
 For the first creation workflow, prefer a thick jail because it is easiest to
 understand:
@@ -113,6 +125,18 @@ understand:
 Thin or shared-base jails should come later. They are attractive for many app
 jails because they reduce duplication, but they add nullfs mounts and update
 coordination that should not be hidden in V1.
+
+Creation should graduate in stages:
+
+1. host-aware, read-only Bastille thick-jail preview with generated commands,
+   release reuse, and collision checks (implemented)
+2. guided Bastille creation through Storage, Userland, Network, Config, and
+   Lifecycle, with conventional `POOL/bastille` storage setup, host-aware
+   address validation, managed PF NAT/anchors, typed confirmation, and separate
+   storage/network/bootstrap/create stages (implemented)
+3. native preview with generated config, storage, and userland steps
+4. broader shared-base, clone, Linux, and desktop-app jail profiles after the
+   basic Thick/Thin service-jail choice is solid
 
 ### Jail Types
 
@@ -142,27 +166,28 @@ because the display/audio/filesystem integration is the hard part.
 
 ### Jail Storage
 
-Jails should use a dedicated ZFS dataset when ZFS is available. The suggested
-default for a normal BSDRunner install is:
+Managed Bastille jails should use Bastille's conventional dataset hierarchy when
+ZFS is available. For a normal install on `zroot`, the installation root is:
 
 ```text
-zroot/jails
+zroot/bastille
 ```
 
-Use `POOL/jails` as the general pattern when the primary pool is not named
-`zroot`. This should be a dataset created inside an existing pool, not a new
-pool created from an existing pool.
+Use `POOL/bastille` as the general pattern. Bastille creates child datasets for
+releases, jails, cache, backups, templates, and logs as its commands need them.
+The Jails UI selects only an existing pool; it never creates a pool or adopts an
+unrelated dataset automatically.
 
-The Jails app should eventually detect whether a dedicated ZFS-backed storage
-location exists. Creating that dataset belongs in the ZFS GUI `Create Dataset`
-workflow, not in Jails V1. The ZFS GUI should support ordinary nested dataset
-paths such as `jails/postgres` or `jails/firefox` without making jails-specific
-assumptions.
+The Jails app detects pools and configures the standard Bastille storage target
+through `bastille setup storage POOL`. It deliberately keeps this separate from
+full Bastille setup so storage configuration cannot silently modify PF or
+network interfaces. The ZFS GUI remains responsible for general-purpose dataset
+creation and should not make jails-specific assumptions.
 
 ### Bastille Role
 
-Bastille should be evaluated as an optional service-jail automation backend.
-It may save work for:
+Bastille is the assumed managed service-jail backend while the native backend
+remains the no-dependency status and lifecycle baseline. It may save work for:
 
 - release bootstrapping
 - thick/thin jail creation
@@ -219,6 +244,7 @@ choosing a privacy action, and continuing navigation.
 
 Possible follow-up features:
 
+- native create-preview mode with generated `jail.conf` content
 - plain jail creation and destruction with strong confirmations
 - optional Bastille template and release management
 - desktop app jail profiles and launcher integration

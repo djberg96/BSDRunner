@@ -1,0 +1,26 @@
+[
+  {
+    "JID": "9",
+    "Name": "cache",
+    "Boot": "on",
+    "Prio": "99",
+    "State": "Up",
+    "Type": "thick",
+    "IP Address": "bastille0|10.0.0.9/24",
+    "Published Ports": "-",
+    "Release": "15.0-RELEASE",
+    "Tags": "-"
+  },
+  {
+    "JID": "-",
+    "Name": "build",
+    "Boot": "off",
+    "Prio": "99",
+    "State": "Down",
+    "Type": "thin",
+    "IP Address": "bastille0|10.0.0.10/24",
+    "Published Ports": "-",
+    "Release": "14.3-RELEASE",
+    "Tags": "-"
+  }
+]

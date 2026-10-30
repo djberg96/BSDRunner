@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'sudo'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+
+[ "${1:-}" = "-n" ] && shift
+exec "$@"

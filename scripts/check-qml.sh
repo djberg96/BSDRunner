@@ -38,6 +38,9 @@ dotfiles/.config/quickshell/bsdrunner-network/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/shell.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-zfs/ThemePalette.qml
+dotfiles/.config/quickshell/bsdrunner-jails/shell.qml
+dotfiles/.config/quickshell/bsdrunner-jails/ThemeLoader.qml
+dotfiles/.config/quickshell/bsdrunner-jails/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-memory/shell.qml
 "
 

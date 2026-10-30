@@ -3,6 +3,8 @@
 set -eu
 
 profile_file="${1:-${HOME}/.config/bsdrunner/pf/profile.conf}"
+policy_file="$(dirname "$profile_file")/jail-policies.conf"
+forward_file="$(dirname "$profile_file")/jail-port-forwards.conf"
 
 allow_outbound="yes"
 block_unsolicited="yes"
@@ -16,6 +18,20 @@ log_blocked="no"
 ssh_tarpit_port="22"
 ssh_real_port="22222"
 ssh_real_port_configured="no"
+jail_nat="no"
+jail_interface="bastille0"
+jail_ext_if=""
+
+valid_interface() {
+    case "${1:-}" in
+        ''|*[!A-Za-z0-9_.-]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
 
 valid_real_ssh_port() {
     case "${1:-}" in
@@ -36,6 +52,66 @@ normalize_bool() {
             printf 'no\n'
             ;;
     esac
+}
+
+valid_ipv4() {
+    printf '%s\n' "${1:-}" | awk -F '.' '
+        NF != 4 { exit 1 }
+        {
+            for (i = 1; i <= 4; i++)
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255)
+                    exit 1
+        }
+    '
+}
+
+emit_policies() {
+    [ -f "$policy_file" ] || return 0
+    while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+        case "$policy_name" in
+            ''|*[!A-Za-z0-9_.-]*)
+                continue
+                ;;
+        esac
+        valid_ipv4 "$policy_address" || continue
+        valid_ipv4 "$policy_resolver" || continue
+        case "$policy_mode" in
+            internet-only|lan|none)
+                printf '%s|%s|%s|%s\n' "$policy_name" "$policy_address" "$policy_mode" "$policy_resolver"
+                ;;
+        esac
+    done <"$policy_file"
+}
+
+valid_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+emit_forwards() {
+    [ -f "$forward_file" ] || return 0
+    while IFS='|' read -r forward_name forward_address forward_protocol forward_host_port forward_jail_port; do
+        case "$forward_name" in
+            ''|*[!A-Za-z0-9_.-]*)
+                continue
+                ;;
+        esac
+        valid_ipv4 "$forward_address" || continue
+        case "$forward_protocol" in
+            tcp|udp)
+                ;;
+            *)
+                continue
+                ;;
+        esac
+        valid_port "$forward_host_port" || continue
+        valid_port "$forward_jail_port" || continue
+        printf '%s|%s|%s|%s|%s\n' "$forward_name" "$forward_address" "$forward_protocol" "$forward_host_port" "$forward_jail_port"
+    done <"$forward_file"
 }
 
 load_profile() {
@@ -79,11 +155,31 @@ load_profile() {
             log_blocked)
                 log_blocked="$(normalize_bool "$value")"
                 ;;
+            jail_nat)
+                jail_nat="$(normalize_bool "$value")"
+                ;;
+            jail_interface)
+                if valid_interface "$value"; then
+                    jail_interface="$value"
+                else
+                    jail_interface=""
+                fi
+                ;;
+            jail_ext_if)
+                if valid_interface "$value"; then
+                    jail_ext_if="$value"
+                else
+                    jail_ext_if=""
+                fi
+                ;;
         esac
     done <"$profile_file"
 
     if [ "$allow_ssh_lan" != "yes" ]; then
         allow_ssh_tarpit="no"
+    fi
+    if [ "$jail_nat" = "yes" ] && { ! valid_interface "$jail_interface" || ! valid_interface "$jail_ext_if"; }; then
+        jail_nat="no"
     fi
 }
 
@@ -100,10 +196,19 @@ emit_settings() {
         printf 'ssh_real_port=%s\n' "$ssh_real_port"
     fi
     printf 'log_blocked=%s\n' "$log_blocked"
+    if [ "$jail_nat" = "yes" ]; then
+        printf 'jail_nat=yes\n'
+        printf 'jail_interface=%s\n' "$jail_interface"
+        printf 'jail_ext_if=%s\n' "$jail_ext_if"
+    fi
 }
 
 profile_checksum() {
-    emit_settings | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
+    {
+        emit_settings
+        emit_policies
+        emit_forwards
+    } | cksum | awk '{ printf "%s-%s\n", $1, $2 }'
 }
 
 render_profile() {
@@ -122,6 +227,19 @@ icmp_types = "{ echoreq, unreach, timex }"
 icmp6_types = "{ echoreq, unreach, timex, paramprob, routersol, routeradv, neighbrsol, neighbradv, toobig }"
 EOF
 
+    if [ "$jail_nat" = "yes" ]; then
+        printf 'jail_ext_if = "%s"\n' "$jail_ext_if"
+        printf 'jail_if = "%s"\n' "$jail_interface"
+        cat <<'EOF'
+table <jails> persist
+EOF
+        if emit_policies | awk -F '|' '$3 == "internet-only" { found = 1 } END { exit found ? 0 : 1 }'; then
+            cat <<'EOF'
+private_nets = "{ 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 }"
+EOF
+        fi
+    fi
+
     if [ "$allow_ssh_lan" = "yes" ]; then
         cat <<'EOF'
 lan_hosts = "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }"
@@ -138,13 +256,40 @@ EOF
 EOF
     fi
 
-    cat <<'EOF'
+    if [ "$jail_nat" = "yes" ]; then
+        cat <<'EOF'
+
+set skip on lo
+EOF
+    else
+        cat <<'EOF'
 
 set skip on lo0
+EOF
+    fi
+
+    cat <<'EOF'
 set block-policy return
 set reassemble yes
 
 EOF
+
+    if [ "$jail_nat" = "yes" ]; then
+        cat <<'EOF'
+# Translate traffic from running Bastille jails on the current uplink.
+# Bastille adds and removes jail addresses from <jails> as jails start and stop.
+nat on $jail_ext_if inet from <jails> to any -> ($jail_ext_if:0)
+EOF
+        emit_forwards | while IFS='|' read -r forward_name forward_address forward_protocol forward_host_port forward_jail_port; do
+            printf '# Forward %s/%s on the host to Bastille jail %s.\n' "$forward_host_port" "$forward_protocol" "$forward_name"
+            printf 'rdr pass on $jail_ext_if inet proto %s from any to ($jail_ext_if) port %s -> %s port %s\n' \
+                "$forward_protocol" "$forward_host_port" "$forward_address" "$forward_jail_port"
+        done
+        cat <<'EOF'
+rdr-anchor "rdr/*"
+
+EOF
+    fi
 
     if [ "$block_unsolicited" = "yes" ]; then
         if [ "$log_blocked" = "yes" ]; then
@@ -167,10 +312,36 @@ EOF
     fi
 
     if [ "$allow_outbound" = "yes" ]; then
+        if [ "$jail_nat" = "yes" ]; then
+            emit_policies | while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+                printf '\n# Outbound policy for Bastille jail %s.\n' "$policy_name"
+                case "$policy_mode" in
+                    internet-only)
+                        printf 'pass out quick on $jail_ext_if inet proto { tcp udp } from %s to %s port 53 keep state\n' "$policy_address" "$policy_resolver"
+                        printf 'block return out quick on $jail_ext_if inet from %s to $private_nets\n' "$policy_address"
+                        printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
+                        ;;
+                    lan)
+                        printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
+                        ;;
+                    none)
+                        printf 'block return out quick on $jail_ext_if inet from %s to any\n' "$policy_address"
+                        ;;
+                esac
+            done
+        fi
         cat <<'EOF'
 
 # Allow connections started by this computer.
 pass out all keep state
+EOF
+    fi
+
+    if [ "$jail_nat" = "yes" ]; then
+        cat <<'EOF'
+
+# Bastille stores per-jail inbound pass rules here when port redirects are used.
+anchor "bastille/*"
 EOF
     fi
 

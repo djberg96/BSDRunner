@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'service'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_PF_TEST_LOG"
+
+printf 'Service fixture command completed.\n'

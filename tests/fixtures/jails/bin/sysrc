@@ -1,0 +1,43 @@
+#!/bin/sh
+
+set -eu
+
+if [ "${1:-}" = "-R" ] && [ -n "${2:-}" ] && [ "${3:-}" = "-n" ] && [ -n "${4:-}" ]; then
+    awk -F '=' -v key="$4" '
+        $1 == key {
+            value = substr($0, index($0, "=") + 1)
+            gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, "", value)
+            print value
+            found = 1
+            exit
+        }
+        END { if (!found) print "NO" }
+    ' "$2/etc/rc.conf" 2>/dev/null || printf 'NO\n'
+    exit 0
+fi
+
+case "${2:-}" in
+    jail_enable)
+        printf 'YES\n'
+        ;;
+    bastille_enable)
+        printf 'NO\n'
+        ;;
+    cloned_interfaces)
+        if [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE:-}" ]; then
+            printf 'lo1\n'
+        else
+            printf 'unknown\n'
+        fi
+        ;;
+    ifconfig_lo1_name)
+        if [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE:-}" ]; then
+            printf 'bastille0\n'
+        else
+            printf 'unknown\n'
+        fi
+        ;;
+    *)
+        printf 'unknown\n'
+        ;;
+esac

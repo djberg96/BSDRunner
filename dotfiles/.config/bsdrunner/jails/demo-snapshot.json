@@ -1,0 +1,124 @@
+{
+  "ok": true,
+  "demo": true,
+  "message": "Loaded Jails demo data.",
+  "tools": {
+    "jls": true,
+    "jail": true,
+    "service": true,
+    "bastille": true,
+    "mdo": true
+  },
+  "services": {
+    "jail": "YES",
+    "bastille": "YES"
+  },
+  "host_release": "15.0-RELEASE",
+  "bastille_setup": true,
+  "storage": {
+    "configured": true,
+    "initialized": true,
+    "prefix": "/usr/local/bastille",
+    "zfs_pool": "zroot",
+    "zfs_prefix": "bastille",
+    "target_dataset": "zroot/bastille",
+    "pools": [
+      "zroot"
+    ]
+  },
+  "network": {
+    "ready": true,
+    "loopback_ready": true,
+    "pf_running": true,
+    "nat_ready": true,
+    "rdr_anchor_ready": true,
+    "filter_anchor_ready": true,
+    "loopback_interface": "bastille0",
+    "external_interface": "wlan0",
+    "recommended_address": "10.0.0.20/24"
+  },
+  "bastille_releases": [
+    "14.3-RELEASE",
+    "15.0-RELEASE"
+  ],
+  "running": [
+    {
+      "name": "web",
+      "jid": "4",
+      "hostname": "web.home.arpa",
+      "path": "/jails/web",
+      "ipv4": "10.0.0.20",
+      "ipv6": "fd00::20",
+      "state": "running",
+      "backend": "native",
+      "autostart": "YES",
+      "release": "15.0-RELEASE"
+    }
+  ],
+  "configured": [
+    {
+      "name": "postgres",
+      "jid": "",
+      "hostname": "postgres.home.arpa",
+      "path": "/jails/postgres",
+      "ipv4": "10.0.0.21",
+      "ipv6": "",
+      "state": "configured",
+      "backend": "native",
+      "autostart": "NO",
+      "release": "15.0-RELEASE",
+      "source": "/etc/jail.conf.d/postgres.conf"
+    }
+  ],
+  "bastille": [
+    {
+      "name": "build",
+      "jid": "0",
+      "hostname": "build",
+      "path": "/usr/local/bastille/jails/build/root",
+      "ipv4": "10.0.0.22",
+      "ipv6": "",
+      "state": "stopped",
+      "backend": "bastille",
+      "autostart": "NO",
+      "release": "14.3-RELEASE"
+    }
+  ],
+  "outbound_policies": [
+    {
+      "name": "build",
+      "ipv4": "10.0.0.22",
+      "policy": "internet-only",
+      "resolver": "192.168.1.1"
+    }
+  ],
+  "port_forwards": [
+    {
+      "name": "build",
+      "ipv4": "10.0.0.22",
+      "protocol": "tcp",
+      "host_port": 8080,
+      "jail_port": 80
+    }
+  ],
+  "simple_services": [
+    {
+      "name": "build",
+      "ipv4": "10.0.0.22",
+      "service": "nginx",
+      "package": "nginx",
+      "label": "nginx",
+      "description": "Static web server and reverse proxy",
+      "port": 80,
+      "status_known": false,
+      "installed": false,
+      "enabled": false,
+      "running": false
+    }
+  ],
+  "last_result": {
+    "tone": "info",
+    "message": "Demo mode uses sample data; management actions are disabled.",
+    "timestamp": ""
+  }
+}

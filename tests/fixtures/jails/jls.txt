@@ -1,0 +1,2 @@
+jid=7 name=api host.hostname=api.example.test path=/jails/api ip4.addr=10.0.0.7 ip6.addr=fd00::7
+jid=8 name=worker host.hostname=worker.example.test path=/jails/worker ip4.addr=10.0.0.8 ip6.addr=none

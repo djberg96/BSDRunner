@@ -1,0 +1,44 @@
+#!/bin/sh
+
+set -eu
+
+if [ "${1:-}" = "list" ] && { [ "${2:-}" = "all" ] || [ "${2:-}" = "-a" ]; }; then
+    cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-list.txt"
+    exit 0
+fi
+
+if [ "${1:-}" = "list" ] && [ "${2:-}" = "-j" ]; then
+    cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-list.json"
+    exit 0
+fi
+
+if [ "${1:-}" = "list" ] && { [ "${2:-}" = "release" ] || [ "${2:-}" = "releases" ]; }; then
+    cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-releases.txt"
+    exit 0
+fi
+
+if [ "${1:-}" = "config" ] && [ "${2:-}" = "ALL" ] && [ "${3:-}" = "get" ]; then
+    cat "$BSDRUNNER_JAILS_TEST_FIXTURES/bastille-config.txt"
+    exit 0
+fi
+
+if [ "${1:-}" = "setup" ] && [ "${2:-}" = "--yes" ] && [ "${3:-}" = "loopback" ] && [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_STATE:-}" ]; then
+    if [ -n "${BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE:-}" ]; then
+        : >"$BSDRUNNER_JAILS_TEST_LOOPBACK_SOURCE_STATE"
+    else
+        : >"$BSDRUNNER_JAILS_TEST_LOOPBACK_STATE"
+    fi
+fi
+
+{
+    printf 'bastille'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+
+if [ "${1:-}" = "cp" ] && [ "${BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL:-0}" = "1" ]; then
+    printf 'Unable to copy resolver configuration.\n' >&2
+    exit 1
+fi
+
+printf 'Bastille action completed.\n'

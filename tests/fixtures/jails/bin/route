@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -eu
+
+[ "${1:-}" = "-n" ] && [ "${2:-}" = "get" ] || exit 1
+
+case "${3:-}" in
+    default)
+        destination="0.0.0.0"
+        interface="wlan0"
+        ;;
+    192.168.1.*)
+        destination="192.168.1.0"
+        interface="wlan0"
+        ;;
+    *)
+        destination="0.0.0.0"
+        interface="wlan0"
+        ;;
+esac
+
+printf 'destination: %s\n' "$destination"
+printf '  interface: %s\n' "$interface"

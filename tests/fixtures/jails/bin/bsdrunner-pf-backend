@@ -1,0 +1,35 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'pf-backend'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+
+if [ "${1:-}" = "jail-network" ]; then
+    if [ -n "${BSDRUNNER_JAILS_TEST_PF_STATE:-}" ]; then
+        : >"$BSDRUNNER_JAILS_TEST_PF_STATE"
+    fi
+    printf '%s\n' '{"ok":true,"message":"BSDRunner firewall profile applied.","details":"PF fixture applied."}'
+    exit 0
+fi
+
+if [ "${1:-}" = "jail-policy" ]; then
+    printf '%s\n' '{"ok":true,"message":"Applied outbound policy.","details":"PF policy fixture applied."}'
+    exit 0
+fi
+
+if [ "${1:-}" = "jail-forward-add" ]; then
+    printf '%s\n' '{"ok":true,"message":"Added port forward.","details":"PF port-forward fixture applied."}'
+    exit 0
+fi
+
+if [ "${1:-}" = "jail-forward-remove" ]; then
+    printf '%s\n' '{"ok":true,"message":"Removed port forward.","details":"PF port-forward fixture removed."}'
+    exit 0
+fi
+
+printf '%s\n' '{"ok":false,"message":"Unknown fixture action."}'
+exit 1
