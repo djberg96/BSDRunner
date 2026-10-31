@@ -5,7 +5,12 @@ set -eu
 repo_root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-if ! command -v qmllint >/dev/null 2>&1; then
+qmllint_bin="$(command -v qmllint 2>/dev/null || true)"
+if [ -z "$qmllint_bin" ] && [ -x /usr/local/lib/qt6/bin/qmllint ]; then
+    qmllint_bin=/usr/local/lib/qt6/bin/qmllint
+fi
+
+if [ -z "$qmllint_bin" ]; then
     printf 'qmllint is not installed or not in PATH.\n' >&2
     exit 1
 fi
@@ -42,7 +47,10 @@ dotfiles/.config/quickshell/bsdrunner-jails/shell.qml
 dotfiles/.config/quickshell/bsdrunner-jails/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-jails/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-memory/shell.qml
+dotfiles/.config/quickshell/bsdrunner-greeter/shell.qml
+dotfiles/.config/quickshell/bsdrunner-greeter/ThemeLoader.qml
+dotfiles/.config/quickshell/bsdrunner-greeter/ThemePalette.qml
 "
 
 printf 'Running qmllint...\n'
-qmllint $qml_files
+"$qmllint_bin" $qml_files

@@ -1,133 +1,126 @@
-# Wayland Login with Ly
+# Graphical Login Screen
 
-BSDRunner uses Ly as its supported login manager on FreeBSD. Ly runs directly
-on a kernel virtual terminal, discovers Hyprland through its Wayland session
-entry, and returns to the login screen after Hyprland exits. It does not require
-an X server.
+BSDRunner ships a native graphical greetd client for FreeBSD. It reuses the
+earlier BSDRunner Quickshell login design and replaces the abandoned custom PAM
+helpers with a small Rust bridge to greetd.
 
-The login screen is a terminal UI rather than a graphical Wayland client. This
-keeps the boot path within FreeBSD's packaged components while still providing
-a real session owner.
+The split is deliberate:
 
-## Safety Model
+- Quickshell renders the themed username, password, session, and status UI.
+- `bsdrunner-greetd-greeter` translates newline-delimited JSON from the UI into
+  greetd IPC messages.
+- greetd owns PAM, the VT, user/group changes, and session lifetime.
+- a minimal Hyprland instance hosts only the greeter.
 
-- `ttyv0` always remains a normal text recovery console.
-- Ly is assigned to `ttyv1` only for the next boot.
-- The installer never reloads `init`, starts Ly, or disrupts the current seat.
-- Existing `/etc/gettytab` and `/etc/ttys` files receive one-time
-  `.pre-bsdrunner-ly` backups.
-- Activation refuses stale `.profile` or `.zprofile` Hyprland autostart hooks.
-- LightDM and any stale greetd service are disabled during activation.
-- A rollback helper restores the original FreeBSD console configuration.
+Passwords travel from Quickshell to the bridge over stdin and from the bridge
+to greetd over its Unix socket. They are never placed in argv, the environment,
+or a temporary file.
 
-## 1. Install Ly and the Dotfiles
+## Prerequisites
 
-```sh
-sudo pkg install ly
-./scripts/install-dotfiles.sh
-```
-
-The Hyprland package must provide this Wayland session entry:
-
-```text
-/usr/local/share/wayland-sessions/hyprland.desktop
-```
-
-## 2. Stage the Getty Capability
+The FreeBSD-enabled greetd build must already be installed and its `greeter`
+account and PAM services must exist. You also need:
 
 ```sh
-sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-ly.sh
+mdo pkg install quickshell rust dbus seatd hyprland
 ```
 
-This adds the `BSDRunnerLy` capability to `/etc/gettytab`, but does not assign
-it to a terminal. The current and next boot paths are unchanged.
-
-Run the read-only preflight:
+Enable DBus and seatd before activating greetd:
 
 ```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-ly.sh
+mdo sysrc dbus_enable=YES
+mdo sysrc seatd_enable=YES
+mdo service dbus start
+mdo service seatd start
 ```
 
-It verifies the package, Ly wrapper and configuration, Hyprland Wayland
-session, getty capability, `dbus`, and `seatd`. It does not start Ly or reload
-`init`.
+## Build and Stage
 
-Stop here if any check fails.
-
-## 3. Prepare the Recovery Console
-
-The older BSDRunner console path launched Hyprland from login profiles. Remove
-only the recognized autostart blocks:
+From the BSDRunner repository:
 
 ```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-disable-console-autostart.sh --check
-sh ~/.config/bsdrunner/scripts/bsdrunner-disable-console-autostart.sh
+./scripts/install-greetd-greeter.sh --theme jinteki
 ```
 
-The originals are retained as applicable:
+Omit `--theme` to use the current BSDRunner theme. This command builds the Rust
+bridge and installs a self-contained bundle under `/etc/greetd/bsdrunner`, but
+does not replace the active greetd configuration.
 
-```text
-~/.profile.pre-bsdrunner-ly
-~/.zprofile.pre-bsdrunner-ly
-```
+The installer creates a timestamped backup of an existing BSDRunner bundle.
 
-Systems migrated during the earlier LightDM experiment may already have the
-equivalent `.pre-bsdrunner-lightdm` backups.
+## Activate
 
-Before activation, switch to another text VT, log in, confirm that it gives you
-a normal shell, and exit. Hyprland can always be started manually with
-`start-hyprland`.
-
-## 4. Enable Ly for the Next Boot
+Once the staged files are present:
 
 ```sh
-sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-ly.sh \
-  --profile "$HOME/.profile" \
-  --enable
+./scripts/install-greetd-greeter.sh --theme jinteki --activate
+mdo sysrc greetd_enable=YES
 ```
 
-This changes only `ttyv1` to use `BSDRunnerLy`. It leaves `ttyv0` as an enabled
-standard getty and does not reload `init`.
+`--activate` backs up the current
+`/usr/local/etc/greetd/config.toml` before installing the BSDRunner config. The
+config uses VT 9 (`ttyv8`); keep `ttyv0` enabled as the recovery console and do
+not assign another display manager to `ttyv8`.
 
-Run the strict preflight:
+Do the first live test without rebooting:
 
 ```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-ly.sh \
-  --profile "$HOME/.profile" \
-  --activation-ready
+mdo service greetd onestart
 ```
 
-Stop if any check fails. Otherwise, finish your work and reboot normally:
+If the keyboard initially produces escape-prefixed characters such as `^[d`,
+tap the left Alt key once. FreeBSD's VT switch can retain a stale Alt modifier.
+
+Select `Terminal` for the first successful login. It starts a deliberately
+small Hyprland session containing only a terminal. Then test the full
+`BSDRunner` session.
+
+## Returning From a Test Session
+
+With current Hyprland Lua dispatchers, exit the session with:
 
 ```sh
-sudo shutdown -r now
+hyprctl dispatch 'hl.dsp.exit()'
 ```
 
-At Ly, select the Hyprland session, enter your username and password, and log
-in. Ly saves the last selected session by default. Selecting **Logout** in
-BSDRunner exits Hyprland, after which Ly should display its login screen again.
+greetd should regain VT 9 and show the greeter again.
 
-## Recovery and Rollback
+## Recovery
 
-If Ly or Hyprland fails, switch to `ttyv0` with `Ctrl`+`Alt`+`F1`, log in, and
-run:
+From a graphical failure, press `Ctrl+Alt+F1`. From a text VT, use `Alt+F1`.
+Log in on `ttyv0`, then stop and disable greetd:
 
 ```sh
-sudo sh ~/.config/bsdrunner/scripts/bsdrunner-rollback-ly.sh
-sudo shutdown -r now
+mdo service greetd stop
+mdo sysrc greetd_enable=NO
 ```
 
-The rollback restores `/etc/gettytab` and `/etc/ttys`, keeps LightDM and greetd
-disabled, and deliberately does not reload `init` underneath the failed login
-session. After reboot, log in on the console and run `start-hyprland` manually
-if needed.
-
-## Validation
-
-The repository smoke test uses a temporary root, verifies staging and
-activation, preserves `ttyv0`, rejects stale profile autostart, and checks the
-retained rollback files:
+Find the config backup made during activation:
 
 ```sh
-sh scripts/test-ly.sh
+ls -1t /usr/local/etc/greetd/config.toml.pre-bsdrunner-*
 ```
+
+Restore the newest known-good file, substituting its exact name:
+
+```sh
+mdo install -m 0644 \
+  /usr/local/etc/greetd/config.toml.pre-bsdrunner-YYYYMMDD-HHMMSS \
+  /usr/local/etc/greetd/config.toml
+```
+
+If the TTY assignments were changed separately, restore the existing
+`/etc/ttys.greetd-backup-*` backup as well. Reboot only after the service is
+disabled and the recovery console is confirmed available.
+
+## Development Checks
+
+The bridge includes a fake-greetd integration test that exercises a secret PAM
+prompt and session start without touching the live daemon:
+
+```sh
+cargo test --manifest-path greeter/Cargo.toml --locked
+cargo clippy --manifest-path greeter/Cargo.toml --locked --all-targets -- -D warnings
+```
+
+QML files are included in `scripts/check-qml.sh`.
