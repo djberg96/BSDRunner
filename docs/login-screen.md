@@ -90,6 +90,25 @@ hyprctl dispatch 'hl.dsp.exit()'
 
 greetd should regain VT 9 and show the greeter again.
 
+## Logging Out
+
+The wlogout `Logout` action runs
+`~/.config/bsdrunner/scripts/bsdrunner-logout.sh`. The helper only asks the
+current user-owned Hyprland compositor to exit. greetd observes the session
+ending, cleans up the login's remaining process tree, reclaims VT 9, and
+starts a new graphical greeter.
+
+BSDRunner's FreeBSD greetd build makes each session worker a process reaper.
+This keeps applications that daemonize or create a new process group, such as
+Code and D-Bus, scoped to the login that launched them. When Hyprland exits,
+greetd first gives those remaining descendants two seconds to terminate and
+then kills only that session's stragglers. Processes from SSH connections,
+recovery consoles, and other logins are outside that reaper tree.
+
+The helper deliberately does not call `vidcontrol`, switch to a recovery VT,
+restart greetd, or use elevated privileges. Those operations race the login
+manager and previously left the FreeBSD VT in an unusable state.
+
 ## Recovery
 
 From a graphical failure, press `Ctrl+Alt+F1`. From a text VT, use `Alt+F1`.
