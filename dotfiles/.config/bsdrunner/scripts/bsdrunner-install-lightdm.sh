@@ -110,6 +110,12 @@ if [ "$install_prefix" = /usr/local ]; then
     }
 fi
 
+profile_has_console_autostart() {
+    candidate="$1"
+    [ -f "$candidate" ] || return 1
+    grep -Eq 'BSDRUNNER GREETER AUTOSTART|bsdrunner-login-dispatch\.sh|^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$candidate"
+}
+
 if [ "$enable_service" = true ]; then
     [ "$install_prefix" = /usr/local ] || {
         echo ":: --enable is only valid for the /usr/local system installation." >&2
@@ -119,8 +125,10 @@ if [ "$enable_service" = true ]; then
         echo ":: --enable requires --profile with the desktop user's .profile." >&2
         exit 1
     }
-    if grep -Eq '^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$login_profile"; then
-        echo ":: Refusing to enable LightDM while .profile still autostarts Hyprland." >&2
+    login_zprofile="$(dirname -- "$login_profile")/.zprofile"
+    if profile_has_console_autostart "$login_profile" || \
+        profile_has_console_autostart "$login_zprofile"; then
+        echo ":: Refusing to enable LightDM while a login profile still autostarts BSDRunner." >&2
         echo ":: Run bsdrunner-disable-console-autostart.sh first." >&2
         exit 1
     fi

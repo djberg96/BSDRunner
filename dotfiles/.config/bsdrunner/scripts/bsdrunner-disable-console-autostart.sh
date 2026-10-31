@@ -3,15 +3,116 @@
 set -eu
 
 profile="${HOME}/.profile"
+zprofile=""
 check_only=false
+found_any=false
 
 usage() {
     cat <<'EOF'
-Usage: bsdrunner-disable-console-autostart.sh [--check] [--profile FILE]
+Usage: bsdrunner-disable-console-autostart.sh [--check] [--profile FILE] [--zprofile FILE]
 
-Removes the old ttyv0 block that immediately execs start-hyprland. A copy of
-the original profile is retained as FILE.pre-bsdrunner-lightdm.
+Removes recognized BSDRunner console autostart blocks from the Bourne/Bash and
+Zsh login profiles. Originals are retained with a .pre-bsdrunner-lightdm suffix.
 EOF
+}
+
+has_console_autostart() {
+    candidate="$1"
+    [ -f "$candidate" ] || return 1
+    grep -Eq 'BSDRUNNER GREETER AUTOSTART|bsdrunner-login-dispatch\.sh|^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$candidate"
+}
+
+migrate_file() {
+    source_file="$1"
+    [ -f "$source_file" ] || return 0
+    has_console_autostart "$source_file" || return 0
+    found_any=true
+
+    source_dir="$(CDPATH= cd -- "$(dirname -- "$source_file")" && pwd)"
+    temporary_file="$(mktemp "$source_dir/.bsdrunner-profile.XXXXXX")"
+
+    if ! awk '
+        BEGIN {
+            in_greeter = 0
+            in_tty = 0
+            greeter_count = 0
+            tty_count = 0
+            tty_block = ""
+        }
+
+        /^# >>> BSDRUNNER GREETER AUTOSTART >>>$/ {
+            if (in_greeter || in_tty)
+                exit 44
+            in_greeter = 1
+            greeter_count++
+            next
+        }
+
+        in_greeter {
+            if ($0 == "# <<< BSDRUNNER GREETER AUTOSTART <<<")
+                in_greeter = 0
+            next
+        }
+
+        !in_tty && /\/dev\/ttyv0/ && /then[[:space:]]*$/ {
+            in_tty = 1
+            tty_block = $0 ORS
+            next
+        }
+
+        in_tty {
+            tty_block = tty_block $0 ORS
+            if ($0 ~ /^[[:space:]]*fi[[:space:]]*$/) {
+                if (tty_block ~ /exec[[:space:]]+start-hyprland/)
+                    tty_count++
+                else
+                    printf "%s", tty_block
+                in_tty = 0
+                tty_block = ""
+            }
+            next
+        }
+
+        { print }
+
+        END {
+            if (in_greeter || in_tty)
+                exit 43
+            if (greeter_count > 1 || tty_count > 1)
+                exit 44
+            if (greeter_count + tty_count == 0)
+                exit 42
+        }
+    ' "$source_file" > "$temporary_file"; then
+        rm -f "$temporary_file"
+        echo ":: Refusing to edit $source_file: recognized autostart blocks are malformed." >&2
+        exit 1
+    fi
+
+    if has_console_autostart "$temporary_file"; then
+        rm -f "$temporary_file"
+        echo ":: Refusing to edit $source_file: an unrecognized console autostart remains." >&2
+        exit 1
+    fi
+
+    if [ "$check_only" = true ]; then
+        rm -f "$temporary_file"
+        echo ":: Found recognized BSDRunner console autostart in $source_file"
+        return 0
+    fi
+
+    backup_file="${source_file}.pre-bsdrunner-lightdm"
+    if [ ! -e "$backup_file" ]; then
+        cp -p "$source_file" "$backup_file"
+    fi
+    metadata_file="${temporary_file}.metadata"
+    cp -p "$source_file" "$metadata_file"
+    cp "$temporary_file" "$metadata_file"
+    mv "$metadata_file" "$source_file"
+    rm -f "$temporary_file"
+
+    echo ":: Removed recognized console autostart from $source_file"
+    echo ":: Original retained at $backup_file"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -25,6 +126,14 @@ while [ "$#" -gt 0 ]; do
                 exit 1
             }
             profile="$2"
+            shift
+            ;;
+        --zprofile)
+            [ "$#" -ge 2 ] || {
+                echo ":: Missing value for $1" >&2
+                exit 1
+            }
+            zprofile="$2"
             shift
             ;;
         -h|--help)
@@ -45,76 +154,15 @@ done
     exit 1
 }
 
-if ! grep -Eq '^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$profile"; then
-    echo ":: No start-hyprland console autostart is present in $profile"
-    exit 0
+if [ -z "$zprofile" ]; then
+    zprofile="$(dirname -- "$profile")/.zprofile"
 fi
 
-profile_dir="$(CDPATH= cd -- "$(dirname -- "$profile")" && pwd)"
-temporary_profile="$(mktemp "$profile_dir/.bsdrunner-profile.XXXXXX")"
-trap 'rm -f "$temporary_profile"' EXIT HUP INT TERM
+migrate_file "$profile"
+migrate_file "$zprofile"
 
-if ! awk '
-    BEGIN {
-        capturing = 0
-        removed = 0
-        block = ""
-    }
-
-    !capturing && /\/dev\/ttyv0/ && /then[[:space:]]*$/ {
-        capturing = 1
-        block = $0 ORS
-        next
-    }
-
-    capturing {
-        block = block $0 ORS
-        if ($0 ~ /^[[:space:]]*fi[[:space:]]*$/) {
-            if (block ~ /exec[[:space:]]+start-hyprland/) {
-                removed++
-            } else {
-                printf "%s", block
-            }
-            capturing = 0
-            block = ""
-        }
-        next
-    }
-
-    { print }
-
-    END {
-        if (capturing) {
-            printf "%s", block
-            exit 43
-        }
-        if (removed != 1)
-            exit 42
-    }
-' "$profile" > "$temporary_profile"; then
-    echo ":: Refusing to edit $profile: the expected single ttyv0 block was not found." >&2
-    exit 1
+if [ "$found_any" = false ]; then
+    echo ":: No recognized BSDRunner console autostart is present."
+elif [ "$check_only" = true ]; then
+    echo ":: Run again without --check to remove the recognized blocks."
 fi
-
-if grep -Eq '^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$temporary_profile"; then
-    echo ":: Refusing to edit $profile: another start-hyprland autostart remains." >&2
-    exit 1
-fi
-
-if [ "$check_only" = true ]; then
-    echo ":: Found the old ttyv0 Hyprland autostart in $profile"
-    echo ":: Run again without --check to remove it."
-    exit 0
-fi
-
-backup_profile="${profile}.pre-bsdrunner-lightdm"
-if [ ! -e "$backup_profile" ]; then
-    cp -p "$profile" "$backup_profile"
-fi
-cp -p "$profile" "$temporary_profile.metadata"
-trap 'rm -f "$temporary_profile" "$temporary_profile.metadata"' EXIT HUP INT TERM
-cp "$temporary_profile" "$temporary_profile.metadata"
-mv "$temporary_profile.metadata" "$profile"
-
-echo ":: Removed the ttyv0 Hyprland autostart from $profile"
-echo ":: Original retained at $backup_profile"

@@ -25,6 +25,12 @@ pass() {
     echo ":: PASS: $*"
 }
 
+profile_has_console_autostart() {
+    candidate="$1"
+    [ -f "$candidate" ] || return 1
+    grep -Eq 'BSDRUNNER GREETER AUTOSTART|bsdrunner-login-dispatch\.sh|^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$candidate"
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --prefix)
@@ -104,13 +110,18 @@ fi
 if [ "$activation_ready" = true ]; then
     [ -n "$login_profile" ] && [ -f "$login_profile" ] || \
         fail "--activation-ready requires --profile FILE"
-    if grep -Eq '^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$login_profile"; then
-        fail "The old ttyv0 Hyprland autostart remains in $login_profile"
-    fi
+    login_zprofile="$(dirname -- "$login_profile")/.zprofile"
+    profile_has_console_autostart "$login_profile" && \
+        fail "A BSDRunner console autostart remains in $login_profile"
+    profile_has_console_autostart "$login_zprofile" && \
+        fail "A BSDRunner console autostart remains in $login_zprofile"
     pass "console login will return a recovery shell"
-elif [ -n "$login_profile" ] && [ -f "$login_profile" ] && \
-    grep -Eq '^[[:space:]]*exec[[:space:]]+start-hyprland([[:space:]]|$)' "$login_profile"; then
-    echo ":: NOTE: The old console autostart remains active; staging is safe, activation is not ready."
+elif [ -n "$login_profile" ] && [ -f "$login_profile" ]; then
+    login_zprofile="$(dirname -- "$login_profile")/.zprofile"
+    if profile_has_console_autostart "$login_profile" || \
+        profile_has_console_autostart "$login_zprofile"; then
+        echo ":: NOTE: A console autostart remains active; staging is safe, activation is not ready."
+    fi
 fi
 
 echo ":: LightDM preflight completed without starting or enabling it."
