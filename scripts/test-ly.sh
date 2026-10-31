@@ -128,9 +128,9 @@ cmp -s "$system_root/etc/ttys" "$test_root/expected-ttys" || \
     fail "rollback did not restore ttys"
 pass "rollback restores the original gettytab and ttys"
 
-if grep -F 'vidcontrol' "$repo_root/dotfiles/.config/wlogout/layout" >/dev/null; then
-    fail "logout still forces a VT switch"
+if grep -F '"label" : "logout"' "$repo_root/dotfiles/.config/wlogout/layout" >/dev/null; then
+    fail "wlogout exposes logout even though Ly cannot visibly reclaim the FreeBSD VT"
 fi
-pass "logout lets Ly reclaim the session naturally"
+pass "wlogout hides the unsafe logout action"
 
 echo "All Ly tests passed."
