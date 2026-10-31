@@ -3,7 +3,7 @@
 set -eu
 
 bundle_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-config_path="$bundle_dir/hyprland.conf"
+config_path="$bundle_dir/hyprland.lua"
 temporary_runtime=""
 
 cleanup() {
