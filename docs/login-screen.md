@@ -14,8 +14,8 @@ desktop unexpectedly or leave the active VT black.
 The setup is intentionally split into checked steps:
 
 - rendering does not need root access
-- the profile migration only removes the recognized ttyv0 autostart block and
-  retains the original profile
+- the profile migration only removes recognized ttyv0 and earlier BSDRunner
+  greeter-autostart blocks and retains the original login profiles
 - system files are staged while LightDM remains disabled and the existing
   console startup still works
 - a read-only preflight verifies both packages, the Hyprland session entry, the
@@ -96,10 +96,11 @@ Then apply the migration:
 sh ~/.config/bsdrunner/scripts/bsdrunner-disable-console-autostart.sh
 ```
 
-The original is retained as:
+The originals are retained as applicable:
 
 ```text
 ~/.profile.pre-bsdrunner-lightdm
+~/.zprofile.pre-bsdrunner-lightdm
 ```
 
 After this change, logging in on a text console gives you a normal shell.

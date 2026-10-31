@@ -91,14 +91,28 @@ pass "installer performs enablement checks before writing"
 
 profile_home="$test_root/profile-home"
 profile="$profile_home/.profile"
+zprofile="$profile_home/.zprofile"
 mkdir -p "$profile_home"
 printf '%s\n' \
+    '# >>> BSDRUNNER GREETER AUTOSTART >>>' \
+    '"$HOME/.config/bsdrunner/scripts/bsdrunner-login-dispatch.sh"' \
+    '# <<< BSDRUNNER GREETER AUTOSTART <<<' \
     'export EDITOR=vi' \
     'if [ -z "${SSH_CONNECTION:-}" ] && [ "$(tty)" = "/dev/ttyv0" ]; then' \
     '  export XDG_RUNTIME_DIR="/var/run/user/$(id -u)"' \
     '  exec start-hyprland' \
     'fi' \
     '. "$HOME/.cargo/env"' > "$profile"
+printf '%s\n' \
+    '# >>> BSDRUNNER GREETER AUTOSTART >>>' \
+    '"$HOME/.config/bsdrunner/scripts/bsdrunner-login-dispatch.sh"' \
+    '# <<< BSDRUNNER GREETER AUTOSTART <<<' > "$zprofile"
+
+if sh "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh" \
+    --prefix "$prefix" --profile "$profile" --activation-ready >/dev/null 2>&1; then
+    fail "activation preflight accepted a stale greeter autostart"
+fi
+pass "activation preflight detects stale greeter autostart blocks"
 
 HOME="$profile_home" sh \
     "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-disable-console-autostart.sh" \
@@ -109,11 +123,17 @@ HOME="$profile_home" sh \
 
 grep -F 'exec start-hyprland' "$profile" >/dev/null && \
     fail "console autostart remains in the migrated profile"
+grep -F 'bsdrunner-login-dispatch.sh' "$profile" >/dev/null && \
+    fail "stale greeter dispatch remains in the migrated profile"
+grep -F 'bsdrunner-login-dispatch.sh' "$zprofile" >/dev/null && \
+    fail "stale greeter dispatch remains in the migrated zprofile"
 grep -F '. "$HOME/.cargo/env"' "$profile" >/dev/null || \
     fail "profile migration removed unrelated content"
 grep -F 'exec start-hyprland' "$profile.pre-bsdrunner-lightdm" >/dev/null || \
     fail "profile backup does not contain the original block"
-pass "profile migration removes only the ttyv0 autostart block"
+grep -F 'bsdrunner-login-dispatch.sh' "$zprofile.pre-bsdrunner-lightdm" >/dev/null || \
+    fail "zprofile backup does not contain the original greeter block"
+pass "profile migration removes direct and stale greeter autostart blocks"
 
 sh "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh" \
     --prefix "$prefix" --profile "$profile" --activation-ready >/dev/null
