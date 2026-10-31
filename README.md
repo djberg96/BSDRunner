@@ -176,12 +176,13 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-dns.sh
 
 The GUI starts in read-only status mode until you choose an action. See `docs/dns.md` for backend commands and manual acceptance checks.
 
-## Graphical Login
+## Wayland Login
 
-BSDRunner supports `LightDM` with `lightdm-gtk-greeter` as its graphical login
-path on FreeBSD. This gives Hyprland a real session owner to return to on
-logout. See [docs/login-screen.md](docs/login-screen.md) for the guarded
-installation and rollback procedure.
+BSDRunner supports Ly as its X-server-free login path on FreeBSD. Ly owns the
+session lifecycle and returns to its terminal login UI after Hyprland exits,
+while `ttyv0` remains available for recovery. See
+[docs/login-screen.md](docs/login-screen.md) for the guarded installation and
+rollback procedure.
 
 ## ZFS
 

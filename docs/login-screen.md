@@ -1,166 +1,133 @@
-# Graphical Login Screen
+# Wayland Login with Ly
 
-BSDRunner uses LightDM with `lightdm-gtk-greeter` as its supported graphical
-login path on FreeBSD. A display manager owns the login seat, starts Hyprland
-after authentication, and displays the greeter again after Hyprland exits.
+BSDRunner uses Ly as its supported login manager on FreeBSD. Ly runs directly
+on a kernel virtual terminal, discovers Hyprland through its Wayland session
+entry, and returns to the login screen after Hyprland exits. It does not require
+an X server.
 
-The older console path did not provide that lifecycle. It logged in through
-`getty` on `ttyv0` and immediately replaced the login shell with
-`start-hyprland` from `~/.profile`. Logging out could therefore restart the
-desktop unexpectedly or leave the active VT black.
+The login screen is a terminal UI rather than a graphical Wayland client. This
+keeps the boot path within FreeBSD's packaged components while still providing
+a real session owner.
 
 ## Safety Model
 
-The setup is intentionally split into checked steps:
+- `ttyv0` always remains a normal text recovery console.
+- Ly is assigned to `ttyv1` only for the next boot.
+- The installer never reloads `init`, starts Ly, or disrupts the current seat.
+- Existing `/etc/gettytab` and `/etc/ttys` files receive one-time
+  `.pre-bsdrunner-ly` backups.
+- Activation refuses stale `.profile` or `.zprofile` Hyprland autostart hooks.
+- LightDM and any stale greetd service are disabled during activation.
+- A rollback helper restores the original FreeBSD console configuration.
 
-- rendering does not need root access
-- the profile migration only removes recognized ttyv0 and earlier BSDRunner
-  greeter-autostart blocks and retains the original login profiles
-- system files are staged while LightDM remains disabled and the existing
-  console startup still works
-- a read-only preflight verifies both packages, the Hyprland session entry, the
-  combined LightDM configuration, `dbus`, and `seatd`
-- activation enables LightDM for the next boot but never starts it underneath
-  the current graphical session
-- a rollback helper is available from a text console
-
-Do not run `service lightdm start` from inside the current Hyprland session.
-
-## 1. Install Packages and Dotfiles
+## 1. Install Ly and the Dotfiles
 
 ```sh
-sudo pkg install lightdm lightdm-gtk-greeter
+sudo pkg install ly
 ./scripts/install-dotfiles.sh
 ```
 
-The Hyprland package must also provide:
+The Hyprland package must provide this Wayland session entry:
 
 ```text
 /usr/local/share/wayland-sessions/hyprland.desktop
 ```
 
-## 2. Render and Inspect the Bundle
+## 2. Stage the Getty Capability
 
 ```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-render-lightdm.sh
+sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-ly.sh
 ```
 
-The bundle is written to `~/.config/bsdrunner/lightdm/`. It contains:
+This adds the `BSDRunnerLy` capability to `/etc/gettytab`, but does not assign
+it to a terminal. The current and next boot paths are unchanged.
 
-- the LightDM seat configuration, including `user-session=hyprland`
-- the GTK greeter configuration
-- a BSDRunner greeter wrapper and desktop entry
-- static BSDRunner wallpapers and a random wallpaper picker
-
-## 3. Stage the System Files While Keeping the Current Boot Path
-
-Install the bundle without `--enable`:
+Run the read-only preflight:
 
 ```sh
-sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh \
-  --bundle "$HOME/.config/bsdrunner/lightdm"
+sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-ly.sh
 ```
 
-LightDM remains disabled. The old ttyv0 startup remains in `.profile`, so a
-reboot at this point still uses the existing console-to-Hyprland path.
-The installer also updates the active `greeter-session` in LightDM's main
-configuration because that file takes precedence over `lightdm.conf.d`; the
-original main configuration is retained with a `.pre-bsdrunner` suffix.
-
-## 4. Run the Read-Only Preflight
-
-```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh \
-  --profile "$HOME/.profile"
-```
-
-The preflight does not start or enable LightDM. It checks the installed package
-and executable paths, the xgreeter entry, the Hyprland session, the combined
-LightDM configuration, and the required services. It should report that staging
-is safe but activation is not yet ready because the old console autostart still
-exists.
+It verifies the package, Ly wrapper and configuration, Hyprland Wayland
+session, getty capability, `dbus`, and `seatd`. It does not start Ly or reload
+`init`.
 
 Stop here if any check fails.
 
-## 5. Prepare a Console Recovery Shell
+## 3. Prepare the Recovery Console
 
-First verify that the expected block can be migrated:
+The older BSDRunner console path launched Hyprland from login profiles. Remove
+only the recognized autostart blocks:
 
 ```sh
 sh ~/.config/bsdrunner/scripts/bsdrunner-disable-console-autostart.sh --check
-```
-
-Then apply the migration:
-
-```sh
 sh ~/.config/bsdrunner/scripts/bsdrunner-disable-console-autostart.sh
 ```
 
 The originals are retained as applicable:
 
 ```text
-~/.profile.pre-bsdrunner-lightdm
-~/.zprofile.pre-bsdrunner-lightdm
+~/.profile.pre-bsdrunner-ly
+~/.zprofile.pre-bsdrunner-ly
 ```
 
-After this change, logging in on a text console gives you a normal shell.
-Hyprland can always be started manually with `start-hyprland`.
+Systems migrated during the earlier LightDM experiment may already have the
+equivalent `.pre-bsdrunner-lightdm` backups.
 
-Run the stricter preflight before changing `rc.conf`:
+Before activation, switch to another text VT, log in, confirm that it gives you
+a normal shell, and exit. Hyprland can always be started manually with
+`start-hyprland`.
 
-```sh
-sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-lightdm.sh \
-  --profile "$HOME/.profile" \
-  --activation-ready
-```
-
-Before continuing, switch to a different text VT, log in, confirm that you get a
-shell prompt, and exit. This proves the recovery route before LightDM is enabled.
-
-## 6. Enable for the Next Boot
+## 4. Enable Ly for the Next Boot
 
 ```sh
-sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-lightdm.sh \
-  --bundle "$HOME/.config/bsdrunner/lightdm" \
+sudo sh ~/.config/bsdrunner/scripts/bsdrunner-install-ly.sh \
   --profile "$HOME/.profile" \
   --enable
 ```
 
-This revalidates the staged bundle and recovery profile, then sets
-`lightdm_enable=YES` and the stale `greetd_enable` value to `NO`. Existing
-LightDM configuration files receive `.pre-bsdrunner` backups.
+This changes only `ttyv1` to use `BSDRunnerLy`. It leaves `ttyv0` as an enabled
+standard getty and does not reload `init`.
 
-The script does not start LightDM. Finish your work and reboot normally:
+Run the strict preflight:
+
+```sh
+sh ~/.config/bsdrunner/scripts/bsdrunner-preflight-ly.sh \
+  --profile "$HOME/.profile" \
+  --activation-ready
+```
+
+Stop if any check fails. Otherwise, finish your work and reboot normally:
 
 ```sh
 sudo shutdown -r now
 ```
 
-After login, selecting **Logout** only asks Hyprland to exit. LightDM owns the
-seat and should display the greeter again; BSDRunner no longer forces a VT
-switch.
+At Ly, select the Hyprland session, enter your username and password, and log
+in. Ly saves the last selected session by default. Selecting **Logout** in
+BSDRunner exits Hyprland, after which Ly should display its login screen again.
 
 ## Recovery and Rollback
 
-If the greeter does not appear, switch to a text console with
-`Ctrl`+`Alt`+`F1`, log in, and run:
+If Ly or Hyprland fails, switch to `ttyv0` with `Ctrl`+`Alt`+`F1`, log in, and
+run:
 
 ```sh
-sudo sh ~/.config/bsdrunner/scripts/bsdrunner-rollback-lightdm.sh
-start-hyprland
+sudo sh ~/.config/bsdrunner/scripts/bsdrunner-rollback-ly.sh
+sudo shutdown -r now
 ```
 
-The rollback helper disables and stops LightDM and restores any LightDM config
-files that existed before BSDRunner installed its bundle. It deliberately does
-not restore automatic Hyprland startup in `.profile`; a normal console login is
-the safer recovery path.
+The rollback restores `/etc/gettytab` and `/etc/ttys`, keeps LightDM and greetd
+disabled, and deliberately does not reload `init` underneath the failed login
+session. After reboot, log in on the console and run `start-hyprland` manually
+if needed.
 
 ## Validation
 
-The repository smoke test renders into a temporary prefix, installs the bundle
-there, tests profile migration, and confirms logout no longer invokes
-`vidcontrol`:
+The repository smoke test uses a temporary root, verifies staging and
+activation, preserves `ttyv0`, rejects stale profile autostart, and checks the
+retained rollback files:
 
 ```sh
-sh scripts/test-lightdm.sh
+sh scripts/test-ly.sh
 ```

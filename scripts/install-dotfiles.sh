@@ -277,6 +277,21 @@ cleanup_stale_theme_waybar_configs() {
     done
 }
 
+cleanup_stale_login_scripts() {
+    local target_dir="$HOME/.config/bsdrunner/scripts"
+    local stale_script=""
+
+    for stale_script in \
+        bsdrunner-install-lightdm.sh \
+        bsdrunner-preflight-lightdm.sh \
+        bsdrunner-render-lightdm.sh \
+        bsdrunner-rollback-lightdm.sh; do
+        if [[ ! -e "$repo_root/dotfiles/.config/bsdrunner/scripts/$stale_script" ]]; then
+            rm -f "$target_dir/$stale_script"
+        fi
+    done
+}
+
 sync_waybar_scripts() {
     local source_dir="$repo_root/dotfiles/.config/waybar/scripts"
     local target_dir="$HOME/.config/waybar/scripts"
@@ -296,6 +311,7 @@ rsync -a --backup --suffix='.pre-bsdrunner' \
     --exclude='.config/bsdrunner/pf/profile.conf' \
     "$repo_root/dotfiles/" "$HOME/"
 cleanup_stale_theme_waybar_configs
+cleanup_stale_login_scripts
 sync_waybar_scripts
 chmod_runner_scripts
 
