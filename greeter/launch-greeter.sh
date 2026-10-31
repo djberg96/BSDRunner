@@ -23,7 +23,11 @@ export BSDRUNNER_GREETER_WALLPAPER="$wallpaper"
 export XDG_CACHE_HOME="$runtime_root/cache"
 
 set +e
-qs --path "$bundle_dir/quickshell"
+if [ -n "${BSDRUNNER_GREETER_LOG_DIR:-}" ] && [ -d "$BSDRUNNER_GREETER_LOG_DIR" ]; then
+    qs --path "$bundle_dir/quickshell" >>"$BSDRUNNER_GREETER_LOG_DIR/quickshell.log" 2>&1
+else
+    qs --path "$bundle_dir/quickshell"
+fi
 status="$?"
 set -e
 

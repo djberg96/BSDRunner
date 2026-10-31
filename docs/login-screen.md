@@ -48,6 +48,11 @@ does not replace the active greetd configuration.
 
 The installer creates a timestamped backup of an existing BSDRunner bundle.
 
+The greeter launcher uses the PAM-provided `XDG_RUNTIME_DIR` when available.
+FreeBSD's minimal `greetd-greeter` PAM service does not create one, so the
+launcher securely creates a private temporary runtime directory before
+Hyprland starts and removes it when the compositor exits.
+
 ## Activate
 
 Once the staged files are present:
@@ -88,7 +93,25 @@ greetd should regain VT 9 and show the greeter again.
 ## Recovery
 
 From a graphical failure, press `Ctrl+Alt+F1`. From a text VT, use `Alt+F1`.
-Log in on `ttyv0`, then stop and disable greetd:
+Log in on `ttyv0`. Each greeter launch keeps private diagnostic logs in a
+randomly named directory under `/var/tmp`, which survives a reboot. Find the
+newest directory before or after recovery:
+
+```sh
+mdo find /var/tmp -maxdepth 1 -type d \
+  -name 'bsdrunner-greeter-log.*' -print
+```
+
+Use the exact newest path to inspect `launcher.log`, `hyprland.log`, and, if
+the UI started, `quickshell.log`:
+
+```sh
+mdo cat /var/tmp/bsdrunner-greeter-log.XXXXXX/launcher.log
+mdo cat /var/tmp/bsdrunner-greeter-log.XXXXXX/hyprland.log
+mdo cat /var/tmp/bsdrunner-greeter-log.XXXXXX/quickshell.log
+```
+
+Then stop and disable greetd:
 
 ```sh
 mdo service greetd stop
@@ -121,6 +144,11 @@ prompt and session start without touching the live daemon:
 ```sh
 cargo test --manifest-path greeter/Cargo.toml --locked
 cargo clippy --manifest-path greeter/Cargo.toml --locked --all-targets -- -D warnings
+sh greeter/tests/launcher.sh
 ```
 
 QML files are included in `scripts/check-qml.sh`.
+
+```sh
+sh scripts/check-qml.sh
+```

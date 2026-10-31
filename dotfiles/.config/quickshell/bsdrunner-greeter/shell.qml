@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import QtQuick
 
 ShellRoot {
@@ -224,6 +225,9 @@ ShellRoot {
         visible: true
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "bsdrunner-greeter"
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
         anchors {
             top: true
@@ -332,6 +336,7 @@ ShellRoot {
                                     font.pixelSize: 18
                                     text: root.usernameText
                                     enabled: !root.loginInProgress
+                                    focus: true
                                     activeFocusOnTab: true
 
                                     Keys.onReturnPressed: passwordInput.forceActiveFocus()
