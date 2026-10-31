@@ -12,7 +12,7 @@ usage() {
 Usage: bsdrunner-disable-console-autostart.sh [--check] [--profile FILE] [--zprofile FILE]
 
 Removes recognized BSDRunner console autostart blocks from the Bourne/Bash and
-Zsh login profiles. Originals are retained with a .pre-bsdrunner-lightdm suffix.
+Zsh login profiles. Originals are retained with a .pre-bsdrunner-ly suffix.
 EOF
 }
 
@@ -101,7 +101,7 @@ migrate_file() {
         return 0
     fi
 
-    backup_file="${source_file}.pre-bsdrunner-lightdm"
+    backup_file="${source_file}.pre-bsdrunner-ly"
     if [ ! -e "$backup_file" ]; then
         cp -p "$source_file" "$backup_file"
     fi
