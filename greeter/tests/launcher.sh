@@ -2,6 +2,15 @@
 
 set -eu
 
+if [ "$(basename -- "$0")" = dbus-run-session ]; then
+    set +e
+    "$@"
+    status="$?"
+    set -e
+    printf '%s\n' 'simulated portal teardown output' >&2
+    exit "$status"
+fi
+
 if [ "${BSDRUNNER_LAUNCHER_TEST_CHILD:-}" = 1 ]; then
     [ -n "${XDG_RUNTIME_DIR:-}" ]
     [ -d "$XDG_RUNTIME_DIR" ]
@@ -33,6 +42,7 @@ mkdir -p \
     "$test_root/existing-runtime"
 chmod 700 "$test_root/logs" "$test_root/existing-runtime"
 ln -s "$repo_root/greeter/tests/launcher.sh" "$test_root/bin/start-hyprland"
+ln -s "$repo_root/greeter/tests/launcher.sh" "$test_root/bin/dbus-run-session"
 ln -s "$test_root/existing-runtime" "$test_root/symlink-runtime"
 
 run_launcher() {
@@ -75,6 +85,8 @@ for log_dir in "$test_root"/logs/bsdrunner-greeter-log.*; do
     mode="$(stat -f '%Lp' "$log_dir" 2>/dev/null || stat -c '%a' "$log_dir")"
     [ "$mode" = 700 ]
     grep -Fx 'Hyprland exit status=0' "$log_dir/launcher.log" >/dev/null
+    grep -Fx 'greeter session exit status=0' "$log_dir/launcher.log" >/dev/null
+    grep -Fx 'simulated portal teardown output' "$log_dir/session.log" >/dev/null
 done
 
 printf '%s\n' \
