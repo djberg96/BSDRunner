@@ -128,9 +128,14 @@ cmp -s "$system_root/etc/ttys" "$test_root/expected-ttys" || \
     fail "rollback did not restore ttys"
 pass "rollback restores the original gettytab and ttys"
 
-if grep -F '"label" : "logout"' "$repo_root/dotfiles/.config/wlogout/layout" >/dev/null; then
-    fail "wlogout exposes logout even though Ly cannot visibly reclaim the FreeBSD VT"
+if ! grep -F 'bsdrunner-logout.sh' "$repo_root/dotfiles/.config/wlogout/layout" >/dev/null; then
+    fail "wlogout does not delegate logout to the BSDRunner session helper"
 fi
-pass "wlogout hides the unsafe logout action"
+if grep -E 'vidcontrol|chvt' \
+    "$repo_root/dotfiles/.config/wlogout/layout" \
+    "$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-logout.sh" >/dev/null; then
+    fail "logout still forces a FreeBSD VT switch"
+fi
+pass "logout leaves VT ownership to the active login manager"
 
 echo "All Ly tests passed."

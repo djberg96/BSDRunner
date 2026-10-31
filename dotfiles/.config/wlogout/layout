@@ -6,6 +6,13 @@
 }
 
 {
+  "label" : "logout",
+  "action" : "sh ~/.config/bsdrunner/scripts/bsdrunner-logout.sh",
+  "text" : "Logout",
+  "keybind" : "e"
+}
+
+{
   "label" : "suspend",
   "action" : "command -v zzz >/dev/null 2>&1 && zzz",
   "text" : "Suspend",
