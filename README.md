@@ -178,11 +178,11 @@ The GUI starts in read-only status mode until you choose an action. See `docs/dn
 
 ## Wayland Login
 
-BSDRunner supports Ly as its X-server-free login path on FreeBSD. Ly owns the
-session lifecycle and returns to its terminal login UI after Hyprland exits,
-while `ttyv0` remains available for recovery. See
-[docs/login-screen.md](docs/login-screen.md) for the guarded installation and
-rollback procedure.
+BSDRunner includes a native graphical greetd client built with Quickshell. The
+small Rust bridge speaks greetd's IPC protocol; greetd continues to own PAM,
+the TTY, privilege changes, and session cleanup. `ttyv0` remains available for
+recovery. See [docs/login-screen.md](docs/login-screen.md) for installation,
+testing, and rollback.
 
 ## ZFS
 

@@ -38,11 +38,14 @@ sudo pkg install \
 BSDRunner Files uses `xdg-open` from `xdg-utils` to open files with their
 default applications.
 
-For the supported Wayland login path, also install:
+For the graphical Wayland login path, also install:
 
 ```sh
-sudo pkg install ly
+mdo pkg install quickshell rust
 ```
+
+The BSDRunner greetd port must also be installed. It is currently built from
+the FreeBSD-enabled greetd fork rather than the FreeBSD package repository.
 
 If you want the heavier fallback file manager validated in BSDRunner testing,
 also install:
@@ -175,10 +178,11 @@ sh ~/.config/bsdrunner/scripts/bsdrunner-start-waybar.sh
 
 ## Wayland Login Screen
 
-BSDRunner uses Ly for a stable login and logout lifecycle without an X server.
-Ly runs as a terminal UI on `ttyv1`, launches the packaged Hyprland Wayland
-session, and leaves `ttyv0` as a normal recovery console. The guarded
-installation and rollback procedure is in [login-screen.md](login-screen.md).
+BSDRunner uses greetd for the login lifecycle and ships its own themed
+Quickshell greeter. greetd runs the greeter in a small dedicated Hyprland
+session on `ttyv8`/VT 9 and leaves `ttyv0` as a normal recovery console. The
+guarded installation and rollback procedure is in
+[login-screen.md](login-screen.md).
 
 For quick theme switching after install, BSDRunner supports:
 

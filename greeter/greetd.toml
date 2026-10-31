@@ -1,0 +1,13 @@
+[terminal]
+vt = 9
+switch = true
+
+[general]
+service = "greetd"
+source_profile = true
+runfile = "/var/run/greetd.run"
+
+[default_session]
+command = "env XDG_DATA_DIRS=/usr/local/share:/usr/share dbus-run-session /etc/greetd/bsdrunner/start-greeter-hyprland.sh"
+user = "greeter"
+service = "greetd-greeter"
