@@ -14,7 +14,7 @@ launch_hyprland() {
 }
 
 launch_terminal() {
-    terminal_config="$HOME/.config/hypr/bsdrunner-terminal.conf"
+    terminal_config="$HOME/.config/hypr/bsdrunner-terminal.lua"
 
     if [ -x "$launcher" ] && command -v Hyprland >/dev/null 2>&1 && [ -f "$terminal_config" ]; then
         exec "$launcher" "$terminal_config"

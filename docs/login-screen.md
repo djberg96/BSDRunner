@@ -12,6 +12,9 @@ The split is deliberate:
 - greetd owns PAM, the VT, user/group changes, and session lifetime.
 - a minimal Hyprland instance hosts only the greeter.
 
+Both the greeter and the `Terminal` fallback use native Hyprland Lua configs;
+they do not depend on the legacy `.conf` format removed in Hyprland 0.57.
+
 Passwords travel from Quickshell to the bridge over stdin and from the bridge
 to greetd over its Unix socket. They are never placed in argv, the environment,
 or a temporary file.

@@ -96,8 +96,11 @@ mdo install -m 0755 \
     "$repo_root/greeter/launch-greeter.sh" \
     "$bundle_dir/"
 mdo install -m 0644 \
-    "$repo_root/greeter/hyprland.conf" \
-    "$bundle_dir/hyprland.conf"
+    "$repo_root/greeter/hyprland.lua" \
+    "$bundle_dir/hyprland.lua"
+# The bundle was backed up above, so remove the obsolete config after its Lua
+# replacement is safely installed.
+mdo rm -f "$bundle_dir/hyprland.conf"
 mdo install -m 0644 \
     "$repo_root/dotfiles/.config/quickshell/bsdrunner-greeter/shell.qml" \
     "$repo_root/dotfiles/.config/quickshell/bsdrunner-greeter/ThemeLoader.qml" \

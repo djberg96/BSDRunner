@@ -1,5 +1,4 @@
 -- BSDRunner configuration for Hyprland 0.56 and later.
--- Keep the legacy .conf files until the separate greeter is migrated to Lua.
 
 local theme = require("bsdrunner-theme")
 

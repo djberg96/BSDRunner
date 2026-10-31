@@ -292,6 +292,19 @@ cleanup_stale_login_scripts() {
     done
 }
 
+cleanup_legacy_hyprland_configs() {
+    local legacy_terminal="$HOME/.config/hypr/bsdrunner-terminal.conf"
+    local backup_terminal="$legacy_terminal.pre-bsdrunner"
+
+    if [[ -f "$legacy_terminal" ]]; then
+        if [[ ! -e "$backup_terminal" ]]; then
+            mv "$legacy_terminal" "$backup_terminal"
+        else
+            rm -f "$legacy_terminal"
+        fi
+    fi
+}
+
 sync_waybar_scripts() {
     local source_dir="$repo_root/dotfiles/.config/waybar/scripts"
     local target_dir="$HOME/.config/waybar/scripts"
@@ -312,6 +325,7 @@ rsync -a --backup --suffix='.pre-bsdrunner' \
     "$repo_root/dotfiles/" "$HOME/"
 cleanup_stale_theme_waybar_configs
 cleanup_stale_login_scripts
+cleanup_legacy_hyprland_configs
 sync_waybar_scripts
 chmod_runner_scripts
 

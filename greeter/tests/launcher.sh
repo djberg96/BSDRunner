@@ -9,6 +9,8 @@ if [ "${BSDRUNNER_LAUNCHER_TEST_CHILD:-}" = 1 ]; then
     [ -O "$XDG_RUNTIME_DIR" ]
     printf '%s\n' "$XDG_RUNTIME_DIR" \
         >"$BSDRUNNER_LAUNCHER_TEST_ROOT/$BSDRUNNER_LAUNCHER_TEST_CASE.runtime"
+    printf '%s\n' "$@" \
+        >"$BSDRUNNER_LAUNCHER_TEST_ROOT/$BSDRUNNER_LAUNCHER_TEST_CASE.args"
     exit 0
 fi
 
@@ -73,6 +75,15 @@ for log_dir in "$test_root"/logs/bsdrunner-greeter-log.*; do
     mode="$(stat -f '%Lp' "$log_dir" 2>/dev/null || stat -c '%a' "$log_dir")"
     [ "$mode" = 700 ]
     grep -Fx 'Hyprland exit status=0' "$log_dir/launcher.log" >/dev/null
+done
+
+printf '%s\n' \
+    '--' \
+    '--config' \
+    "$repo_root/greeter/hyprland.lua" \
+    >"$test_root/expected.args"
+for test_case in fallback existing symlink; do
+    cmp -s "$test_root/expected.args" "$test_root/$test_case.args"
 done
 
 printf '%s\n' 'launcher tests passed'
