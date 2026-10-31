@@ -56,6 +56,10 @@ FreeBSD's minimal `greetd-greeter` PAM service does not create one, so the
 launcher securely creates a private temporary runtime directory before
 Hyprland starts and removes it when the compositor exits.
 
+The launcher also owns the greeter's private D-Bus session and records its
+output in `session.log`. Portal shutdown diagnostics therefore remain with the
+other greeter logs instead of briefly appearing on the login VT.
+
 ## Activate
 
 Once the staged files are present:
@@ -124,11 +128,12 @@ mdo find /var/tmp -maxdepth 1 -type d \
   -name 'bsdrunner-greeter-log.*' -print
 ```
 
-Use the exact newest path to inspect `launcher.log`, `hyprland.log`, and, if
-the UI started, `quickshell.log`:
+Use the exact newest path to inspect `launcher.log`, `session.log`,
+`hyprland.log`, and, if the UI started, `quickshell.log`:
 
 ```sh
 mdo cat /var/tmp/bsdrunner-greeter-log.XXXXXX/launcher.log
+mdo cat /var/tmp/bsdrunner-greeter-log.XXXXXX/session.log
 mdo cat /var/tmp/bsdrunner-greeter-log.XXXXXX/hyprland.log
 mdo cat /var/tmp/bsdrunner-greeter-log.XXXXXX/quickshell.log
 ```

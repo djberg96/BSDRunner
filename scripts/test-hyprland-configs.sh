@@ -28,6 +28,13 @@ if grep -R -n --exclude-dir=target 'hyprland\.conf' \
     fail "a greeter runtime path still selects the deprecated config format"
 fi
 
+if grep -F 'dbus-run-session' "$repo_root/greeter/greetd.toml" >/dev/null; then
+    fail "greetd still owns the greeter D-Bus wrapper outside the logged launcher"
+fi
+grep -F 'dbus-run-session "$0"' \
+    "$repo_root/greeter/start-greeter-hyprland.sh" >/dev/null || \
+    fail "the greeter launcher does not own its D-Bus session"
+
 if command -v Hyprland >/dev/null 2>&1; then
     for config in "$greeter_config" "$terminal_config"; do
         Hyprland --verify-config --config "$config" >/dev/null || \
