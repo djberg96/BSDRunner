@@ -47,6 +47,36 @@ path. Invalid or missing interface names fail closed. The Jails backend invokes
 only Bastille's narrow loopback setup; it does not let `bastille setup pf`
 replace the BSDRunner-managed ruleset.
 
+## DNS Leak Protection
+
+The managed profile enables DNS leak protection by default. Applications may
+still query the local resolver on loopback, which PF skips, but ordinary
+outbound DNS on TCP or UDP port 53 is restricted to the `unbound` service:
+
+```pf
+table <bsdrunner_network_dns> persist
+pass out quick proto { tcp udp } to <bsdrunner_network_dns> port 53 label "bsdrunner_network_dns" keep state
+pass out quick proto { tcp udp } to any port 53 user unbound keep state
+block return out quick proto { tcp udp } to any port 53
+```
+
+The Unbound exception preserves local router zones and the DNS GUI's explicit
+Plain DNS fallback when a network blocks DNS-over-TLS. Other applications
+cannot bypass the local resolver by querying an arbitrary server directly.
+
+For captive portals, the DNS GUI's `Network DNS` action temporarily replaces
+the contents of `<bsdrunner_network_dns>` with the non-loopback resolvers
+learned from DHCP. `Local Cache` flushes the table and kills states carrying
+the temporary rule's label after restoring Unbound. The
+profile does not store any addresses in the table, so an interrupted travel
+session does not create a persistent exception across reboot. `Local Cache`
+remains the normal way to close the exception during the same session.
+
+This control covers ordinary DNS on port 53. It does not attempt to block
+application-managed DNS-over-HTTPS on port 443 or DNS-over-QUIC on UDP port
+853; those transports are encrypted and blocking them reliably would also
+interfere with ordinary web or QUIC traffic.
+
 ## Per-Jail Outbound Policy
 
 When jail networking is enabled, BSDRunner persists each Bastille jail's
@@ -60,7 +90,9 @@ The Jails UI manages this file through the PF backend. The renderer validates
 every jail name, IPv4 address, policy, and resolver; malformed entries are
 ignored instead of being inserted into `pf.conf`.
 
-Internet-only policies allow TCP/UDP DNS to the jail's configured resolver,
+When DNS leak protection is enabled, internet-only and LAN policies allow
+TCP/UDP DNS only to the jail's configured resolver and reject port 53 to other
+destinations. Internet-only policies then
 block private, carrier-grade NAT, loopback, and link-local destinations, and
 then allow public IPv4 destinations. No-outbound policies block all new IPv4
 egress for that jail. LAN policies explicitly permit all IPv4 egress. These

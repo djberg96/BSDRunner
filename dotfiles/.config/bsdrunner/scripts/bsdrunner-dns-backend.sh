@@ -10,6 +10,7 @@ resolv_backup_file="$state_dir/resolv.conf.before-network-dns"
 public_forwarders_dir="/var/unbound/conf.d"
 public_forwarders_file="$public_forwarders_dir/public-forwarders.conf"
 ca_bundle_file="/usr/local/share/certs/ca-root-nss.crt"
+pf_network_dns_table="bsdrunner_network_dns"
 
 json_escape() {
     awk '
@@ -395,6 +396,65 @@ run_privileged() {
     fi
 }
 
+pf_network_dns_table_available() {
+    command -v pfctl >/dev/null 2>&1 || return 1
+
+    run_privileged pfctl -s Tables 2>/dev/null | awk -v table="$pf_network_dns_table" '
+        {
+            value = $1
+            gsub(/^</, "", value)
+            gsub(/>$/, "", value)
+            if (value == table)
+                found = 1
+        }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+replace_network_dns_exception() {
+    pf_network_dns_table_available || return 0
+
+    tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns-table.XXXXXX")"
+    network_nameservers | awk '
+        /^[0-9A-Fa-f:.%]+$/ && $0 != "127.0.0.1" && $0 != "::1" {
+            if (!seen[$0]++)
+                print
+        }
+    ' >"$tmp"
+
+    if [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+        printf 'No valid network DNS servers were available for the PF exception table.\n'
+        return 1
+    fi
+
+    if output="$(run_privileged pfctl -t "$pf_network_dns_table" -T replace -f "$tmp" 2>&1)"; then
+        rm -f "$tmp"
+        printf 'Temporarily allowed DHCP-provided resolvers through DNS leak protection.\n%s\n' "$output"
+        return 0
+    fi
+
+    rm -f "$tmp"
+    printf '%s\n' "$output"
+    return 1
+}
+
+clear_network_dns_exception() {
+    pf_network_dns_table_available || return 0
+
+    if ! output="$(run_privileged pfctl -t "$pf_network_dns_table" -T flush 2>&1)"; then
+        printf '%s\n' "$output"
+        return 1
+    fi
+
+    if ! state_output="$(run_privileged pfctl -k label -k "$pf_network_dns_table" 2>&1)"; then
+        printf 'The exception table was emptied, but its existing PF states could not be removed.\n%s\n%s\n' "$output" "$state_output"
+        return 1
+    fi
+
+    printf 'Cleared the temporary Network DNS firewall exception and its states.\n%s\n%s\n' "$output" "$state_output"
+}
+
 check_unbound_config() {
     if command -v local-unbound-checkconf >/dev/null 2>&1; then
         run_privileged local-unbound-checkconf
@@ -654,12 +714,29 @@ do_disable_dot() {
 }
 
 do_network_dns() {
+    pf_output=""
+    pf_exception_set=no
+    if pf_network_dns_table_available; then
+        if ! pf_output="$(replace_network_dns_exception 2>&1)"; then
+            write_last_result "error" "Unable to open the temporary Network DNS firewall exception."
+            emit_action_result false "Unable to open the temporary Network DNS firewall exception." "$pf_output"
+            exit 1
+        fi
+        pf_exception_set=yes
+    fi
+
     if output="$(write_network_resolv_conf 2>&1)"; then
         write_last_result "warning" "Using network DNS for captive portal or travel."
-        emit_action_result true "Using network DNS for captive portal or travel." "$output"
+        emit_action_result true "Using network DNS for captive portal or travel." "$pf_output
+$output"
     else
+        rollback_output=""
+        if [ "$pf_exception_set" = "yes" ]; then
+            rollback_output="$(clear_network_dns_exception 2>&1 || true)"
+        fi
         write_last_result "error" "Unable to switch to network DNS."
-        emit_action_result false "Unable to switch to network DNS." "$output"
+        emit_action_result false "Unable to switch to network DNS." "$output
+$rollback_output"
         exit 1
     fi
 }
@@ -667,8 +744,15 @@ do_network_dns() {
 do_local_dns() {
     if command -v local-unbound-setup >/dev/null 2>&1; then
         if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged local-unbound-setup 2>&1 && run_privileged service local_unbound restart 2>&1)"; then
+            if ! pf_output="$(clear_network_dns_exception 2>&1)"; then
+                write_last_result "error" "Local DNS cache restored, but the Network DNS firewall exception remains open."
+                emit_action_result false "Local DNS cache restored, but the Network DNS firewall exception remains open." "$output
+$pf_output"
+                exit 1
+            fi
             write_last_result "success" "Local DNS cache restored."
-            emit_action_result true "Local DNS cache restored." "$output"
+            emit_action_result true "Local DNS cache restored." "$output
+$pf_output"
         else
             write_last_result "error" "Unable to restore local DNS cache."
             emit_action_result false "Unable to restore local DNS cache." "$output"
@@ -686,8 +770,15 @@ do_local_dns() {
 
     if output="$(run_privileged install -m 0644 "$tmp" /etc/resolv.conf 2>&1 && run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged service local_unbound restart 2>&1)"; then
         rm -f "$tmp"
+        if ! pf_output="$(clear_network_dns_exception 2>&1)"; then
+            write_last_result "error" "Local DNS cache restored, but the Network DNS firewall exception remains open."
+            emit_action_result false "Local DNS cache restored, but the Network DNS firewall exception remains open." "$output
+$pf_output"
+            exit 1
+        fi
         write_last_result "success" "Local DNS cache restored."
-        emit_action_result true "Local DNS cache restored." "$output"
+        emit_action_result true "Local DNS cache restored." "$output
+$pf_output"
     else
         rm -f "$tmp"
         write_last_result "error" "Unable to restore local DNS cache."

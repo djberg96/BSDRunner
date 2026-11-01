@@ -43,6 +43,7 @@ printf '%s\n' \
     'allow_ipv6=yes' \
     'allow_dhcp=yes' \
     'allow_mdns=yes' \
+    'dns_leak_protection=yes' \
     'allow_ssh_lan=no' \
     'allow_ssh_tarpit=no' \
     'log_blocked=no' \
@@ -50,6 +51,18 @@ printf '%s\n' \
     'jail_interface=bastille0' \
     'jail_ext_if=wlan0' >"$profile_dir/profile.conf"
 : >"$command_log"
+
+snapshot_output="$test_root/snapshot.json"
+run_backend snapshot >"$snapshot_output"
+jq -e '.ok == true and .settings.dns_leak_protection == true and any(.rules[]; .id == "dns_leak_protection" and .enabled == true)' "$snapshot_output" >/dev/null || fail "snapshot should report DNS leak protection"
+pass "PF backend exposes DNS leak protection status"
+
+set_output="$test_root/set-dns-leak-protection.json"
+run_backend set dns_leak_protection no >"$set_output"
+jq -e '.ok == true and .settings.dns_leak_protection == false' "$set_output" >/dev/null || fail "DNS leak protection should be mutable through the backend"
+grep -Fx 'dns_leak_protection=no' "$profile_dir/profile.conf" >/dev/null || fail "DNS leak protection setting should persist"
+run_backend set dns_leak_protection yes >/dev/null
+pass "PF backend persists the DNS leak protection setting"
 
 policy_output="$test_root/policy.json"
 run_backend jail-policy web 10.0.0.20 internet-only 192.168.1.254 >"$policy_output"

@@ -68,7 +68,8 @@ Some airport, hotel, and cafe networks need their own DHCP-provided DNS server b
 Use the DNS Cache GUI instead of hand-editing `/etc/resolv.conf`:
 
 - `Network DNS` temporarily writes `/etc/resolv.conf` with non-local nameservers learned from `resolvconf` state. BSDRunner backs up the current file under `~/.config/bsdrunner/dns/resolv.conf.before-network-dns`.
-- `Local Cache` runs the normal `local-unbound-setup` path again and restarts `local_unbound`, putting the laptop back through the local cache.
+- When PF DNS leak protection is active, `Network DNS` also places only those learned nameservers in PF's temporary `<bsdrunner_network_dns>` exception table. If the exception cannot be installed, BSDRunner leaves `/etc/resolv.conf` unchanged instead of switching into a mode that cannot resolve names.
+- `Local Cache` runs the normal `local-unbound-setup` path again, restarts `local_unbound`, and flushes the temporary PF exception table, putting the laptop back through the protected local cache.
 - `Plain DNS` keeps the local cache active but switches BSDRunner's public forwarding from DNS-over-TLS to ordinary DNS. Try this first when the network allows DNS but blocks port 853.
 
 The intended travel order is:
@@ -77,7 +78,11 @@ The intended travel order is:
 Plain DNS -> Network DNS -> captive portal login -> Local Cache
 ```
 
-`Network DNS` is deliberately temporary. It does not edit Unbound forwarding policy; it only swaps the system resolver file so captive portals can be reached.
+`Network DNS` is deliberately temporary. It does not edit Unbound forwarding
+policy. It swaps the system resolver file and, when the managed PF control is
+present, opens only the DHCP-provided port-53 destinations needed to reach the
+captive portal. `Local Cache` explicitly empties the exception table, and its
+contents are not stored across reboot.
 
 ## GUI Scope
 

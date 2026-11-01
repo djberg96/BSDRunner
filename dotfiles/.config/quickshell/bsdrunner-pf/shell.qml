@@ -90,6 +90,7 @@ ShellRoot {
             "allow_ipv6": true,
             "allow_dhcp": true,
             "allow_mdns": true,
+            "dns_leak_protection": true,
             "allow_ssh_lan": false,
             "allow_ssh_tarpit": false,
             "log_blocked": false
@@ -1136,6 +1137,11 @@ ShellRoot {
                                         "key": "allow_mdns",
                                         "label": "Allow local discovery",
                                         "detail": "Find local printers, casting devices, and .local names."
+                                    },
+                                    {
+                                        "key": "dns_leak_protection",
+                                        "label": "Block plain DNS bypasses",
+                                        "detail": "Force apps through Unbound; Network DNS remains available for captive portals."
                                     },
                                     {
                                         "key": "allow_ssh_lan",
