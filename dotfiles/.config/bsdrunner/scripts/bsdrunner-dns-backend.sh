@@ -10,6 +10,9 @@ resolv_backup_file="$state_dir/resolv.conf.before-network-dns"
 public_forwarders_dir="/var/unbound/conf.d"
 public_forwarders_file="$public_forwarders_dir/public-forwarders.conf"
 ca_bundle_file="/usr/local/share/certs/ca-root-nss.crt"
+pf_network_dns_table="bsdrunner_network_dns"
+pf_profile_file="${HOME}/.config/bsdrunner/pf/profile.conf"
+pf_jail_policy_file="${HOME}/.config/bsdrunner/pf/jail-policies.conf"
 
 json_escape() {
     awk '
@@ -395,6 +398,178 @@ run_privileged() {
     fi
 }
 
+pf_network_dns_table_available() {
+    command -v pfctl >/dev/null 2>&1 || return 1
+
+    run_privileged pfctl -s Tables 2>/dev/null | awk -v table="$pf_network_dns_table" '
+        {
+            value = $1
+            gsub(/^</, "", value)
+            gsub(/>$/, "", value)
+            if (value == table)
+                found = 1
+        }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+replace_network_dns_exception() {
+    pf_network_dns_table_available || return 0
+
+    tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-network-dns-table.XXXXXX")"
+    network_nameservers | awk '
+        /^[0-9A-Fa-f:.%]+$/ && $0 != "127.0.0.1" && $0 != "::1" {
+            if (!seen[$0]++)
+                print
+        }
+    ' >"$tmp"
+
+    if [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+        printf 'No valid network DNS servers were available for the PF exception table.\n'
+        return 1
+    fi
+
+    if output="$(run_privileged pfctl -t "$pf_network_dns_table" -T replace -f "$tmp" 2>&1)"; then
+        rm -f "$tmp"
+        printf 'Temporarily allowed DHCP-provided resolvers through DNS leak protection.\n%s\n' "$output"
+        return 0
+    fi
+
+    rm -f "$tmp"
+    printf '%s\n' "$output"
+    return 1
+}
+
+clear_network_dns_exception() {
+    pf_network_dns_table_available || return 0
+
+    if ! output="$(run_privileged pfctl -t "$pf_network_dns_table" -T flush 2>&1)"; then
+        printf '%s\n' "$output"
+        return 1
+    fi
+
+    if ! state_output="$(run_privileged pfctl -k label -k "$pf_network_dns_table" 2>&1)"; then
+        printf 'The exception table was emptied, but its existing PF states could not be removed.\n%s\n%s\n' "$output" "$state_output"
+        return 1
+    fi
+
+    printf 'Cleared the temporary Network DNS firewall exception and its states.\n%s\n%s\n' "$output" "$state_output"
+}
+
+pf_running() {
+    command -v pfctl >/dev/null 2>&1 || return 1
+    run_privileged pfctl -s Running >/dev/null 2>&1
+}
+
+pf_leak_profile_enabled() {
+    [ -f "$pf_profile_file" ] || return 1
+
+    value="$(awk -F '=' '
+        $1 == "dns_leak_protection" {
+            print tolower($2)
+            found = 1
+            exit
+        }
+        END {
+            if (!found)
+                print "yes"
+        }
+    ' "$pf_profile_file")"
+
+    case "$value" in
+        1|yes|true|on|enabled)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+pf_dns_rules_loaded() {
+    command -v pfctl >/dev/null 2>&1 || return 1
+    rules="$(run_privileged pfctl -sr 2>/dev/null)" || return 1
+
+    printf '%s\n' "$rules" | grep -q 'label "bsdrunner_plain_dns_block"' &&
+        printf '%s\n' "$rules" | grep -q 'label "bsdrunner_unbound_dns"' &&
+        printf '%s\n' "$rules" | grep -q 'label "bsdrunner_network_dns"'
+}
+
+pf_label_packets() {
+    label="$1"
+    command -v pfctl >/dev/null 2>&1 || {
+        printf '0\n'
+        return
+    }
+
+    run_privileged pfctl -s labels 2>/dev/null | awk -v label="$label" '
+        $1 == label { packets += $3 }
+        END { print packets + 0 }
+    '
+}
+
+pf_network_dns_addresses_json() {
+    first=1
+    printf '['
+    if pf_network_dns_table_available; then
+        run_privileged pfctl -t "$pf_network_dns_table" -T show 2>/dev/null | while IFS= read -r address; do
+            address="$(printf '%s' "$address" | awk '{$1=$1; print}')"
+            [ -n "$address" ] || continue
+            if [ "$first" -eq 0 ]; then
+                printf ','
+            fi
+            first=0
+            printf '"%s"' "$(printf '%s' "$address" | json_escape)"
+        done
+    fi
+    printf ']'
+}
+
+dot_socket_count() {
+    if ! command -v sockstat >/dev/null 2>&1; then
+        printf '0\n'
+        return
+    fi
+
+    sockstat -46c 2>/dev/null | awk '
+        $2 ~ /^local-unbo/ && $7 ~ /:853$/ { count += 1 }
+        END { print count + 0 }
+    '
+}
+
+dnssec_validation_enabled() {
+    if [ -r /var/unbound/unbound.conf ] && [ -r /var/unbound/root.key ] &&
+       grep -Eq '^[[:space:]]*auto-trust-anchor-file:' /var/unbound/unbound.conf; then
+        printf 'yes\n'
+    else
+        printf 'no\n'
+    fi
+}
+
+jail_dns_policies_json() {
+    [ -r "$pf_jail_policy_file" ] || {
+        printf '[]'
+        return
+    }
+
+    awk -F '|' '
+        function esc(value) {
+            gsub(/\\/, "\\\\", value)
+            gsub(/"/, "\\\"", value)
+            return value
+        }
+        BEGIN { printf "["; first = 1 }
+        NF == 4 && $1 != "" && $2 != "" && $3 != "" && $4 != "" {
+            if (!first)
+                printf ","
+            first = 0
+            printf "{\"name\":\"%s\",\"address\":\"%s\",\"policy\":\"%s\",\"resolver\":\"%s\"}", esc($1), esc($2), esc($3), esc($4)
+        }
+        END { printf "]" }
+    ' "$pf_jail_policy_file"
+}
+
 check_unbound_config() {
     if command -v local-unbound-checkconf >/dev/null 2>&1; then
         run_privileged local-unbound-checkconf
@@ -527,6 +702,11 @@ emit_snapshot() {
     last_tone="$(last_result_value tone)"
     last_message="$(last_result_value message)"
     last_timestamp="$(last_result_value timestamp)"
+    dnssec_validation="$(dnssec_validation_enabled)"
+    dot_connections="$(dot_socket_count)"
+    blocked_plain_dns_packets="$(pf_label_packets bsdrunner_plain_dns_block)"
+    unbound_plain_dns_packets="$(pf_label_packets bsdrunner_unbound_dns)"
+    network_dns_packets="$(pf_label_packets "$pf_network_dns_table")"
 
     [ -n "$last_tone" ] || last_tone="info"
     [ -n "$last_message" ] || last_message="Loaded DNS cache status."
@@ -554,6 +734,20 @@ emit_snapshot() {
     network_nameservers_json
     printf ',"forwarders":'
     forwarders_json
+    printf '},'
+    printf '"protection":{"pf_available":%s,"pf_running":%s,"profile_enabled":%s,"rules_loaded":%s,"dnssec_validation":%s,"dot_connections":%s,"blocked_plain_dns_packets":%s,"unbound_plain_dns_packets":%s,"network_dns_packets":%s,"temporary_resolvers":' \
+        "$(if command -v pfctl >/dev/null 2>&1; then printf true; else printf false; fi)" \
+        "$(if pf_running; then printf true; else printf false; fi)" \
+        "$(if pf_leak_profile_enabled; then printf true; else printf false; fi)" \
+        "$(if pf_dns_rules_loaded; then printf true; else printf false; fi)" \
+        "$(bool_json "$dnssec_validation")" \
+        "$dot_connections" \
+        "$blocked_plain_dns_packets" \
+        "$unbound_plain_dns_packets" \
+        "$network_dns_packets"
+    pf_network_dns_addresses_json
+    printf ',"jail_policies":'
+    jail_dns_policies_json
     printf '},'
     printf '"tools":{"drill":%s,"local_unbound_setup":%s,"local_unbound_control":%s,"resolvconf":%s},' \
         "$(if command -v drill >/dev/null 2>&1; then printf true; else printf false; fi)" \
@@ -654,12 +848,29 @@ do_disable_dot() {
 }
 
 do_network_dns() {
+    pf_output=""
+    pf_exception_set=no
+    if pf_network_dns_table_available; then
+        if ! pf_output="$(replace_network_dns_exception 2>&1)"; then
+            write_last_result "error" "Unable to open the temporary Network DNS firewall exception."
+            emit_action_result false "Unable to open the temporary Network DNS firewall exception." "$pf_output"
+            exit 1
+        fi
+        pf_exception_set=yes
+    fi
+
     if output="$(write_network_resolv_conf 2>&1)"; then
         write_last_result "warning" "Using network DNS for captive portal or travel."
-        emit_action_result true "Using network DNS for captive portal or travel." "$output"
+        emit_action_result true "Using network DNS for captive portal or travel." "$pf_output
+$output"
     else
+        rollback_output=""
+        if [ "$pf_exception_set" = "yes" ]; then
+            rollback_output="$(clear_network_dns_exception 2>&1 || true)"
+        fi
         write_last_result "error" "Unable to switch to network DNS."
-        emit_action_result false "Unable to switch to network DNS." "$output"
+        emit_action_result false "Unable to switch to network DNS." "$output
+$rollback_output"
         exit 1
     fi
 }
@@ -667,8 +878,15 @@ do_network_dns() {
 do_local_dns() {
     if command -v local-unbound-setup >/dev/null 2>&1; then
         if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged local-unbound-setup 2>&1 && run_privileged service local_unbound restart 2>&1)"; then
+            if ! pf_output="$(clear_network_dns_exception 2>&1)"; then
+                write_last_result "error" "Local DNS cache restored, but the Network DNS firewall exception remains open."
+                emit_action_result false "Local DNS cache restored, but the Network DNS firewall exception remains open." "$output
+$pf_output"
+                exit 1
+            fi
             write_last_result "success" "Local DNS cache restored."
-            emit_action_result true "Local DNS cache restored." "$output"
+            emit_action_result true "Local DNS cache restored." "$output
+$pf_output"
         else
             write_last_result "error" "Unable to restore local DNS cache."
             emit_action_result false "Unable to restore local DNS cache." "$output"
@@ -686,8 +904,15 @@ do_local_dns() {
 
     if output="$(run_privileged install -m 0644 "$tmp" /etc/resolv.conf 2>&1 && run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged service local_unbound restart 2>&1)"; then
         rm -f "$tmp"
+        if ! pf_output="$(clear_network_dns_exception 2>&1)"; then
+            write_last_result "error" "Local DNS cache restored, but the Network DNS firewall exception remains open."
+            emit_action_result false "Local DNS cache restored, but the Network DNS firewall exception remains open." "$output
+$pf_output"
+            exit 1
+        fi
         write_last_result "success" "Local DNS cache restored."
-        emit_action_result true "Local DNS cache restored." "$output"
+        emit_action_result true "Local DNS cache restored." "$output
+$pf_output"
     else
         rm -f "$tmp"
         write_last_result "error" "Unable to restore local DNS cache."
@@ -785,6 +1010,84 @@ do_test() {
     fi
 }
 
+do_test_protection() {
+    if ! command -v drill >/dev/null 2>&1; then
+        write_last_result "error" "DNS protection checks need drill."
+        emit_action_result false "DNS protection checks need drill." "Install drill, then run the checks again."
+        exit 1
+    fi
+
+    failures=0
+    details=""
+
+    if local_output="$(drill @127.0.0.1 example.com A 2>&1)" &&
+       printf '%s\n' "$local_output" | grep -q 'rcode: NOERROR'; then
+        details="Local resolver: PASS"
+    else
+        details="Local resolver: FAIL"
+        failures=$((failures + 1))
+    fi
+
+    if pf_running && pf_dns_rules_loaded; then
+        details="$details
+Firewall rules: ACTIVE"
+        if [ "$(pf_network_dns_addresses_json)" != "[]" ]; then
+            details="$details
+Plain DNS bypass: TEMPORARILY OPEN for Network DNS"
+        elif timeout 4 drill @8.8.8.8 example.com A >/dev/null 2>&1; then
+            details="$details
+Plain DNS bypass: FAIL (direct lookup succeeded)"
+            failures=$((failures + 1))
+        else
+            details="$details
+Plain DNS bypass: BLOCKED"
+        fi
+    else
+        details="$details
+Firewall rules: INACTIVE
+Plain DNS bypass: NOT VERIFIED"
+        failures=$((failures + 1))
+    fi
+
+    dnssec_good="$(drill -D @127.0.0.1 cloudflare.com A 2>&1 || true)"
+    dnssec_bad="$(drill @127.0.0.1 dnssec-failed.org A 2>&1 || true)"
+    if printf '%s\n' "$dnssec_good" | grep -Eq '^;; flags:.*[ ;]ad[ ;]' &&
+       printf '%s\n' "$dnssec_bad" | grep -q 'rcode: SERVFAIL'; then
+        details="$details
+DNSSEC validation: PASS"
+    else
+        details="$details
+DNSSEC validation: FAIL"
+        failures=$((failures + 1))
+    fi
+
+    if [ "$(encrypted_forwarding_enabled)" = "yes" ]; then
+        drill @127.0.0.1 "bsdrunner-protection-$(date +%s).example.com" A >/dev/null 2>&1 || true
+        dot_connections="$(dot_socket_count)"
+        if [ "$dot_connections" -gt 0 ]; then
+            details="$details
+Upstream transport: DoT active ($dot_connections connections)"
+        else
+            details="$details
+Upstream transport: DoT configured (currently idle)"
+        fi
+    else
+        details="$details
+Upstream transport: Plain DNS"
+        failures=$((failures + 1))
+    fi
+
+    if [ "$failures" -eq 0 ]; then
+        write_last_result "success" "DNS protection checks passed."
+        emit_action_result true "DNS protection checks passed." "$details"
+        return
+    fi
+
+    write_last_result "error" "DNS protection checks found a problem."
+    emit_action_result false "DNS protection checks found a problem." "$details"
+    exit 1
+}
+
 case "$action" in
     snapshot)
         emit_snapshot
@@ -815,6 +1118,9 @@ case "$action" in
         ;;
     test)
         do_test "${2:-freebsd.org}"
+        ;;
+    test_protection)
+        do_test_protection
         ;;
     *)
         emit_error "Unknown DNS action: $action"

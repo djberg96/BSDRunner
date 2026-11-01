@@ -19,6 +19,7 @@ allow_diagnostics="yes"
 allow_ipv6="yes"
 allow_dhcp="yes"
 allow_mdns="yes"
+dns_leak_protection="yes"
 allow_ssh_lan="no"
 allow_ssh_tarpit="no"
 log_blocked="no"
@@ -201,6 +202,9 @@ load_profile() {
             allow_mdns)
                 allow_mdns="$(normalize_bool "$value")"
                 ;;
+            dns_leak_protection)
+                dns_leak_protection="$(normalize_bool "$value")"
+                ;;
             allow_ssh_lan)
                 allow_ssh_lan="$(normalize_bool "$value")"
                 ;;
@@ -253,6 +257,7 @@ write_profile() {
         printf 'allow_ipv6=%s\n' "$allow_ipv6"
         printf 'allow_dhcp=%s\n' "$allow_dhcp"
         printf 'allow_mdns=%s\n' "$allow_mdns"
+        printf 'dns_leak_protection=%s\n' "$dns_leak_protection"
         printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
         printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
         if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
@@ -274,6 +279,7 @@ emit_settings() {
     printf 'allow_ipv6=%s\n' "$allow_ipv6"
     printf 'allow_dhcp=%s\n' "$allow_dhcp"
     printf 'allow_mdns=%s\n' "$allow_mdns"
+    printf 'dns_leak_protection=%s\n' "$dns_leak_protection"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
     printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
     if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
@@ -317,6 +323,9 @@ set_setting_value() {
             ;;
         allow_mdns)
             allow_mdns="$value"
+            ;;
+        dns_leak_protection)
+            dns_leak_protection="$value"
             ;;
         allow_ssh_lan)
             allow_ssh_lan="$value"
@@ -556,6 +565,7 @@ rules_summary_json() {
     printf ',{"id":"ipv6","label":"IPv6 essentials","description":"Neighbor discovery and IPv6 control messages are allowed.","enabled":%s}' "$(bool_json "$allow_ipv6")"
     printf ',{"id":"dhcp","label":"DHCP address assignment","description":"DHCP and DHCPv6 replies are allowed.","enabled":%s}' "$(bool_json "$allow_dhcp")"
     printf ',{"id":"mdns","label":"Local discovery","description":"mDNS discovery for local devices is allowed.","enabled":%s}' "$(bool_json "$allow_mdns")"
+    printf ',{"id":"dns_leak_protection","label":"DNS leak protection","description":"Only Unbound, configured jail resolvers, and temporary Network DNS exceptions may use ordinary DNS.","enabled":%s}' "$(bool_json "$dns_leak_protection")"
     printf ',{"id":"ssh","label":"SSH from local network","description":"SSH is limited to private IPv4 LAN ranges.","enabled":%s}' "$(bool_json "$allow_ssh_lan")"
     printf ',{"id":"tarpit","label":"SSH tarpit","description":"endlessh listens on port 22 while real SSH moves to the stored high port.","enabled":%s}' "$(bool_json "$allow_ssh_tarpit")"
     printf ',{"id":"logging","label":"Blocked attempt logging","description":"Blocked packets are written to pflog.","enabled":%s}' "$(bool_json "$log_blocked")"
@@ -653,6 +663,7 @@ emit_snapshot() {
     printf '"allow_ipv6":%s,' "$(bool_json "$allow_ipv6")"
     printf '"allow_dhcp":%s,' "$(bool_json "$allow_dhcp")"
     printf '"allow_mdns":%s,' "$(bool_json "$allow_mdns")"
+    printf '"dns_leak_protection":%s,' "$(bool_json "$dns_leak_protection")"
     printf '"allow_ssh_lan":%s,' "$(bool_json "$allow_ssh_lan")"
     printf '"allow_ssh_tarpit":%s,' "$(bool_json "$allow_ssh_tarpit")"
     printf '"log_blocked":%s' "$(bool_json "$log_blocked")"

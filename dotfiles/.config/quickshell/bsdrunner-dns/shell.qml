@@ -20,6 +20,7 @@ ShellRoot {
     property string activeActionId: ""
     property string activeActionArg: ""
     property string activeActionLabel: ""
+    property string activeView: "overview"
     property string pendingActionId: ""
     property string pendingActionLabel: ""
     property string pendingActionDescription: ""
@@ -37,6 +38,17 @@ ShellRoot {
     property var nameservers: []
     property var networkNameservers: []
     property var forwarders: []
+    property bool pfAvailable: false
+    property bool pfRunning: false
+    property bool leakProfileEnabled: false
+    property bool leakRulesLoaded: false
+    property bool dnssecValidation: false
+    property int dotConnections: 0
+    property int blockedPlainDnsPackets: 0
+    property int unboundPlainDnsPackets: 0
+    property int networkDnsPackets: 0
+    property var temporaryResolvers: []
+    property var jailDnsPolicies: []
     property bool hasDrill: false
     property bool hasSetup: false
     property bool hasControl: false
@@ -155,6 +167,47 @@ ShellRoot {
         return targets.length > 0 ? targets : ["No targets"]
     }
 
+    function protectionHeadline() {
+        if (pfRunning && leakRulesLoaded && localResolverActive && encryptedForwarding && dnssecValidation)
+            return "Enforced"
+        if (leakProfileEnabled)
+            return "Pending Apply"
+        return "Not Enforced"
+    }
+
+    function protectionTone() {
+        if (pfRunning && leakRulesLoaded && localResolverActive && encryptedForwarding && dnssecValidation)
+            return "success"
+        if (leakProfileEnabled || localResolverActive || encryptedForwarding)
+            return "warning"
+        return "error"
+    }
+
+    function upstreamTransportText() {
+        if (!encryptedForwarding)
+            return "Plain DNS"
+        if (dotConnections > 0)
+            return "DoT active · " + dotConnections + " connection" + (dotConnections === 1 ? "" : "s")
+        return "DoT configured · idle"
+    }
+
+    function temporaryResolverText() {
+        if (!temporaryResolvers || temporaryResolvers.length === 0)
+            return "Closed"
+        return temporaryResolvers.join(", ")
+    }
+
+    function jailPolicyText() {
+        if (!jailDnsPolicies || jailDnsPolicies.length === 0)
+            return "No jail-specific policies"
+        var lines = []
+        for (var i = 0; i < jailDnsPolicies.length; i += 1) {
+            var policy = jailDnsPolicies[i]
+            lines.push((policy.name || policy.address || "jail") + ": " + (policy.policy || "unknown") + " → " + (policy.resolver || "unknown"))
+        }
+        return lines.join("\n")
+    }
+
     function requestAction(actionId, label, description) {
         if (runningAction || !actionAvailable(actionId))
             return
@@ -205,6 +258,15 @@ ShellRoot {
         activeActionId = "test"
         activeActionArg = lookupName
         activeActionLabel = "Testing lookup"
+        runActionProcess()
+    }
+
+    function runProtectionTest() {
+        if (runningAction)
+            return
+        activeActionId = "test_protection"
+        activeActionArg = ""
+        activeActionLabel = "Testing DNS protection"
         runActionProcess()
     }
 
@@ -279,6 +341,17 @@ ShellRoot {
         nameservers = payload.resolver ? payload.resolver.nameservers || [] : []
         networkNameservers = payload.resolver ? payload.resolver.network_nameservers || [] : []
         forwarders = payload.resolver ? payload.resolver.forwarders || [] : []
+        pfAvailable = payload.protection ? !!payload.protection.pf_available : false
+        pfRunning = payload.protection ? !!payload.protection.pf_running : false
+        leakProfileEnabled = payload.protection ? !!payload.protection.profile_enabled : false
+        leakRulesLoaded = payload.protection ? !!payload.protection.rules_loaded : false
+        dnssecValidation = payload.protection ? !!payload.protection.dnssec_validation : false
+        dotConnections = payload.protection ? payload.protection.dot_connections || 0 : 0
+        blockedPlainDnsPackets = payload.protection ? payload.protection.blocked_plain_dns_packets || 0 : 0
+        unboundPlainDnsPackets = payload.protection ? payload.protection.unbound_plain_dns_packets || 0 : 0
+        networkDnsPackets = payload.protection ? payload.protection.network_dns_packets || 0 : 0
+        temporaryResolvers = payload.protection ? payload.protection.temporary_resolvers || [] : []
+        jailDnsPolicies = payload.protection ? payload.protection.jail_policies || [] : []
         hasDrill = payload.tools ? !!payload.tools.drill : false
         hasSetup = payload.tools ? !!payload.tools.local_unbound_setup : false
         hasControl = payload.tools ? !!payload.tools.local_unbound_control : false
@@ -389,8 +462,8 @@ ShellRoot {
     FloatingWindow {
         visible: true
         title: "BSDRunner DNS Cache"
-        minimumSize: Qt.size(960, 620)
-        maximumSize: Qt.size(960, 620)
+        minimumSize: Qt.size(960, 660)
+        maximumSize: Qt.size(960, 660)
         color: "transparent"
 
         Rectangle {
@@ -674,7 +747,50 @@ ShellRoot {
 
                 Row {
                     width: parent.width
-                    height: parent.height - 108 - 46 - 28
+                    height: 34
+                    spacing: 8
+
+                    Repeater {
+                        model: [
+                            { "id": "overview", "label": "Overview" },
+                            { "id": "protection", "label": "Protection" }
+                        ]
+
+                        delegate: Rectangle {
+                            id: viewTab
+
+                            required property var modelData
+                            readonly property bool selected: root.activeView === modelData.id
+
+                            width: 132
+                            height: parent.height
+                            radius: 8
+                            color: selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.cardBackground
+                            border.width: 1
+                            border.color: selected ? root.palette.accent : root.palette.panelBorder
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: viewTab.modelData.label
+                                color: viewTab.selected ? root.palette.accent : root.palette.secondaryText
+                                font.pixelSize: 12
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.activeView = viewTab.modelData.id
+                            }
+                        }
+                    }
+                }
+
+                Row {
+                    visible: root.activeView === "overview"
+                    width: parent.width
+                    height: parent.height - 108 - 46 - 34 - 42
                     spacing: 14
 
                     Rectangle {
@@ -1093,6 +1209,367 @@ ShellRoot {
                                         text: root.actionDetails.length > 0 ? root.actionDetails : root.lastResultMessage
                                         color: root.palette.secondaryText
                                         font.pixelSize: 13
+                                        font.family: root.actionDetails.length > 0 ? "monospace" : ""
+                                        wrapMode: Text.WrapAnywhere
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row {
+                    visible: root.activeView === "protection"
+                    width: parent.width
+                    height: parent.height - 108 - 46 - 34 - 42
+                    spacing: 14
+
+                    Rectangle {
+                        width: (parent.width - 14) / 2
+                        height: parent.height
+                        radius: 8
+                        color: root.palette.cardBackground
+                        border.width: 1
+                        border.color: root.toneColor(root.protectionTone())
+
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            spacing: 10
+
+                            Row {
+                                width: parent.width
+                                height: 28
+
+                                Text {
+                                    width: parent.width - 114
+                                    height: parent.height
+                                    text: "Resolver Path"
+                                    color: root.palette.accent
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+
+                                Rectangle {
+                                    width: 114
+                                    height: 26
+                                    radius: 13
+                                    color: Qt.alpha(root.toneColor(root.protectionTone()), 0.16)
+                                    border.width: 1
+                                    border.color: root.toneColor(root.protectionTone())
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.protectionHeadline()
+                                        color: root.toneColor(root.protectionTone())
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 68
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 11
+                                    spacing: 6
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Applications → Local Unbound → Upstream"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 14
+                                        font.family: "monospace"
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "127.0.0.1 / ::1 isolates application DNS from the network"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Repeater {
+                                model: [
+                                    {
+                                        "label": "Local resolver",
+                                        "value": root.localResolverActive && root.serviceRunning ? "Active" : "Inactive",
+                                        "detail": root.serviceRunning ? "local_unbound is running" : "local_unbound is stopped",
+                                        "tone": root.localResolverActive && root.serviceRunning ? "success" : "error"
+                                    },
+                                    {
+                                        "label": "Upstream transport",
+                                        "value": root.upstreamTransportText(),
+                                        "detail": root.encryptedForwarding ? "Authenticated TLS on port 853" : "Forwarder traffic is not encrypted",
+                                        "tone": root.encryptedForwarding ? "success" : "warning"
+                                    },
+                                    {
+                                        "label": "DNSSEC validation",
+                                        "value": root.dnssecValidation ? "Enabled" : "Not detected",
+                                        "detail": root.dnssecValidation ? "Root trust anchor is configured" : "Trust-anchor configuration is missing",
+                                        "tone": root.dnssecValidation ? "success" : "warning"
+                                    }
+                                ]
+
+                                delegate: Rectangle {
+                                    id: resolverStatus
+
+                                    required property var modelData
+
+                                    width: parent.width
+                                    height: 62
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.toneColor(modelData.tone)
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 3
+
+                                        Row {
+                                            width: parent.width
+                                            height: 18
+
+                                            Text {
+                                                width: parent.width * 0.45
+                                                text: resolverStatus.modelData.label
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width * 0.55
+                                                text: resolverStatus.modelData.value
+                                                color: root.toneColor(resolverStatus.modelData.tone)
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignRight
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: resolverStatus.modelData.detail
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: (parent.width - 14) / 2
+                        height: parent.height
+                        radius: 8
+                        color: root.palette.cardBackground
+                        border.width: 1
+                        border.color: root.palette.panelBorder
+
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            spacing: 10
+
+                            Row {
+                                width: parent.width
+                                height: 36
+                                spacing: 10
+
+                                Text {
+                                    width: parent.width - 146
+                                    height: parent.height
+                                    text: "Firewall Enforcement"
+                                    color: root.palette.accent
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+
+                                Rectangle {
+                                    width: 136
+                                    height: parent.height
+                                    radius: 8
+                                    color: protectionTestMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.accent
+                                    opacity: root.runningAction ? 0.5 : 1.0
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.runningAction && root.activeActionId === "test_protection" ? "Testing..." : "Test Protection"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: protectionTestMouse
+
+                                        anchors.fill: parent
+                                        enabled: !root.runningAction
+                                        hoverEnabled: enabled
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: root.runProtectionTest()
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 62
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.leakRulesLoaded && root.pfRunning ? root.palette.success : root.palette.warning
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 4
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.pfRunning && root.leakRulesLoaded ? "PF rules active" : (root.leakProfileEnabled ? "PF apply required" : "DNS bypass blocking disabled")
+                                        color: root.pfRunning && root.leakRulesLoaded ? root.palette.success : root.palette.warning
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Temporary Network DNS exception: " + root.temporaryResolverText()
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 70
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 8
+
+                                    Repeater {
+                                        model: [
+                                            { "label": "Blocked", "value": root.blockedPlainDnsPackets },
+                                            { "label": "Unbound", "value": root.unboundPlainDnsPackets },
+                                            { "label": "Temporary", "value": root.networkDnsPackets }
+                                        ]
+
+                                        delegate: Column {
+                                            id: packetCounter
+
+                                            required property var modelData
+
+                                            width: (parent.width - 16) / 3
+                                            spacing: 4
+
+                                            Text {
+                                                width: parent.width
+                                                text: packetCounter.modelData.value
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 20
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: packetCounter.modelData.label
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 10
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 62
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 4
+
+                                    Text {
+                                        text: "Jail DNS policies"
+                                        color: root.palette.mutedText
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.jailPolicyText()
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        maximumLineCount: 2
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: parent.height - 36 - 62 - 70 - 62 - 40
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Flickable {
+                                    id: protectionDetailFlickable
+
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    contentWidth: width
+                                    contentHeight: protectionDetailText.height
+                                    clip: true
+                                    boundsBehavior: Flickable.StopAtBounds
+
+                                    Text {
+                                        id: protectionDetailText
+
+                                        width: protectionDetailFlickable.width
+                                        text: root.actionDetails.length > 0 ? root.actionDetails : "Run Test Protection to verify the live resolver path, DNSSEC, DoT, and plain-DNS blocking."
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
                                         font.family: root.actionDetails.length > 0 ? "monospace" : ""
                                         wrapMode: Text.WrapAnywhere
                                     }

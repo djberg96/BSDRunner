@@ -12,6 +12,7 @@ allow_diagnostics="yes"
 allow_ipv6="yes"
 allow_dhcp="yes"
 allow_mdns="yes"
+dns_leak_protection="yes"
 allow_ssh_lan="no"
 allow_ssh_tarpit="no"
 log_blocked="no"
@@ -140,6 +141,9 @@ load_profile() {
             allow_mdns)
                 allow_mdns="$(normalize_bool "$value")"
                 ;;
+            dns_leak_protection)
+                dns_leak_protection="$(normalize_bool "$value")"
+                ;;
             allow_ssh_lan)
                 allow_ssh_lan="$(normalize_bool "$value")"
                 ;;
@@ -190,6 +194,7 @@ emit_settings() {
     printf 'allow_ipv6=%s\n' "$allow_ipv6"
     printf 'allow_dhcp=%s\n' "$allow_dhcp"
     printf 'allow_mdns=%s\n' "$allow_mdns"
+    printf 'dns_leak_protection=%s\n' "$dns_leak_protection"
     printf 'allow_ssh_lan=%s\n' "$allow_ssh_lan"
     printf 'allow_ssh_tarpit=%s\n' "$allow_ssh_tarpit"
     if [ "$ssh_real_port_configured" = "yes" ] && valid_real_ssh_port "$ssh_real_port"; then
@@ -226,6 +231,12 @@ render_profile() {
 icmp_types = "{ echoreq, unreach, timex }"
 icmp6_types = "{ echoreq, unreach, timex, paramprob, routersol, routeradv, neighbrsol, neighbradv, toobig }"
 EOF
+
+    if [ "$dns_leak_protection" = "yes" ]; then
+        cat <<'EOF'
+table <bsdrunner_network_dns> persist
+EOF
+    fi
 
     if [ "$jail_nat" = "yes" ]; then
         printf 'jail_ext_if = "%s"\n' "$jail_ext_if"
@@ -318,10 +329,17 @@ EOF
                 case "$policy_mode" in
                     internet-only)
                         printf 'pass out quick on $jail_ext_if inet proto { tcp udp } from %s to %s port 53 keep state\n' "$policy_address" "$policy_resolver"
+                        if [ "$dns_leak_protection" = "yes" ]; then
+                            printf 'block return out quick on $jail_ext_if inet proto { tcp udp } from %s to any port 53\n' "$policy_address"
+                        fi
                         printf 'block return out quick on $jail_ext_if inet from %s to $private_nets\n' "$policy_address"
                         printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
                         ;;
                     lan)
+                        if [ "$dns_leak_protection" = "yes" ]; then
+                            printf 'pass out quick on $jail_ext_if inet proto { tcp udp } from %s to %s port 53 keep state\n' "$policy_address" "$policy_resolver"
+                            printf 'block return out quick on $jail_ext_if inet proto { tcp udp } from %s to any port 53\n' "$policy_address"
+                        fi
                         printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
                         ;;
                     none)
@@ -329,6 +347,18 @@ EOF
                         ;;
                 esac
             done
+        fi
+        if [ "$dns_leak_protection" = "yes" ]; then
+            cat <<'EOF'
+
+# Keep applications and forwarded traffic from bypassing the local resolver
+# with ordinary DNS. Network DNS temporarily fills the exception table with
+# DHCP-provided resolvers for captive portals. Unbound retains plain DNS for
+# local zones and the explicit Plain DNS fallback.
+pass out quick proto { tcp udp } to <bsdrunner_network_dns> port 53 label "bsdrunner_network_dns" keep state
+pass out quick proto { tcp udp } to any port 53 user unbound label "bsdrunner_unbound_dns" keep state
+block return out quick proto { tcp udp } to any port 53 label "bsdrunner_plain_dns_block"
+EOF
         fi
         cat <<'EOF'
 

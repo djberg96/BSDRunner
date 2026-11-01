@@ -24,10 +24,12 @@ base_profile="$test_root/base-profile.conf"
 nat_profile="$test_root/nat-profile.conf"
 invalid_profile="$test_root/invalid-profile.conf"
 policy_profile="$test_root/policy-profile.conf"
+unprotected_profile="$test_root/unprotected-profile.conf"
 base_rendered="$test_root/base-pf.conf"
 nat_rendered="$test_root/nat-pf.conf"
 invalid_rendered="$test_root/invalid-pf.conf"
 policy_rendered="$test_root/policy-pf.conf"
+unprotected_rendered="$test_root/unprotected-pf.conf"
 
 printf '%s\n' \
     'allow_outbound=yes' \
@@ -36,16 +38,29 @@ printf '%s\n' \
     'allow_ipv6=yes' \
     'allow_dhcp=yes' \
     'allow_mdns=yes' \
+    'dns_leak_protection=yes' \
     'allow_ssh_lan=no' \
     'allow_ssh_tarpit=no' \
     'log_blocked=no' >"$base_profile"
 
 sh "$renderer" "$base_profile" >"$base_rendered"
 grep -Fx 'set skip on lo0' "$base_rendered" >/dev/null || fail "default profile should skip only lo0"
+grep -Fx 'table <bsdrunner_network_dns> persist' "$base_rendered" >/dev/null || fail "protected profile should create the temporary Network DNS exception table"
+grep -Fx 'pass out quick proto { tcp udp } to <bsdrunner_network_dns> port 53 label "bsdrunner_network_dns" keep state' "$base_rendered" >/dev/null || fail "protected profile should allow and label temporary captive-portal resolvers"
+grep -Fx 'pass out quick proto { tcp udp } to any port 53 user unbound label "bsdrunner_unbound_dns" keep state' "$base_rendered" >/dev/null || fail "protected profile should preserve and label Unbound plain DNS fallback and local zones"
+grep -Fx 'block return out quick proto { tcp udp } to any port 53 label "bsdrunner_plain_dns_block"' "$base_rendered" >/dev/null || fail "protected profile should block and label direct ordinary DNS"
 if grep -Eq 'table <jails>|nat on \$jail_ext_if|rdr-anchor "rdr/\*"|anchor "bastille/\*"' "$base_rendered"; then
     fail "default profile should not enable jail networking"
 fi
 pass "default profile leaves jail networking disabled"
+pass "DNS leak protection keeps Unbound and captive-portal exceptions usable"
+
+sed 's/^dns_leak_protection=yes$/dns_leak_protection=no/' "$base_profile" >"$unprotected_profile"
+sh "$renderer" "$unprotected_profile" >"$unprotected_rendered"
+if grep -Eq 'bsdrunner_(network|unbound|plain)_dns|user unbound|port 53( |$)' "$unprotected_rendered"; then
+    fail "disabled DNS leak protection should not emit enforcement rules"
+fi
+pass "DNS leak protection can be disabled explicitly"
 
 cp "$base_profile" "$nat_profile"
 printf '%s\n' \
@@ -77,10 +92,13 @@ printf '%s\n' \
 sh "$renderer" "$policy_profile" >"$policy_rendered"
 grep -F 'private_nets = "{ 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 }"' "$policy_rendered" >/dev/null || fail "internet-only policy should define blocked private destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.20 to 192.168.1.254 port 53 keep state' "$policy_rendered" >/dev/null || fail "internet-only policy should preserve DNS to the selected resolver"
+grep -Fx 'block return out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.20 to any port 53' "$policy_rendered" >/dev/null || fail "internet-only policy should block alternate plain DNS resolvers"
 grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.20 to $private_nets' "$policy_rendered" >/dev/null || fail "internet-only policy should block private destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.20 to any keep state' "$policy_rendered" >/dev/null || fail "internet-only policy should allow public destinations"
 grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.21 to any' "$policy_rendered" >/dev/null || fail "no-outbound policy should block all destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.22 to any keep state' "$policy_rendered" >/dev/null || fail "LAN policy should allow all destinations"
+grep -Fx 'pass out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.22 to 192.168.1.254 port 53 keep state' "$policy_rendered" >/dev/null || fail "LAN policy should preserve DNS to the selected resolver"
+grep -Fx 'block return out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.22 to any port 53' "$policy_rendered" >/dev/null || fail "LAN policy should block alternate plain DNS resolvers"
 grep -Fx 'rdr pass on $jail_ext_if inet proto tcp from any to ($jail_ext_if) port 8080 -> 10.0.0.20 port 80' "$policy_rendered" >/dev/null || fail "TCP port forwards should render into PF"
 grep -Fx 'rdr pass on $jail_ext_if inet proto udp from any to ($jail_ext_if) port 5353 -> 10.0.0.22 port 5353' "$policy_rendered" >/dev/null || fail "UDP port forwards should render into PF"
 if grep -Eq '9000|9001|sctp|bad name' "$policy_rendered"; then
