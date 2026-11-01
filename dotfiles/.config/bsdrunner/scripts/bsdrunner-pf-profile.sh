@@ -356,8 +356,8 @@ EOF
 # DHCP-provided resolvers for captive portals. Unbound retains plain DNS for
 # local zones and the explicit Plain DNS fallback.
 pass out quick proto { tcp udp } to <bsdrunner_network_dns> port 53 label "bsdrunner_network_dns" keep state
-pass out quick proto { tcp udp } to any port 53 user unbound keep state
-block return out quick proto { tcp udp } to any port 53
+pass out quick proto { tcp udp } to any port 53 user unbound label "bsdrunner_unbound_dns" keep state
+block return out quick proto { tcp udp } to any port 53 label "bsdrunner_plain_dns_block"
 EOF
         fi
         cat <<'EOF'

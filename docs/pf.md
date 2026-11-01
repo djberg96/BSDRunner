@@ -56,13 +56,15 @@ outbound DNS on TCP or UDP port 53 is restricted to the `unbound` service:
 ```pf
 table <bsdrunner_network_dns> persist
 pass out quick proto { tcp udp } to <bsdrunner_network_dns> port 53 label "bsdrunner_network_dns" keep state
-pass out quick proto { tcp udp } to any port 53 user unbound keep state
-block return out quick proto { tcp udp } to any port 53
+pass out quick proto { tcp udp } to any port 53 user unbound label "bsdrunner_unbound_dns" keep state
+block return out quick proto { tcp udp } to any port 53 label "bsdrunner_plain_dns_block"
 ```
 
 The Unbound exception preserves local router zones and the DNS GUI's explicit
 Plain DNS fallback when a network blocks DNS-over-TLS. Other applications
 cannot bypass the local resolver by querying an arbitrary server directly.
+The stable rule labels also expose pass/block packet counters in the DNS GUI's
+`Protection` tab and make its live enforcement check independent of rule order.
 
 For captive portals, the DNS GUI's `Network DNS` action temporarily replaces
 the contents of `<bsdrunner_network_dns>` with the non-loopback resolvers

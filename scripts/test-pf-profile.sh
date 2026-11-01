@@ -47,8 +47,8 @@ sh "$renderer" "$base_profile" >"$base_rendered"
 grep -Fx 'set skip on lo0' "$base_rendered" >/dev/null || fail "default profile should skip only lo0"
 grep -Fx 'table <bsdrunner_network_dns> persist' "$base_rendered" >/dev/null || fail "protected profile should create the temporary Network DNS exception table"
 grep -Fx 'pass out quick proto { tcp udp } to <bsdrunner_network_dns> port 53 label "bsdrunner_network_dns" keep state' "$base_rendered" >/dev/null || fail "protected profile should allow and label temporary captive-portal resolvers"
-grep -Fx 'pass out quick proto { tcp udp } to any port 53 user unbound keep state' "$base_rendered" >/dev/null || fail "protected profile should preserve Unbound plain DNS fallback and local zones"
-grep -Fx 'block return out quick proto { tcp udp } to any port 53' "$base_rendered" >/dev/null || fail "protected profile should block direct ordinary DNS"
+grep -Fx 'pass out quick proto { tcp udp } to any port 53 user unbound label "bsdrunner_unbound_dns" keep state' "$base_rendered" >/dev/null || fail "protected profile should preserve and label Unbound plain DNS fallback and local zones"
+grep -Fx 'block return out quick proto { tcp udp } to any port 53 label "bsdrunner_plain_dns_block"' "$base_rendered" >/dev/null || fail "protected profile should block and label direct ordinary DNS"
 if grep -Eq 'table <jails>|nat on \$jail_ext_if|rdr-anchor "rdr/\*"|anchor "bastille/\*"' "$base_rendered"; then
     fail "default profile should not enable jail networking"
 fi
@@ -57,7 +57,7 @@ pass "DNS leak protection keeps Unbound and captive-portal exceptions usable"
 
 sed 's/^dns_leak_protection=yes$/dns_leak_protection=no/' "$base_profile" >"$unprotected_profile"
 sh "$renderer" "$unprotected_profile" >"$unprotected_rendered"
-if grep -Eq 'bsdrunner_network_dns|user unbound|port 53( |$)' "$unprotected_rendered"; then
+if grep -Eq 'bsdrunner_(network|unbound|plain)_dns|user unbound|port 53( |$)' "$unprotected_rendered"; then
     fail "disabled DNS leak protection should not emit enforcement rules"
 fi
 pass "DNS leak protection can be disabled explicitly"

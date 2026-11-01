@@ -11,6 +11,7 @@ Run these without enabling anything:
 ```sh
 ~/.config/bsdrunner/scripts/bsdrunner-dns-backend.sh snapshot
 ~/.config/bsdrunner/scripts/bsdrunner-dns-backend.sh test freebsd.org
+~/.config/bsdrunner/scripts/bsdrunner-dns-backend.sh test_protection
 ```
 
 Enable and start the local cache from the GUI, or manually:
@@ -97,5 +98,20 @@ The DNS Cache GUI is a practical control surface:
 - temporary network DNS mode for captive portals and travel Wi-Fi
 - enable, disable, restart, flush, and encrypted forwarding actions
 - a simple lookup test
+
+The `Protection` tab makes the enforcement details visible without mixing them
+into the Network GUI. It reports the local resolver path, configured and active
+DNS-over-TLS connections, DNSSEC trust-anchor status, live PF rule state, the
+temporary captive-portal resolver exception, PF packet counters, and per-jail
+DNS policies. The Firewall GUI remains the place to enable or disable the
+managed `Block plain DNS bypasses` policy.
+
+`Test Protection` performs an on-demand end-to-end check. It confirms that the
+local resolver answers, PF rejects a direct port-53 lookup, DNSSEC accepts a
+valid signed answer and rejects a deliberately broken one, and encrypted public
+forwarding is configured. DoT can appear as `configured (currently idle)` when
+Unbound has no open upstream socket; that is not treated as a failure. In
+temporary `Network DNS` mode, the test reports that the narrowly scoped captive
+portal exception is open instead of claiming that all direct DNS is blocked.
 
 V1 avoids custom upstream selection, ad blocking, DHCP, and LAN host management. Those belong in later profiles if BSDRunner needs them.
