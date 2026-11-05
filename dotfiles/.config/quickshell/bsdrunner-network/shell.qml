@@ -39,6 +39,7 @@ ShellRoot {
     property var tools: ({})
     property var scanRows: []
     property string scanFilter: "all"
+    property var expandedScanGroups: ({})
     property var logLines: []
     property var dnsPolicy: ({})
     property var printers: ({})
@@ -102,6 +103,101 @@ ShellRoot {
 
     function filteredScanRows() {
         return scanRowsForFilter(scanFilter)
+    }
+
+    function scanGroupKey(ssid) {
+        return "ssid:" + (ssid || "(hidden)")
+    }
+
+    function scanGroupExpanded(ssid) {
+        return expandedScanGroups[scanGroupKey(ssid)] === true
+    }
+
+    function toggleScanGroup(ssid) {
+        var key = scanGroupKey(ssid)
+        var next = {}
+        for (var currentKey in expandedScanGroups)
+            next[currentKey] = expandedScanGroups[currentKey]
+        next[key] = !scanGroupExpanded(ssid)
+        expandedScanGroups = next
+        hideFeatureTooltip()
+    }
+
+    function groupedScanRows() {
+        var rows = filteredScanRows()
+        var groups = {}
+        var order = []
+        var result = []
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {}
+            var ssid = row.ssid || "(hidden)"
+            var key = scanGroupKey(ssid)
+            var group = groups[key]
+            if (!group) {
+                group = {
+                    "ssid": ssid,
+                    "rows": [],
+                    "channels": [],
+                    "bands": [],
+                    "bestSignal": -999,
+                    "connected": false
+                }
+                groups[key] = group
+                order.push(key)
+            }
+
+            group.rows.push(row)
+            var channel = row.channel || "-"
+            if (group.channels.indexOf(channel) < 0)
+                group.channels.push(channel)
+            var band = row.band || "unknown"
+            if (group.bands.indexOf(band) < 0)
+                group.bands.push(band)
+            var signal = Number(row.signal)
+            if (!isNaN(signal) && signal > group.bestSignal)
+                group.bestSignal = signal
+            if (sameBssid(row))
+                group.connected = true
+        }
+
+        for (var orderIndex = 0; orderIndex < order.length; orderIndex++) {
+            var current = groups[order[orderIndex]]
+            if (current.rows.length === 1) {
+                result.push({"kind": "ap", "ap": current.rows[0], "nested": false})
+                continue
+            }
+
+            var channelSummary = current.channels.slice(0, 3).join(", ")
+            if (current.channels.length > 3)
+                channelSummary += "..."
+            var bandSummary = current.bands.length > 1 ? "Dual band" : current.bands[0]
+            var bestSignal = current.bestSignal === -999 ? "-" : String(current.bestSignal)
+            result.push({
+                "kind": "group",
+                "ssid": current.ssid,
+                "count": current.rows.length,
+                "channels": channelSummary,
+                "allChannels": current.channels.join(", "),
+                "band": bandSummary,
+                "bestSignal": bestSignal,
+                "connected": current.connected
+            })
+
+            if (scanGroupExpanded(current.ssid)) {
+                for (var rowIndex = 0; rowIndex < current.rows.length; rowIndex++)
+                    result.push({"kind": "ap", "ap": current.rows[rowIndex], "nested": true})
+            }
+        }
+
+        return result
+    }
+
+    function scanGroupTooltip(group) {
+        if (!group || group.kind !== "group")
+            return ""
+        var action = scanGroupExpanded(group.ssid) ? "Click to collapse." : "Click to show each access point."
+        return group.count + " access points on channels " + group.allChannels + ". Strongest signal: " + group.bestSignal + " dBm. " + action
     }
 
     function scanFilterCount(filterId) {
@@ -174,7 +270,7 @@ ShellRoot {
         if (!row || !row.hasCaps)
             return
 
-        showTooltipForItem(row, row.modelData.caps)
+        showTooltipForItem(row, row.accessPoint ? row.accessPoint.caps : row.modelData.caps)
     }
 
     function showTooltipForItem(item, text) {
@@ -1069,38 +1165,57 @@ ShellRoot {
                                     spacing: 6
 
                                     Repeater {
-                                        model: root.filteredScanRows()
+                                        model: root.groupedScanRows()
 
                                         delegate: Rectangle {
                                             id: scanRow
 
                                             required property var modelData
+                                            readonly property bool isGroup: modelData.kind === "group"
+                                            readonly property var accessPoint: isGroup ? ({}) : modelData.ap
                                             readonly property bool rowHovered: scanRowMouse.containsMouse
-                                            readonly property bool hasCaps: modelData.caps && modelData.caps.length > 0
+                                            readonly property bool hasCaps: !isGroup && accessPoint.caps && accessPoint.caps.length > 0
+                                            readonly property bool connected: isGroup ? modelData.connected : root.sameBssid(accessPoint)
 
                                             width: scanColumn.width
                                             height: 38
                                             radius: 6
-                                            color: root.sameBssid(scanRow.modelData) ? Qt.alpha(root.palette.success, 0.18) : (rowHovered ? root.palette.cardHover : root.palette.panelBackground)
+                                            color: connected ? Qt.alpha(root.palette.success, 0.18) : (isGroup ? Qt.alpha(root.palette.accent, rowHovered ? 0.18 : 0.1) : (rowHovered ? root.palette.cardHover : root.palette.panelBackground))
                                             border.width: 1
-                                            border.color: root.sameBssid(scanRow.modelData) ? root.palette.success : (rowHovered ? root.palette.panelBorder : root.palette.frameBorder)
+                                            border.color: connected ? root.palette.success : (isGroup ? root.palette.accent : (rowHovered ? root.palette.panelBorder : root.palette.frameBorder))
 
                                             MouseArea {
                                                 id: scanRowMouse
 
                                                 anchors.fill: parent
-                                                hoverEnabled: scanRow.hasCaps
+                                                hoverEnabled: scanRow.isGroup || scanRow.hasCaps
                                                 acceptedButtons: Qt.LeftButton
-                                                cursorShape: scanRow.modelData.ssid === "(hidden)" ? Qt.ArrowCursor : Qt.PointingHandCursor
-                                                onEntered: root.showFeatureTooltip(scanRow)
-                                                onPositionChanged: root.showFeatureTooltip(scanRow)
+                                                cursorShape: !scanRow.isGroup && scanRow.accessPoint.ssid === "(hidden)" ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                                onEntered: {
+                                                    if (scanRow.isGroup)
+                                                        root.showTooltipForItem(scanRow, root.scanGroupTooltip(scanRow.modelData))
+                                                    else
+                                                        root.showFeatureTooltip(scanRow)
+                                                }
+                                                onPositionChanged: {
+                                                    if (scanRow.isGroup)
+                                                        root.showTooltipForItem(scanRow, root.scanGroupTooltip(scanRow.modelData))
+                                                    else
+                                                        root.showFeatureTooltip(scanRow)
+                                                }
                                                 onExited: root.hideFeatureTooltip()
-                                                onClicked: root.openJoinDialog(scanRow.modelData)
+                                                onClicked: {
+                                                    if (scanRow.isGroup)
+                                                        root.toggleScanGroup(scanRow.modelData.ssid)
+                                                    else
+                                                        root.openJoinDialog(scanRow.accessPoint)
+                                                }
                                             }
 
                                             Row {
+                                                visible: !scanRow.isGroup
                                                 anchors.fill: parent
-                                                anchors.leftMargin: 10
+                                                anchors.leftMargin: scanRow.modelData.nested ? 24 : 10
                                                 anchors.rightMargin: 10
                                                 spacing: 8
 
@@ -1108,10 +1223,10 @@ ShellRoot {
                                                     width: 184
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.ssid || "-"
-                                                    color: root.sameBssid(scanRow.modelData) ? root.palette.success : root.palette.primaryText
+                                                    text: (scanRow.modelData.nested ? "\u21b3 " : "") + (scanRow.accessPoint.ssid || "-")
+                                                    color: root.sameBssid(scanRow.accessPoint) ? root.palette.success : root.palette.primaryText
                                                     font.pixelSize: 12
-                                                    font.bold: root.sameBssid(scanRow.modelData)
+                                                    font.bold: root.sameBssid(scanRow.accessPoint)
                                                     elide: Text.ElideRight
                                                 }
 
@@ -1119,7 +1234,7 @@ ShellRoot {
                                                     width: 142
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.bssid || "-"
+                                                    text: scanRow.accessPoint.bssid || "-"
                                                     color: root.palette.secondaryText
                                                     font.pixelSize: 11
                                                     elide: Text.ElideRight
@@ -1129,7 +1244,7 @@ ShellRoot {
                                                     width: 30
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.channel || "-"
+                                                    text: scanRow.accessPoint.channel || "-"
                                                     color: root.palette.secondaryText
                                                     font.pixelSize: 11
                                                 }
@@ -1138,8 +1253,8 @@ ShellRoot {
                                                     width: 52
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.band || "-"
-                                                    color: scanRow.modelData.band === "5 GHz" ? root.palette.accent : root.palette.secondaryText
+                                                    text: scanRow.accessPoint.band || "-"
+                                                    color: scanRow.accessPoint.band === "5 GHz" ? root.palette.accent : root.palette.secondaryText
                                                     font.pixelSize: 10
                                                     font.bold: true
                                                 }
@@ -1148,29 +1263,29 @@ ShellRoot {
                                                     width: 38
                                                     height: parent.height
                                                     verticalAlignment: Text.AlignVCenter
-                                                    text: scanRow.modelData.signal || "-"
-                                                    color: root.toneColor(root.strengthTone(scanRow.modelData.signal))
+                                                    text: scanRow.accessPoint.signal || "-"
+                                                    color: root.toneColor(root.strengthTone(scanRow.accessPoint.signal))
                                                     font.pixelSize: 11
                                                     font.bold: true
                                                 }
 
                                                 Rectangle {
-                                                    readonly property bool actionEnabled: !root.runningAction && scanRow.modelData.ssid !== "(hidden)" && scanRow.modelData.bssid && scanRow.modelData.bssid.length > 0
+                                                    readonly property bool actionEnabled: !root.runningAction && scanRow.accessPoint.ssid !== "(hidden)" && scanRow.accessPoint.bssid && scanRow.accessPoint.bssid.length > 0
                                                     readonly property bool hovered: pinMouse.containsMouse && actionEnabled
 
                                                     width: 38
                                                     height: 24
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     radius: 5
-                                                    color: root.rowPinned(scanRow.modelData) ? Qt.alpha(root.palette.success, 0.18) : (hovered ? root.palette.cardHover : "transparent")
+                                                    color: root.rowPinned(scanRow.accessPoint) ? Qt.alpha(root.palette.success, 0.18) : (hovered ? root.palette.cardHover : "transparent")
                                                     border.width: 1
-                                                    border.color: root.rowPinned(scanRow.modelData) ? root.palette.success : root.palette.panelBorder
+                                                    border.color: root.rowPinned(scanRow.accessPoint) ? root.palette.success : root.palette.panelBorder
                                                     opacity: actionEnabled ? 1.0 : 0.35
 
                                                     Text {
                                                         anchors.centerIn: parent
-                                                        text: root.pinText(scanRow.modelData)
-                                                        color: root.rowPinned(scanRow.modelData) ? root.palette.success : root.palette.secondaryText
+                                                        text: root.pinText(scanRow.accessPoint)
+                                                        color: root.rowPinned(scanRow.accessPoint) ? root.palette.success : root.palette.secondaryText
                                                         font.pixelSize: 9
                                                         font.bold: true
                                                     }
@@ -1182,11 +1297,89 @@ ShellRoot {
                                                         enabled: parent.actionEnabled
                                                         hoverEnabled: parent.actionEnabled
                                                         cursorShape: parent.actionEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                        onEntered: root.showTooltipForItem(parent, root.pinTooltipText(scanRow.modelData))
-                                                        onPositionChanged: root.showTooltipForItem(parent, root.pinTooltipText(scanRow.modelData))
+                                                        onEntered: root.showTooltipForItem(parent, root.pinTooltipText(scanRow.accessPoint))
+                                                        onPositionChanged: root.showTooltipForItem(parent, root.pinTooltipText(scanRow.accessPoint))
                                                         onExited: root.hideFeatureTooltip()
-                                                        onClicked: root.runPinAction(scanRow.modelData)
+                                                        onClicked: root.runPinAction(scanRow.accessPoint)
                                                     }
+                                                }
+                                            }
+
+                                            Row {
+                                                visible: scanRow.isGroup
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                spacing: 8
+
+                                                Text {
+                                                    width: 14
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: root.scanGroupExpanded(scanRow.modelData.ssid) ? "\u25be" : "\u25b8"
+                                                    color: scanRow.connected ? root.palette.success : root.palette.accent
+                                                    font.pixelSize: 14
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: 190
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.ssid
+                                                    color: scanRow.connected ? root.palette.success : root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Rectangle {
+                                                    width: 56
+                                                    height: 22
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    radius: 11
+                                                    color: Qt.alpha(scanRow.connected ? root.palette.success : root.palette.accent, 0.16)
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: scanRow.modelData.count + " APs"
+                                                        color: scanRow.connected ? root.palette.success : root.palette.accent
+                                                        font.pixelSize: 9
+                                                        font.bold: true
+                                                    }
+                                                }
+
+                                                Text {
+                                                    width: 100
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: "CH " + scanRow.modelData.channels
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: 80
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: scanRow.modelData.band
+                                                    color: scanRow.modelData.band === "Dual band" || scanRow.modelData.band === "5 GHz" ? root.palette.accent : root.palette.secondaryText
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: 64
+                                                    height: parent.height
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    horizontalAlignment: Text.AlignRight
+                                                    text: "BEST " + scanRow.modelData.bestSignal
+                                                    color: root.toneColor(root.strengthTone(scanRow.modelData.bestSignal))
+                                                    font.pixelSize: 9
+                                                    font.bold: true
                                                 }
                                             }
                                         }
