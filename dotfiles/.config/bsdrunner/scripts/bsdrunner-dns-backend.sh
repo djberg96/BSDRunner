@@ -9,7 +9,10 @@ state_file="$state_dir/last-result.conf"
 resolv_backup_file="$state_dir/resolv.conf.before-network-dns"
 public_forwarders_dir="/var/unbound/conf.d"
 public_forwarders_file="$public_forwarders_dir/public-forwarders.conf"
-ca_bundle_file="/usr/local/share/certs/ca-root-nss.crt"
+legacy_public_forwarders_file="$public_forwarders_file.bsdrunner-legacy"
+ca_bundle_file="/etc/ssl/cert.pem"
+tls_forwarders="1.1.1.1@853#cloudflare-dns.com 1.0.0.1@853#cloudflare-dns.com 8.8.8.8@853#dns.google 8.8.4.4@853#dns.google"
+plain_forwarders="1.1.1.1 8.8.8.8"
 pf_network_dns_table="bsdrunner_network_dns"
 pf_profile_file="${HOME}/.config/bsdrunner/pf/profile.conf"
 pf_jail_policy_file="${HOME}/.config/bsdrunner/pf/jail-policies.conf"
@@ -571,12 +574,26 @@ jail_dns_policies_json() {
 }
 
 check_unbound_config() {
+    output=""
     if command -v local-unbound-checkconf >/dev/null 2>&1; then
-        run_privileged local-unbound-checkconf
+        if ! output="$(run_privileged local-unbound-checkconf 2>&1)"; then
+            printf '%s\n' "$output"
+            return 1
+        fi
     elif command -v unbound-checkconf >/dev/null 2>&1; then
-        run_privileged unbound-checkconf /var/unbound/unbound.conf
+        if ! output="$(run_privileged unbound-checkconf /var/unbound/unbound.conf 2>&1)"; then
+            printf '%s\n' "$output"
+            return 1
+        fi
     else
         printf 'No Unbound config checker found; skipping static check.\n'
+        return 0
+    fi
+
+    printf '%s\n' "$output"
+    if printf '%s\n' "$output" | grep -Eqi 'duplicate[[:space:]]+(forward|stub)[[:space:]]+zone|(^|[[:space:]])error:'; then
+        printf 'Unbound reported a configuration error despite returning success.\n'
+        return 1
     fi
 }
 
@@ -627,69 +644,70 @@ write_network_resolv_conf() {
     printf 'Installed network DNS servers from resolvconf state.\n'
 }
 
-write_public_forwarders_config() {
-    mode="$1"
-    tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-public-forwarders.XXXXXX")"
-    backup_file="$public_forwarders_file.bsdrunner-backup"
-    had_existing=no
+retire_legacy_public_forwarders_config() {
+    [ -e "$public_forwarders_file" ] || return 0
 
-    if [ "$mode" = "tls" ] && [ ! -r "$ca_bundle_file" ]; then
-        printf 'CA certificate bundle not found at %s. Install ca_root_nss first.\n' "$ca_bundle_file"
-        rm -f "$tmp"
+    if ! grep -q '^# Managed by BSDRunner DNS Cache\.$' "$public_forwarders_file"; then
+        printf '%s already exists and is not managed by BSDRunner. Refusing to replace it.\n' "$public_forwarders_file"
         return 1
     fi
 
-    if [ -e "$public_forwarders_file" ]; then
-        had_existing=yes
+    if [ ! -e "$legacy_public_forwarders_file" ]; then
+        run_privileged cp -p "$public_forwarders_file" "$legacy_public_forwarders_file"
+        printf 'Preserved the legacy BSDRunner forwarder at %s.\n' "$legacy_public_forwarders_file"
+    fi
+    run_privileged rm -f "$public_forwarders_file"
+    printf 'Removed the legacy duplicate root forwarder from the Unbound include path.\n'
+}
+
+configure_public_forwarders() {
+    mode="$1"
+
+    if [ "$mode" = "tls" ] && [ ! -r "$ca_bundle_file" ]; then
+        printf 'CA certificate bundle not found at %s.\n' "$ca_bundle_file"
+        return 1
+    fi
+
+    if ! command -v local-unbound-setup >/dev/null 2>&1; then
+        printf 'local-unbound-setup is required to configure public forwarding safely.\n'
+        return 1
     fi
 
     if [ "$mode" = "tls" ]; then
-        {
-            printf '# Managed by BSDRunner DNS Cache.\n'
-            printf '# Public root forwarding uses DNS-over-TLS with certificate verification.\n'
-            printf 'server:\n'
-            printf '    tls-cert-bundle: "%s"\n\n' "$ca_bundle_file"
-            printf 'forward-zone:\n'
-            printf '    name: "."\n'
-            printf '    forward-tls-upstream: yes\n'
-            printf '    forward-addr: 1.1.1.1@853#cloudflare-dns.com\n'
-            printf '    forward-addr: 1.0.0.1@853#cloudflare-dns.com\n'
-            printf '    forward-addr: 8.8.8.8@853#dns.google\n'
-            printf '    forward-addr: 8.8.4.4@853#dns.google\n'
-        } >"$tmp"
+        tls_value="YES"
+        forwarders="$tls_forwarders"
     else
-        {
-            printf '# Managed by BSDRunner DNS Cache.\n'
-            printf '# Public root forwarding uses ordinary DNS.\n'
-            printf 'forward-zone:\n'
-            printf '    name: "."\n'
-            printf '    forward-addr: 1.1.1.1\n'
-            printf '    forward-addr: 8.8.8.8\n'
-        } >"$tmp"
+        tls_value="NO"
+        forwarders="$plain_forwarders"
     fi
 
-    run_privileged mkdir -p "$public_forwarders_dir"
-    if [ "$had_existing" = "yes" ]; then
-        run_privileged cp -p "$public_forwarders_file" "$backup_file"
-        printf 'Backed up %s to %s.\n' "$public_forwarders_file" "$backup_file"
-    fi
-
-    run_privileged install -m 0644 "$tmp" "$public_forwarders_file"
-    rm -f "$tmp"
-    printf 'Wrote %s.\n' "$public_forwarders_file"
-
-    if ! check_unbound_config; then
-        if [ "$had_existing" = "yes" ]; then
-            run_privileged cp -p "$backup_file" "$public_forwarders_file"
-            printf 'Config check failed; restored previous public forwarder file.\n'
-        else
-            run_privileged rm -f "$public_forwarders_file"
-            printf 'Config check failed; removed new public forwarder file.\n'
-        fi
+    if ! retire_output="$(retire_legacy_public_forwarders_config 2>&1)"; then
+        printf '%s\n' "$retire_output"
         return 1
     fi
 
-    restart_unbound_after_config_change
+    if ! tls_output="$(run_privileged sysrc "local_unbound_tls=$tls_value" 2>&1)"; then
+        printf '%s\n%s\n' "$retire_output" "$tls_output"
+        return 1
+    fi
+    if ! forwarder_output="$(run_privileged sysrc "local_unbound_forwarders=$forwarders" 2>&1)"; then
+        printf '%s\n%s\n%s\n' "$retire_output" "$tls_output" "$forwarder_output"
+        return 1
+    fi
+    if ! setup_output="$(run_privileged service local_unbound setup 2>&1)"; then
+        printf '%s\n%s\n%s\n%s\n' "$retire_output" "$tls_output" "$forwarder_output" "$setup_output"
+        return 1
+    fi
+    if ! check_output="$(check_unbound_config 2>&1)"; then
+        printf '%s\n%s\n%s\n%s\n%s\n' "$retire_output" "$tls_output" "$forwarder_output" "$setup_output" "$check_output"
+        return 1
+    fi
+    if ! restart_output="$(restart_unbound_after_config_change 2>&1)"; then
+        printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$retire_output" "$tls_output" "$forwarder_output" "$setup_output" "$check_output" "$restart_output"
+        return 1
+    fi
+
+    printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$retire_output" "$tls_output" "$forwarder_output" "$setup_output" "$check_output" "$restart_output"
 }
 
 emit_snapshot() {
@@ -763,7 +781,7 @@ emit_snapshot() {
 
 do_enable() {
     if command -v local-unbound-setup >/dev/null 2>&1; then
-        if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged local-unbound-setup 2>&1 && run_privileged service local_unbound start 2>&1)"; then
+        if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged service local_unbound setup 2>&1 && run_privileged service local_unbound start 2>&1)"; then
             write_last_result "success" "Local DNS cache enabled."
             emit_action_result true "Local DNS cache enabled." "$output"
         else
@@ -826,7 +844,7 @@ do_flush() {
 }
 
 do_enable_dot() {
-    if output="$(write_public_forwarders_config tls 2>&1)"; then
+    if output="$(configure_public_forwarders tls 2>&1)"; then
         write_last_result "success" "Encrypted DNS forwarding enabled."
         emit_action_result true "Encrypted DNS forwarding enabled." "$output"
     else
@@ -837,7 +855,7 @@ do_enable_dot() {
 }
 
 do_disable_dot() {
-    if output="$(write_public_forwarders_config plain 2>&1)"; then
+    if output="$(configure_public_forwarders plain 2>&1)"; then
         write_last_result "warning" "Encrypted DNS forwarding disabled."
         emit_action_result true "Encrypted DNS forwarding disabled." "$output"
     else
@@ -877,7 +895,7 @@ $rollback_output"
 
 do_local_dns() {
     if command -v local-unbound-setup >/dev/null 2>&1; then
-        if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged local-unbound-setup 2>&1 && run_privileged service local_unbound restart 2>&1)"; then
+        if output="$(run_privileged sysrc local_unbound_enable=YES 2>&1 && run_privileged service local_unbound setup 2>&1 && run_privileged service local_unbound restart 2>&1)"; then
             if ! pf_output="$(clear_network_dns_exception 2>&1)"; then
                 write_last_result "error" "Local DNS cache restored, but the Network DNS firewall exception remains open."
                 emit_action_result false "Local DNS cache restored, but the Network DNS firewall exception remains open." "$output
