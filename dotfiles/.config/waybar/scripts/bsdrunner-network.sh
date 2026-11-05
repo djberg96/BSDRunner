@@ -17,12 +17,38 @@ escape_json() {
     '
 }
 
+escape_markup() {
+    printf '%s' "$1" | sed \
+        -e 's/&/\&amp;/g' \
+        -e 's/</\&lt;/g' \
+        -e 's/>/\&gt;/g'
+}
+
 default_iface() {
     route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}'
 }
 
 iface_config() {
     ifconfig "$1" 2>/dev/null || true
+}
+
+ssid_from_config() {
+    printf '%s\n' "${1:-}" | awk '
+        {
+            line = $0
+            if (line ~ /(^|[[:space:]])ssid[[:space:]]/) {
+                if (line ~ /^ssid[[:space:]]/)
+                    sub(/^ssid[[:space:]]+/, "", line)
+                else
+                    sub(/^.*[[:space:]]ssid[[:space:]]+/, "", line)
+                sub(/[[:space:]]+channel[[:space:]].*$/, "", line)
+                sub(/^"/, "", line)
+                sub(/"$/, "", line)
+                print line
+                exit
+            }
+        }
+    '
 }
 
 band_for_channel() {
@@ -251,7 +277,7 @@ fi
 ifconfig_output="$(iface_config "$iface")"
 ipv4="$(printf '%s\n' "$ifconfig_output" | awk '/inet /{print $2; exit}')"
 status="$(printf '%s\n' "$ifconfig_output" | awk '/status:/{print $2; exit}')"
-ssid="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="ssid") {print $(i+1); exit}}')"
+ssid="$(ssid_from_config "$ifconfig_output")"
 channel="$(printf '%s\n' "$ifconfig_output" | awk '{for (i=1;i<=NF;i++) if ($i=="channel") {print $(i+1); exit}}')"
 band="$(band_for_channel "$channel")"
 
@@ -291,5 +317,5 @@ fi
 
 printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' \
     "$(escape_json "$text")" \
-    "$(escape_json "$tooltip")" \
+    "$(escape_json "$(escape_markup "$tooltip")")" \
     "$(escape_json "$class")"
