@@ -95,6 +95,11 @@ ShellRoot {
                 "action": "power"
             },
             {
+                "title": "Power Settings",
+                "subtitle": "Configure automatic screen locking",
+                "action": "power-settings"
+            },
+            {
                 "title": "Close",
                 "subtitle": "Dismiss this welcome window",
                 "action": "close"

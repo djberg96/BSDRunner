@@ -322,6 +322,7 @@ chmod_runner_scripts() {
 
 rsync -a --backup --suffix='.pre-bsdrunner' \
     --exclude='.config/bsdrunner/pf/profile.conf' \
+    --exclude='.config/bsdrunner/power/profile.conf' \
     "$repo_root/dotfiles/" "$HOME/"
 cleanup_stale_theme_waybar_configs
 cleanup_stale_login_scripts
@@ -340,6 +341,15 @@ if [[ ! -f "$HOME/.config/bsdrunner/pf/profile.conf" ]]; then
     cp "$repo_root/dotfiles/.config/bsdrunner/pf/profile.conf" \
        "$HOME/.config/bsdrunner/pf/profile.conf"
 fi
+
+if [[ ! -f "$HOME/.config/bsdrunner/power/profile.conf" ]]; then
+    mkdir -p "$HOME/.config/bsdrunner/power"
+    cp "$repo_root/dotfiles/.config/bsdrunner/power/profile.conf" \
+       "$HOME/.config/bsdrunner/power/profile.conf"
+fi
+
+BSDRUNNER_POWER_SKIP_RESTART=yes \
+    sh "$HOME/.config/bsdrunner/scripts/bsdrunner-power-backend.sh" apply >/dev/null
 
 printf '%s\n' "$theme" > "$HOME/.config/bsdrunner/current-theme"
 

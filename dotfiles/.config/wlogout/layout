@@ -1,6 +1,6 @@
 {
   "label" : "lock",
-  "action" : "command -v hyprlock >/dev/null 2>&1 && hyprlock",
+  "action" : "sh ~/.config/bsdrunner/scripts/bsdrunner-lock.sh",
   "text" : "Lock",
   "keybind" : "l"
 }

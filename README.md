@@ -23,7 +23,7 @@ This repo is intentionally small:
 - a modular Hyprland config with a thin top-level loader
 - Waybar in the default startup path
 - `swww` in the themed startup path
-- no lockscreen, notification daemon, or idle daemon by default
+- automatic session locking through `hypridle` and `hyprlock`
 - no generated monitor config
 - a neutral base with optional corp theme layers
 
@@ -45,6 +45,7 @@ The goal is a nice, bootable base session for Hyprland `0.56.x` on FreeBSD.
 - `docs/themes.md`
 - `docs/software-center.md`
 - `docs/login-screen.md`
+- `docs/power.md`
 - `docs/pf.md`
 - `docs/dns.md`
 
@@ -224,7 +225,7 @@ This starter is targeted at:
 - Hyprland `0.56.x`
 - ThinkPad X1 Gen 9
 
-The current repo already includes a working Waybar autostart and `swww` wallpaper path. The next risky layers are things like lockscreen, idle, extra desktop daemons, or deeper Qt/KDE theming.
+The current repo includes Waybar, themed `swww` wallpapers, greetd login, and configurable automatic session locking. Suspend and deeper display power management remain intentionally separate follow-up layers.
 
 ## Animated Wallpaper
 

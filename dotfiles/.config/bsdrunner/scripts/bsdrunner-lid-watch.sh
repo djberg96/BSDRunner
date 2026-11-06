@@ -4,7 +4,6 @@ set -eu
 
 close_event_file="/tmp/bsdrunner-lid-close"
 open_event_file="/tmp/bsdrunner-lid-open"
-lock_log="/tmp/bsdrunner-hyprlock.log"
 poll_interval=1
 lock_delay=1
 
@@ -24,18 +23,14 @@ file_mtime() {
 }
 
 run_close_action() {
-    if command -v hyprlock >/dev/null 2>&1; then
-        if ! pgrep -x hyprlock >/dev/null 2>&1; then
-            (hyprlock >>"$lock_log" 2>&1 &) >/dev/null 2>&1
-            sleep "$lock_delay"
-        fi
-    fi
+    (sh "${HOME}/.config/bsdrunner/scripts/bsdrunner-lock.sh" &) >/dev/null 2>&1
+    sleep "$lock_delay"
 
-    hyprctl dispatch dpms off >/dev/null 2>&1 || true
+    hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' >/dev/null 2>&1 || true
 }
 
 run_open_action() {
-    hyprctl dispatch dpms on >/dev/null 2>&1 || true
+    hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1 || true
 }
 
 last_close_mtime="$(file_mtime "$close_event_file")"

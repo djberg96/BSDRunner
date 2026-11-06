@@ -65,6 +65,8 @@ ShellRoot {
         "dolphin",
         "foot",
         "hyprland",
+        "hypridle",
+        "hyprlock",
         "hyprlauncher",
         "kitty",
         "mate-polkit",

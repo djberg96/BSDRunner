@@ -25,6 +25,8 @@ sudo pkg install \
   quickshell \
   waybar \
   wlogout \
+  hypridle \
+  hyprlock \
   xdg-desktop-portal \
   xdg-desktop-portal-hyprland \
   xdg-desktop-portal-gtk \
@@ -134,14 +136,7 @@ Do the first test with only the shipped BSDRunner stack:
 - autostarted `bsdrunner-start-waybar.sh`
 - autostarted `swww` wallpaper helper when a theme is active
 
-Do not add:
-
-- swaync
-- hypridle
-- hyprlock
-- Quickshell
-
-until the base session is proven stable.
+Add the idle daemon and lock screen only after the base session is proven stable. BSDRunner's Power Settings panel then manages the automatic-lock delay without enabling suspend or display power-off behavior.
 
 The currently validated application stack for the early BSDRunner setup is:
 
