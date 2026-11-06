@@ -26,10 +26,13 @@ log_blocked="no"
 ssh_tarpit_port="22"
 ssh_real_port="22222"
 ssh_real_port_configured="no"
+ssh_tarpit_boot_script="${BSDRUNNER_PF_TARPIT_BOOT_SCRIPT:-${HOME}/.config/bsdrunner/scripts/bsdrunner-pf-tarpit-boot}"
+ssh_tarpit_boot_target="${BSDRUNNER_PF_TARPIT_BOOT_TARGET:-/usr/local/etc/rc.d/bsdrunner_pf_tarpit}"
+ssh_tarpit_renderer_target="${BSDRUNNER_PF_TARPIT_RENDERER_TARGET:-/usr/local/libexec/bsdrunner-pf-profile}"
 jail_nat="no"
 jail_interface="bastille0"
 jail_ext_if=""
-sshd_config_file="/etc/ssh/sshd_config"
+sshd_config_file="${BSDRUNNER_PF_SSHD_CONFIG_FILE:-/etc/ssh/sshd_config}"
 
 valid_interface() {
     case "${1:-}" in
@@ -1033,7 +1036,7 @@ sync_sshd_with_profile() {
     fi
 }
 
-sync_ssh_services_with_profile() {
+sync_running_ssh_services_with_profile() {
     if [ "$allow_ssh_tarpit" != "yes" ]; then
         endlessh_output="$(sync_endlessh_with_profile 2>&1)" || {
             printf '%s\n' "$endlessh_output"
@@ -1059,6 +1062,49 @@ sync_ssh_services_with_profile() {
     }
 
     printf '%s\n%s\n' "$sshd_output" "$endlessh_output"
+}
+
+sync_tarpit_boot_service() {
+    if ! command -v sysrc >/dev/null 2>&1; then
+        printf 'sysrc is unavailable; boot-time SSH port rotation was not changed.\n'
+        return 0
+    fi
+
+    if [ "$allow_ssh_lan" = "yes" ] && [ "$allow_ssh_tarpit" = "yes" ]; then
+        [ -f "$ssh_tarpit_boot_script" ] || {
+            printf 'Boot-time SSH port rotation helper is missing: %s\n' "$ssh_tarpit_boot_script"
+            return 1
+        }
+
+        run_privileged install -m 0555 "$ssh_tarpit_boot_script" "$ssh_tarpit_boot_target"
+        run_privileged install -m 0555 "$profile_script" "$ssh_tarpit_renderer_target"
+        run_privileged sysrc "bsdrunner_pf_tarpit_profile=$profile_file"
+        run_privileged sysrc "bsdrunner_pf_tarpit_pf_config=$pf_config_file"
+        run_privileged sysrc "bsdrunner_pf_tarpit_sshd_config=$sshd_config_file"
+        run_privileged sysrc "bsdrunner_pf_tarpit_renderer=$ssh_tarpit_renderer_target"
+
+        if [ "$(sysrc_value pf_enable)" = "YES" ]; then
+            run_privileged sysrc bsdrunner_pf_tarpit_enable=YES
+        else
+            run_privileged sysrc bsdrunner_pf_tarpit_enable=NO
+        fi
+        return
+    fi
+
+    run_privileged sysrc bsdrunner_pf_tarpit_enable=NO
+}
+
+sync_ssh_services_with_profile() {
+    running_output="$(sync_running_ssh_services_with_profile 2>&1)" || {
+        printf '%s\n' "$running_output"
+        return 1
+    }
+    boot_output="$(sync_tarpit_boot_service 2>&1)" || {
+        printf '%s\n%s\n' "$running_output" "$boot_output"
+        return 1
+    }
+
+    printf '%s\n%s\n' "$running_output" "$boot_output"
 }
 
 do_apply() {
@@ -1382,6 +1428,19 @@ do_enable() {
     emit_action_result true "Firewall services enabled." "$output"
 }
 
+do_sync_tarpit_boot() {
+    load_profile
+
+    if output="$(sync_tarpit_boot_service 2>&1)"; then
+        write_last_result "success" "Boot-time SSH tarpit rotation synchronized."
+        emit_action_result true "Boot-time SSH tarpit rotation synchronized." "$output"
+    else
+        write_last_result "error" "Unable to synchronize boot-time SSH tarpit rotation."
+        emit_action_result false "Unable to synchronize boot-time SSH tarpit rotation." "$output"
+        exit 1
+    fi
+}
+
 do_disable() {
     if command -v mdo >/dev/null 2>&1; then
         output="$(mdo pfctl -d 2>&1)" || {
@@ -1445,6 +1504,9 @@ case "$action" in
         ;;
     enable)
         do_enable
+        ;;
+    sync-tarpit-boot)
+        do_sync_tarpit_boot
         ;;
     disable)
         do_disable

@@ -1,0 +1,202 @@
+#!/bin/sh
+
+# PROVIDE: bsdrunner_pf_tarpit
+# REQUIRE: FILESYSTEMS
+# BEFORE: pf sshd endlessh
+# KEYWORD: shutdown
+
+set -e
+
+name="bsdrunner_pf_tarpit"
+rcvar="bsdrunner_pf_tarpit_enable"
+
+valid_real_ssh_port() {
+    case "${1:-}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    [ "$1" -ge 22201 ] && [ "$1" -le 22299 ]
+}
+
+current_real_ssh_port() {
+    awk -F '=' '
+        $1 == "ssh_real_port" {
+            gsub(/[[:space:]]/, "", $2)
+            print $2
+            exit
+        }
+    ' "$bsdrunner_pf_tarpit_profile"
+}
+
+port_is_available() {
+    candidate="$1"
+
+    command -v sockstat >/dev/null 2>&1 || return 0
+    ! sockstat -l -P tcp -p "$candidate" 2>/dev/null | awk 'NR > 1 { found = 1 } END { exit found ? 0 : 1 }'
+}
+
+random_real_ssh_port() {
+    if valid_real_ssh_port "${BSDRUNNER_PF_TARPIT_TEST_PORT:-}"; then
+        printf '%s\n' "$BSDRUNNER_PF_TARPIT_TEST_PORT"
+    elif command -v jot >/dev/null 2>&1; then
+        jot -r 1 22201 22299
+    else
+        od -An -N4 -tu4 /dev/urandom | awk '{ print 22201 + ($1 % 99) }'
+    fi
+}
+
+choose_real_ssh_port() {
+    previous_port="$1"
+    attempts=0
+
+    while [ "$attempts" -lt 198 ]; do
+        candidate="$(random_real_ssh_port)"
+        attempts=$((attempts + 1))
+        valid_real_ssh_port "$candidate" || continue
+        [ "$candidate" != "$previous_port" ] || continue
+        port_is_available "$candidate" || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done
+
+    printf 'Unable to choose an unused SSH port between 22201 and 22299.\n' >&2
+    return 1
+}
+
+install_preserving_metadata() {
+    source_file="$1"
+    target_file="$2"
+
+    owner="$(stat -f '%u' "$target_file")"
+    group="$(stat -f '%g' "$target_file")"
+    mode="$(stat -f '%Lp' "$target_file")"
+    install -m "$mode" -o "$owner" -g "$group" "$source_file" "$target_file"
+}
+
+rotate_tarpit_port() {
+    [ -f "$bsdrunner_pf_tarpit_profile" ] || {
+        printf 'BSDRunner PF profile not found: %s\n' "$bsdrunner_pf_tarpit_profile" >&2
+        return 1
+    }
+    [ -f "$bsdrunner_pf_tarpit_pf_config" ] || {
+        printf 'PF configuration not found: %s\n' "$bsdrunner_pf_tarpit_pf_config" >&2
+        return 1
+    }
+    [ -f "$bsdrunner_pf_tarpit_sshd_config" ] || {
+        printf 'sshd configuration not found: %s\n' "$bsdrunner_pf_tarpit_sshd_config" >&2
+        return 1
+    }
+
+    if ! grep -q '^allow_ssh_lan=yes$' "$bsdrunner_pf_tarpit_profile" ||
+       ! grep -q '^allow_ssh_tarpit=yes$' "$bsdrunner_pf_tarpit_profile"; then
+        printf 'BSDRunner SSH tarpit is disabled; leaving the SSH port unchanged.\n'
+        return 0
+    fi
+
+    grep -q 'bsdrunner_pf_profile_version=1' "$bsdrunner_pf_tarpit_pf_config" || {
+        printf 'Refusing to modify an unmanaged PF configuration.\n' >&2
+        return 1
+    }
+    [ -f "$bsdrunner_pf_tarpit_renderer" ] || {
+        printf 'BSDRunner PF profile renderer not found: %s\n' "$bsdrunner_pf_tarpit_renderer" >&2
+        return 1
+    }
+
+    previous_port="$(current_real_ssh_port)"
+    new_port="$(choose_real_ssh_port "$previous_port")"
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-pf-tarpit.XXXXXX")"
+    trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
+
+    profile_tmp="$tmp_dir/profile.conf"
+    pf_tmp="$tmp_dir/pf.conf"
+    sshd_tmp="$tmp_dir/sshd_config"
+
+    awk -v port="$new_port" '
+        BEGIN { replaced = 0 }
+        /^ssh_real_port=/ {
+            if (!replaced) {
+                print "ssh_real_port=" port
+                replaced = 1
+            }
+            next
+        }
+        { print }
+        END {
+            if (!replaced)
+                print "ssh_real_port=" port
+        }
+    ' "$bsdrunner_pf_tarpit_profile" >"$profile_tmp"
+
+    profile_source_dir="$(dirname "$bsdrunner_pf_tarpit_profile")"
+    for companion in jail-policies.conf jail-port-forwards.conf; do
+        if [ -f "$profile_source_dir/$companion" ]; then
+            cp "$profile_source_dir/$companion" "$tmp_dir/$companion"
+        fi
+    done
+
+    sh "$bsdrunner_pf_tarpit_renderer" "$profile_tmp" >"$pf_tmp"
+    grep -q "^ssh_real_port = \"$new_port\"$" "$pf_tmp" || {
+        printf 'Rendered PF configuration did not contain the rotated SSH port.\n' >&2
+        return 1
+    }
+
+    awk -v port="$new_port" '
+        BEGIN { in_block = 0; found_begin = 0; found_end = 0; replaced = 0 }
+        /^# BEGIN BSDRunner firewall SSH tarpit$/ {
+            in_block = 1
+            found_begin = 1
+            print
+            next
+        }
+        /^# END BSDRunner firewall SSH tarpit$/ {
+            in_block = 0
+            found_end = 1
+            print
+            next
+        }
+        in_block && /^[[:space:]]*Port[[:space:]]+/ {
+            print "Port " port
+            replaced = 1
+            next
+        }
+        { print }
+        END { exit found_begin && found_end && replaced ? 0 : 1 }
+    ' "$bsdrunner_pf_tarpit_sshd_config" >"$sshd_tmp" || {
+        printf 'sshd configuration has no BSDRunner tarpit block.\n' >&2
+        return 1
+    }
+
+    pfctl -nf "$pf_tmp"
+    sshd -t -f "$sshd_tmp"
+
+    install_preserving_metadata "$profile_tmp" "$bsdrunner_pf_tarpit_profile"
+    install_preserving_metadata "$pf_tmp" "$bsdrunner_pf_tarpit_pf_config"
+    install_preserving_metadata "$sshd_tmp" "$bsdrunner_pf_tarpit_sshd_config"
+
+    printf 'Rotated BSDRunner real SSH port from %s to %s.\n' "${previous_port:-unset}" "$new_port"
+}
+
+if [ "${BSDRUNNER_PF_TARPIT_STANDALONE:-no}" = "yes" ]; then
+    : "${bsdrunner_pf_tarpit_profile:?Set bsdrunner_pf_tarpit_profile}"
+    : "${bsdrunner_pf_tarpit_pf_config:?Set bsdrunner_pf_tarpit_pf_config}"
+    : "${bsdrunner_pf_tarpit_sshd_config:?Set bsdrunner_pf_tarpit_sshd_config}"
+    : "${bsdrunner_pf_tarpit_renderer:?Set bsdrunner_pf_tarpit_renderer}"
+    rotate_tarpit_port
+    exit
+fi
+
+. /etc/rc.subr
+
+load_rc_config "$name"
+: "${bsdrunner_pf_tarpit_enable:=NO}"
+: "${bsdrunner_pf_tarpit_profile:=/root/.config/bsdrunner/pf/profile.conf}"
+: "${bsdrunner_pf_tarpit_pf_config:=/etc/pf.conf}"
+: "${bsdrunner_pf_tarpit_sshd_config:=/etc/ssh/sshd_config}"
+: "${bsdrunner_pf_tarpit_renderer:=/usr/local/libexec/bsdrunner-pf-profile}"
+
+start_cmd="rotate_tarpit_port"
+stop_cmd=":"
+
+run_rc_command "${1:-start}"
