@@ -34,6 +34,7 @@ ShellRoot {
     property bool logFollowing: false
     property bool stoppingLogFollow: false
     property bool filterLogNoise: false
+    property string contentTab: "settings"
     property string viewerMode: "logs"
     property string logMessage: "PF logs are loaded on demand."
     property string logText: "Enable blocked-attempt logging, apply the profile, then refresh logs after blocked traffic occurs."
@@ -419,6 +420,7 @@ ShellRoot {
     function openPenaltyBox() {
         if (runningAction)
             return;
+        contentTab = "summary";
         viewerMode = "penalty";
         refreshPenaltyBox();
     }
@@ -1082,12 +1084,70 @@ ShellRoot {
                 }
 
                 Row {
+                    id: contentTabRow
+
                     width: parent.width
-                    height: parent.height - 108 - 46 - 28
-                    spacing: 14
+                    height: 38
+                    spacing: 10
+
+                    Repeater {
+                        model: [
+                            {
+                                "id": "settings",
+                                "label": "Settings"
+                            },
+                            {
+                                "id": "summary",
+                                "label": "Profile Summary"
+                            }
+                        ]
+
+                        delegate: Rectangle {
+                            id: contentTabButton
+
+                            required property var modelData
+                            readonly property bool active: root.contentTab === modelData.id
+                            readonly property bool hovered: contentTabMouse.containsMouse
+
+                            width: (contentTabRow.width - contentTabRow.spacing) / 2
+                            height: contentTabRow.height
+                            radius: 8
+                            color: active
+                                ? Qt.alpha(root.palette.accent, 0.18)
+                                : hovered
+                                    ? root.palette.cardHover
+                                    : root.palette.cardBackground
+                            border.width: active ? 2 : 1
+                            border.color: active ? root.palette.accent : root.palette.frameBorder
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: contentTabButton.modelData.label
+                                color: contentTabButton.active ? root.palette.accent : root.palette.secondaryText
+                                font.pixelSize: 14
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: contentTabMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.contentTab = contentTabButton.modelData.id
+                            }
+                        }
+                    }
+                }
+
+                Row {
+                    width: parent.width
+                    height: parent.height - 108 - 46 - contentTabRow.height - 42
+                    spacing: 0
 
                     Rectangle {
-                        width: 420
+                        visible: root.contentTab === "settings"
+                        width: parent.width
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -1097,17 +1157,28 @@ ShellRoot {
                         Column {
                             anchors.fill: parent
                             anchors.margins: 14
-                            spacing: 6
+                            spacing: 10
 
                             Text {
-                                text: "Settings"
-                                color: root.palette.primaryText
-                                font.pixelSize: 22
-                                font.bold: true
+                                width: parent.width
+                                height: 18
+                                text: "Choose which traffic the managed BSDRunner profile permits, blocks, and records."
+                                color: root.palette.mutedText
+                                font.pixelSize: 11
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
 
-                            Repeater {
-                                model: [
+                            Grid {
+                                id: settingsGrid
+
+                                width: parent.width
+                                columns: 2
+                                columnSpacing: 10
+                                rowSpacing: 8
+
+                                Repeater {
+                                    model: [
                                     {
                                         "key": "allow_outbound",
                                         "label": "Allow outbound connections",
@@ -1159,77 +1230,80 @@ ShellRoot {
                                         "label": "Log blocked inbound attempts",
                                         "detail": "Write blocked packets to pflog for inspection."
                                     }
-                                ]
+                                    ]
 
-                                delegate: Rectangle {
-                                    id: toggleRow
+                                    delegate: Rectangle {
+                                        id: toggleRow
 
-                                    required property var modelData
-                                    readonly property bool checked: root.settingValue(modelData.key)
-                                    readonly property bool rowEnabled: modelData.enabled === undefined ? true : modelData.enabled
+                                        required property var modelData
+                                        readonly property bool checked: root.settingValue(modelData.key)
+                                        readonly property bool rowEnabled: modelData.enabled === undefined ? true : modelData.enabled
 
-                                    width: parent.width
-                                    height: 40
-                                    radius: 8
-                                    color: rowEnabled && toggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
-                                    opacity: rowEnabled ? 1.0 : 0.48
-                                    border.width: 1
-                                    border.color: checked ? root.palette.accent : root.palette.frameBorder
+                                        width: (settingsGrid.width - settingsGrid.columnSpacing) / 2
+                                        height: 64
+                                        radius: 8
+                                        color: rowEnabled && toggleMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                        opacity: rowEnabled ? 1.0 : 0.48
+                                        border.width: 1
+                                        border.color: checked ? root.palette.accent : root.palette.frameBorder
 
-                                    Row {
-                                        anchors.fill: parent
-                                        anchors.margins: 7
-                                        spacing: 10
-
-                                        Rectangle {
-                                            width: 42
-                                            height: 22
-                                            radius: 11
-                                            y: 4
-                                            color: toggleRow.checked ? root.palette.accent : root.palette.frameBorder
+                                        Row {
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            spacing: 10
 
                                             Rectangle {
-                                                width: 16
-                                                height: 16
-                                                radius: 8
-                                                x: toggleRow.checked ? 22 : 4
-                                                y: 3
-                                                color: toggleRow.checked ? root.palette.frameBackground : root.palette.mutedText
+                                                width: 42
+                                                height: 22
+                                                radius: 11
+                                                y: 11
+                                                color: toggleRow.checked ? root.palette.accent : root.palette.frameBorder
+
+                                                Rectangle {
+                                                    width: 16
+                                                    height: 16
+                                                    radius: 8
+                                                    x: toggleRow.checked ? 22 : 4
+                                                    y: 3
+                                                    color: toggleRow.checked ? root.palette.frameBackground : root.palette.mutedText
+                                                }
+                                            }
+
+                                            Column {
+                                                width: parent.width - 52
+                                                spacing: 3
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: toggleRow.modelData.label
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: toggleRow.modelData.detail
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 10
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 2
+                                                    elide: Text.ElideRight
+                                                }
                                             }
                                         }
 
-                                        Column {
-                                            width: parent.width - 52
-                                            spacing: 1
+                                        MouseArea {
+                                            id: toggleMouse
 
-                                            Text {
-                                                width: parent.width
-                                                text: toggleRow.modelData.label
-                                                color: root.palette.primaryText
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                                elide: Text.ElideRight
-                                            }
-
-                                            Text {
-                                                width: parent.width
-                                                text: toggleRow.modelData.detail
-                                                color: root.palette.mutedText
-                                                font.pixelSize: 9
-                                                elide: Text.ElideRight
-                                            }
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: !root.runningAction && !root.loading
+                                                     && toggleRow.rowEnabled
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.toggleSetting(toggleRow.modelData.key, !toggleRow.checked)
                                         }
-                                    }
-
-                                    MouseArea {
-                                        id: toggleMouse
-
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        enabled: !root.runningAction && !root.loading
-                                                 && toggleRow.rowEnabled
-                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: root.toggleSetting(toggleRow.modelData.key, !toggleRow.checked)
                                     }
                                 }
                             }
@@ -1237,7 +1311,8 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: parent.width - 420 - 14
+                        visible: root.contentTab === "summary"
+                        width: parent.width
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -1250,18 +1325,15 @@ ShellRoot {
                             spacing: 8
 
                             Text {
-                                text: "Profile Summary"
-                                color: root.palette.primaryText
-                                font.pixelSize: 21
-                                font.bold: true
-                            }
+                                id: summaryIntro
 
-                            Text {
                                 width: parent.width
-                                text: "Logging is quiet until a rule with log matches traffic. Enable blocked-attempt logging, apply, then refresh or follow."
+                                height: 18
+                                text: "Review the active profile, inspect blocked traffic, or manage the SSH penalty box."
                                 color: root.palette.mutedText
                                 font.pixelSize: 11
-                                wrapMode: Text.WordWrap
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
 
                             Row {
@@ -1353,7 +1425,7 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: 340
+                                height: parent.height - summaryIntro.height - summaryMetricRow.height - 16
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -1510,16 +1582,20 @@ ShellRoot {
                                     }
 
                                     Text {
+                                        id: viewerMessage
+
                                         width: parent.width
+                                        height: 18
                                         text: root.viewerMode === "penalty" ? root.penaltyMessage : root.logMessage
                                         color: root.palette.mutedText
                                         font.pixelSize: 10
+                                        verticalAlignment: Text.AlignVCenter
                                         elide: Text.ElideRight
                                     }
 
                                     Rectangle {
                                         width: parent.width
-                                        height: 266
+                                        height: parent.height - 28 - viewerMessage.height - 16
                                         radius: 6
                                         color: root.palette.cardBackground
                                         border.width: 1
