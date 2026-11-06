@@ -1437,12 +1437,18 @@ ShellRoot {
                                     spacing: 8
 
                                     Row {
+                                        id: viewerToolbar
+
+                                        readonly property real visibleControlWidth: root.viewerMode === "logs"
+                                            ? 76 + 82 + 90
+                                            : 76 + 104 + 72
+
                                         width: parent.width
                                         height: 28
                                         spacing: 10
 
                                         Text {
-                                            width: parent.width - (root.viewerMode === "logs" ? 396 : 306)
+                                            width: parent.width - viewerToolbar.visibleControlWidth - viewerToolbar.spacing * 3
                                             text: root.viewerMode === "penalty" ? "Penalty Box" : "pflog Viewer"
                                             color: root.viewerMode === "penalty" || root.settingValue("log_blocked") ? root.palette.warning : root.palette.primaryText
                                             font.pixelSize: 14
