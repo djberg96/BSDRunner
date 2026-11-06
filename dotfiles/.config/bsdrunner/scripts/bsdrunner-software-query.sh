@@ -458,82 +458,50 @@ query_remote_record() {
     return 1
 }
 
-dependency_blob_for_package() {
-    mode="$1"
-    package_name="$2"
-
-    case "$mode" in
-        installed)
-            dependency_output="$(pkg query '%dn' "$package_name" 2>/dev/null || true)"
-            ;;
-        remote)
-            dependency_output="$(pkg rquery '%dn' "$package_name" 2>/dev/null || true)"
-            ;;
-        *)
-            dependency_output=""
-            ;;
-    esac
-
-    first_entry=1
-    printf '%s\n' "$dependency_output" | while IFS= read -r dependency_name; do
-        dependency_name="$(printf '%s\n' "$dependency_name" | awk '
-            {
-                gsub(/\r/, "", $0)
-                sub(/^[[:space:]]+/, "", $0)
-                sub(/[[:space:]]+$/, "", $0)
-                print
-            }
-        ')"
-
-        [ -n "$dependency_name" ] || continue
-
-        dependency_installed=0
-        if pkg info -q -e "$dependency_name" 2>/dev/null; then
-            dependency_installed=1
-        fi
-
-        if [ "$first_entry" -eq 0 ]; then
-            printf '|'
-        fi
-
-        printf '%s~%s' "$dependency_name" "$dependency_installed"
-        first_entry=0
-    done
-
-    printf '\n'
-}
-
 attach_dependencies_to_page() {
     input_file="$1"
-    output_file="$2"
+    installed_file="$2"
+    output_file="$3"
+    dependency_file="${output_file}.dependencies"
+    installed_names_file="${output_file}.installed-names"
+    remote_names_file="${output_file}.remote-names"
+    dependency_format="$(printf '%%n\t%%dn')"
 
-    : >"$output_file"
+    awk -F '\t' '$9 == "1" { print $1 }' "$input_file" >"$installed_names_file"
+    awk -F '\t' '$9 != "1" { print $1 }' "$input_file" >"$remote_names_file"
+    : >"$dependency_file"
 
-    while IFS='	' read -r name version comment origin website size_bytes description license installed update_available installed_version size_text; do
-        [ -n "$name" ] || continue
+    if [ -s "$installed_names_file" ]; then
+        xargs pkg query "$dependency_format" <"$installed_names_file" 2>/dev/null >>"$dependency_file" || true
+    fi
 
-        dependency_mode="remote"
-        if [ "${installed:-0}" = "1" ]; then
-            dependency_mode="installed"
-        fi
+    if [ -s "$remote_names_file" ]; then
+        xargs pkg rquery "$dependency_format" <"$remote_names_file" 2>/dev/null >>"$dependency_file" || true
+    fi
 
-        dependency_blob="$(dependency_blob_for_package "$dependency_mode" "$name")"
+    awk -F '\t' \
+        -v installed_file="$installed_file" \
+        -v dependency_file="$dependency_file" '
+        BEGIN { OFS = FS }
 
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-            "$name" \
-            "$version" \
-            "$comment" \
-            "$origin" \
-            "$website" \
-            "$size_bytes" \
-            "$description" \
-            "$license" \
-            "$installed" \
-            "$update_available" \
-            "$installed_version" \
-            "$size_text" \
-            "$dependency_blob" >>"$output_file"
-    done <"$input_file"
+        FILENAME == installed_file {
+            installed[$1] = 1
+            next
+        }
+
+        FILENAME == dependency_file {
+            if ($1 == "" || $2 == "")
+                next
+
+            entry = $2 "~" (($2 in installed) ? "1" : "0")
+            dependencies[$1] = dependencies[$1] == "" ? entry : dependencies[$1] "|" entry
+            next
+        }
+
+        {
+            print $0, dependencies[$1]
+        }
+    ' "$installed_file" "$dependency_file" "$input_file" >"$output_file"
 }
 
 enrich_browse_page() {
@@ -688,10 +656,58 @@ enrich_installed_page() {
     done <"$page_file"
 }
 
-build_updates_page() {
+collect_planned_update_names() {
+    target_file="$1"
+    installed_file="$2"
+    plan_stdout_file="$3"
+    plan_stderr_file="$4"
+    version_output_file="${target_file}.versions"
+
+    if LC_ALL=C pkg upgrade -n >"$plan_stdout_file" 2>"$plan_stderr_file"; then
+        awk '
+            /^Installed packages to be UPGRADED:/ {
+                in_upgrades = 1
+                next
+            }
+
+            in_upgrades && /^[[:space:]]*$/ {
+                in_upgrades = 0
+                next
+            }
+
+            in_upgrades {
+                line = $0
+                sub(/^[[:space:]]+/, "", line)
+                sub(/:.*/, "", line)
+                if (line != "")
+                    print line
+            }
+        ' "$plan_stdout_file" >"$target_file"
+        return 0
+    fi
+
+    if LC_ALL=C pkg version -qRU -l '<' >"$version_output_file" 2>>"$plan_stderr_file"; then
+        awk -F '\t' '
+            FNR == NR {
+                outdated[$1] = 1
+                next
+            }
+
+            (($1 "-" $2) in outdated) {
+                print $1
+            }
+        ' "$version_output_file" "$installed_file" >"$target_file"
+        return 0
+    fi
+
+    : >"$target_file"
+    return 1
+}
+
+build_updates_page_bulk() {
     installed_file="$1"
-    query_format="$2"
-    field_sep="$3"
+    remote_file="$2"
+    update_names_file="$3"
     text_filter="$4"
     category_filter="$5"
     package_filter="$6"
@@ -700,113 +716,115 @@ build_updates_page() {
     page_file="$9"
     meta_file="${10}"
 
-    : >"$page_file"
+    awk -F '\t' \
+        -v installed_file="$installed_file" \
+        -v remote_file="$remote_file" \
+        -v update_names_file="$update_names_file" \
+        -v meta_file="$meta_file" \
+        -v text_filter="$text_filter" \
+        -v category_filter="$category_filter" \
+        -v package_filter="$package_filter" \
+        -v offset="$offset" \
+        -v limit="$limit" \
+        -v empty_field_token="$empty_field_token" '
+        function matches_package_name(name, filter, prefix_mode, base_filter) {
+            if (filter == "")
+                return 1
 
-    matched=0
-    loaded=0
-    has_next=0
+            prefix_mode = (filter ~ /\*$/)
+            base_filter = prefix_mode ? substr(filter, 1, length(filter) - 1) : filter
+            if (base_filter == "")
+                return 1
 
-    while IFS='	' read -r name installed_version comment origin website size_bytes description; do
-        [ -n "$name" ] || continue
+            name = tolower(name)
+            if (prefix_mode)
+                return index(name, base_filter) == 1
 
-        remote_record="$(query_remote_record "$name" "$query_format" "$field_sep" || true)"
-        [ -n "$remote_record" ] || continue
+            return index(name, base_filter) > 0
+        }
 
-        remote_version="$(printf '%s\n' "$remote_record" | awk -F '	' 'NR == 1 { print $2 }')"
-        [ -n "$remote_version" ] || continue
+        function human_size(bytes,   value, idx, units) {
+            if (bytes == "" || bytes == empty_field_token || bytes !~ /^[0-9]+$/)
+                return empty_field_token
 
-        comparison="$(pkg version -t "$installed_version" "$remote_version" 2>/dev/null || printf '=')"
-        [ "$comparison" = "<" ] || continue
+            split("B KB MB GB TB", units, " ")
+            value = bytes + 0
+            idx = 1
 
-        if [ -n "$text_filter" ] || [ -n "$category_filter" ] || [ -n "$package_filter" ]; then
-            if ! printf '%s\n' "$remote_record" | awk -F '	' -v text_filter="$text_filter" -v category_filter="$category_filter" -v package_filter="$package_filter" '
-                function matches_package_name(name, filter, prefix_mode, base_filter) {
-                    if (filter == "")
-                        return 1
+            while (value >= 1024 && idx < 5) {
+                value /= 1024
+                idx += 1
+            }
 
-                    prefix_mode = (filter ~ /\*$/)
-                    base_filter = prefix_mode ? substr(filter, 1, length(filter) - 1) : filter
-                    if (base_filter == "")
-                        return 1
+            if (idx == 1)
+                return sprintf("%d %s", value, units[idx])
 
-                    name = tolower(name)
-                    if (prefix_mode)
-                        return index(name, base_filter) == 1
+            return sprintf("%.1f %s", value, units[idx])
+        }
 
-                    return index(name, base_filter) > 0
-                }
+        function matches_record(fields,   category, haystack, origin_parts) {
+            split(fields[4], origin_parts, "/")
+            category = tolower(fields[4] == empty_field_token ? "" : origin_parts[1])
 
-                BEGIN { found = 0 }
-                {
-                    split($4, origin_parts, "/")
-                    category = tolower(origin_parts[1])
+            if (category_filter != "" && category != category_filter)
+                return 0
 
-                    if (category_filter != "" && category != category_filter)
-                        next
+            if (!matches_package_name(fields[1], package_filter))
+                return 0
 
-                    if (!matches_package_name($1, package_filter))
-                        next
+            if (text_filter == "")
+                return 1
 
-                    if (text_filter == "") {
-                        found = 1
-                        next
-                    }
+            haystack = tolower(fields[1] " " fields[3] " " fields[4])
+            return index(haystack, text_filter) > 0
+        }
 
-                    haystack = tolower($1 " " $3 " " $4)
-                    if (index(haystack, text_filter) > 0)
-                        found = 1
-                }
-                END { exit found ? 0 : 1 }
-            '; then
-                continue
-            fi
-        fi
+        BEGIN {
+            matched = 0
+            loaded = 0
+            has_next = 0
+        }
 
-        if [ "$matched" -lt "$offset" ]; then
-            matched=$((matched + 1))
-            continue
-        fi
+        FILENAME == update_names_file {
+            updates[$1] = 1
+            next
+        }
 
-        if [ "$loaded" -lt "$limit" ]; then
-            size_text="$(
-                awk -v bytes="$(printf '%s\n' "$remote_record" | awk -F '	' 'NR == 1 { print $6 }')" '
-                    BEGIN {
-                        if (bytes == "" || bytes !~ /^[0-9]+$/) {
-                            print ""
-                            exit
-                        }
+        FILENAME == remote_file {
+            if (!($1 in remote_records))
+                remote_records[$1] = $0
+            next
+        }
 
-                        split("B KB MB GB TB", units, " ")
-                        value = bytes + 0
-                        idx = 1
+        FILENAME == installed_file {
+            if (!($1 in updates) || !($1 in remote_records))
+                next
 
-                        while (value >= 1024 && idx < 5) {
-                            value /= 1024
-                            idx += 1
-                        }
+            remote_count = split(remote_records[$1], remote_fields, FS)
+            if (remote_count < 8 || !matches_record(remote_fields))
+                next
 
-                        if (idx == 1)
-                            printf "%d %s\n", value, units[idx]
-                        else
-                            printf "%.1f %s\n", value, units[idx]
-                    }
-                '
-            )"
+            if (matched < offset) {
+                matched += 1
+                next
+            }
 
-            installed_version="$(encode_empty_field "$installed_version")"
-            size_text="$(encode_empty_field "$size_text")"
+            if (loaded < limit) {
+                size_text = human_size(remote_fields[6])
+                printf "%s\t1\t1\t%s\t%s\n", remote_records[$1], $2, size_text
+                loaded += 1
+                matched += 1
+                next
+            }
 
-            printf '%s\t1\t1\t%s\t%s\n' "$remote_record" "$installed_version" "$size_text" >>"$page_file"
-            matched=$((matched + 1))
-            loaded=$((loaded + 1))
-            continue
-        fi
+            has_next = 1
+            next
+        }
 
-        has_next=1
-        break
-    done <"$installed_file"
-
-    printf 'loaded=%s\nhas_next=%s\n' "$loaded" "$has_next" >"$meta_file"
+        END {
+            printf "loaded=%d\nhas_next=%d\n", loaded, has_next > meta_file
+        }
+    ' "$update_names_file" "$remote_file" "$installed_file" >"$page_file"
 }
 
 emit_json() {
@@ -1010,6 +1028,9 @@ snapshot() {
     page_tsv="$tmp_dir/page.tsv"
     page_with_dependencies_tsv="$tmp_dir/page-with-dependencies.tsv"
     page_meta="$tmp_dir/page.meta"
+    update_names_file="$tmp_dir/update-names.txt"
+    upgrade_plan_stdout="$tmp_dir/upgrade-plan.out"
+    upgrade_plan_stderr="$tmp_dir/upgrade-plan.err"
 
     if ! pkg query -a "$query_format" 2>"$tmp_dir/installed.err" | normalize_records "$field_sep" >"$installed_tsv"; then
         installed_error="$(tr '\n' ' ' <"$tmp_dir/installed.err" | trim_file)"
@@ -1022,13 +1043,17 @@ snapshot() {
     installed_size_label="$(local_pkg_disk_used_label "$installed_size_bytes")"
 
     case "$view" in
-        browse)
+        browse|updates)
             if ! pkg rquery -a "$query_format" 2>"$tmp_dir/remote.err" | normalize_records "$field_sep" >"$remote_tsv"; then
                 remote_error="$(tr '\n' ' ' <"$tmp_dir/remote.err" | trim_file)"
                 error_json "Unable to query remote pkg metadata. ${remote_error}"
                 exit 1
             fi
+            ;;
+    esac
 
+    case "$view" in
+        browse)
             collect_browse_page "$installed_tsv" "$remote_tsv" "$page_tsv" "$page_meta" "$text_filter" "$category_filter" "$package_filter" "$installed_filter" "$offset" "$page_size"
             ;;
         installed)
@@ -1045,12 +1070,18 @@ snapshot() {
                 : >"$page_tsv"
                 printf 'loaded=0\nhas_next=0\n' >"$page_meta"
             else
-                build_updates_page "$installed_tsv" "$query_format" "$field_sep" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size" "$page_tsv" "$page_meta"
+                if ! collect_planned_update_names "$update_names_file" "$installed_tsv" "$upgrade_plan_stdout" "$upgrade_plan_stderr"; then
+                    plan_error="$(tr '\n' ' ' <"$upgrade_plan_stderr" | trim_file)"
+                    error_json "Unable to calculate package updates. ${plan_error}"
+                    exit 1
+                fi
+
+                build_updates_page_bulk "$installed_tsv" "$remote_tsv" "$update_names_file" "$text_filter" "$category_filter" "$package_filter" "$offset" "$page_size" "$page_tsv" "$page_meta"
             fi
             ;;
     esac
 
-    attach_dependencies_to_page "$page_tsv" "$page_with_dependencies_tsv"
+    attach_dependencies_to_page "$page_tsv" "$installed_tsv" "$page_with_dependencies_tsv"
 
     loaded="$(awk -F '=' '$1 == "loaded" { print $2 }' "$page_meta")"
     has_next_flag="$(awk -F '=' '$1 == "has_next" { print $2 }' "$page_meta")"

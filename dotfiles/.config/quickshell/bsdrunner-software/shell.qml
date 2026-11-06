@@ -33,6 +33,7 @@ ShellRoot {
     property string installedCountLabel: "0"
     property string updatesCountLabel: "--"
     property bool pendingRefresh: false
+    property bool pendingRefreshClearsSelection: false
     property bool refreshButtonHovered: false
     property int snapshotExitCode: 0
     property string snapshotStderrText: ""
@@ -173,7 +174,7 @@ ShellRoot {
     }
 
     function requestAction(actionId, actionLabel, pkgName) {
-        if (runningAction)
+        if (runningAction || loadingPackages)
             return
 
         if (actionId !== "upgrade-all" && !pkgName)
@@ -206,7 +207,7 @@ ShellRoot {
     }
 
     function runConfirmedAction() {
-        if (!pendingActionId || !pendingActionPackageName || runningAction)
+        if (!pendingActionId || !pendingActionPackageName || runningAction || loadingPackages)
             return
 
         activeActionId = pendingActionId
@@ -477,13 +478,18 @@ ShellRoot {
     }
 
     function refreshPackages(clearSelection) {
+        var shouldClearSelection = clearSelection !== false
+
         if (snapshotProcess.running) {
             pendingRefresh = true
+            if (shouldClearSelection)
+                pendingRefreshClearsSelection = true
             return
         }
 
         loadingPackages = true
         pendingRefresh = false
+        pendingRefreshClearsSelection = false
         statusTone = "info"
         statusMessage = "Loading a package page from pkg..."
         snapshotExitCode = 0
@@ -492,9 +498,17 @@ ShellRoot {
         snapshotExited = false
         snapshotStdoutFinished = false
         snapshotStderrFinished = false
-        if (clearSelection !== false)
+        if (shouldClearSelection)
             selectedPackageName = ""
         snapshotProcess.running = true
+    }
+
+    function runPendingRefresh() {
+        if (!pendingRefresh)
+            return
+
+        var clearSelection = pendingRefreshClearsSelection
+        refreshPackages(clearSelection)
     }
 
     function maybeFinalizeSnapshot() {
@@ -519,8 +533,7 @@ ShellRoot {
             hasNextPage = false
             generatedAt = ""
             loadingPackages = false
-            if (pendingRefresh)
-                refreshPackages()
+            runPendingRefresh()
             return
         }
 
@@ -536,8 +549,7 @@ ShellRoot {
             hasNextPage = false
             generatedAt = ""
             loadingPackages = false
-            if (pendingRefresh)
-                refreshPackages()
+            runPendingRefresh()
             return
         }
 
@@ -551,8 +563,7 @@ ShellRoot {
             hasNextPage = false
             generatedAt = ""
             loadingPackages = false
-            if (pendingRefresh)
-                refreshPackages()
+            runPendingRefresh()
             return
         }
 
@@ -577,8 +588,7 @@ ShellRoot {
         statusTone = "info"
         statusMessage = payload.message || "Loaded package metadata from pkg."
         loadingPackages = false
-        if (pendingRefresh)
-            refreshPackages()
+        runPendingRefresh()
     }
 
     onVisiblePackagesChanged: {
@@ -1732,7 +1742,9 @@ ShellRoot {
                                                 id: actionButton
 
                                                 required property var modelData
-                                                readonly property bool actionEnabled: modelData.available === true && !root.runningAction
+                                                readonly property bool actionEnabled: modelData.available === true
+                                                    && !root.loadingPackages
+                                                    && !root.runningAction
                                                 readonly property bool hovered: actionMouse.containsMouse
                                                 readonly property color toneColor: modelData.tone === "danger"
                                                     ? root.palette.danger
