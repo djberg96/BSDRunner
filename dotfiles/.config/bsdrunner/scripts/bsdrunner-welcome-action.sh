@@ -33,6 +33,9 @@ case "$action" in
     apps)
         exec sh "$home_config/bsdrunner/scripts/bsdrunner-apps-menu.sh"
         ;;
+    settings)
+        exec sh "$home_config/bsdrunner/scripts/bsdrunner-settings.sh"
+        ;;
     keybindings)
         exec sh "$home_config/waybar/scripts/bsdrunner-keybindings-menu.sh"
         ;;
@@ -41,9 +44,6 @@ case "$action" in
         ;;
     power)
         exec wlogout -l "$home_config/wlogout/layout" -C "$home_config/wlogout/style.css" --buttons-per-row 3 --column-spacing 18 --row-spacing 18 --margin 40
-        ;;
-    power-settings)
-        exec sh "$home_config/bsdrunner/scripts/bsdrunner-power.sh"
         ;;
     *)
         exit 1

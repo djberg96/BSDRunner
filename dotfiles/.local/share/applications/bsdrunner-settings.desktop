@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=BSDRunner Settings
+GenericName=System Settings
+Comment=Configure the BSDRunner desktop
+Exec=sh -c "exec ~/.config/bsdrunner/scripts/bsdrunner-settings.sh"
+Icon=preferences-system
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=settings;system;network;power;firewall;dns;software;zfs;jails;theme;
+StartupNotify=true

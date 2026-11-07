@@ -135,6 +135,7 @@ hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 hl.bind(mainMod .. " + X", hl.dsp.exit())
 hl.bind(mainMod .. " + F", hl.dsp.exec_cmd("firefox"))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("rofi -show drun"))
+hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-settings.sh"))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-welcome.sh"))
 
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))

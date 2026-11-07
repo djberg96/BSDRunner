@@ -15,6 +15,13 @@ ShellRoot {
     property string pendingAction: ""
     property var apps: [
         {
+            "action": "settings",
+            "icon": "SET",
+            "label": "System Settings",
+            "detail": "Configure the BSDRunner desktop",
+            "tone": "info"
+        },
+        {
             "action": "files",
             "icon": "FILE",
             "label": "Files",
@@ -93,6 +100,11 @@ ShellRoot {
 
     function commandFor(action) {
         switch (action) {
+        case "settings":
+            return [
+                "sh",
+                themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-settings.sh"
+            ]
         case "files":
             return [
                 "sh",
@@ -190,7 +202,7 @@ ShellRoot {
 
         visible: true
         implicitWidth: 330
-        implicitHeight: 530
+        implicitHeight: 600
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
 

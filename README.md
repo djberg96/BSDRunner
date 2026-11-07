@@ -24,6 +24,7 @@ This repo is intentionally small:
 - Waybar in the default startup path
 - `swww` in the themed startup path
 - automatic session locking through `hypridle` and `hyprlock`
+- a searchable BSDRunner Settings hub for the desktop control panels
 - no generated monitor config
 - a neutral base with optional corp theme layers
 
@@ -46,6 +47,7 @@ The goal is a nice, bootable base session for Hyprland `0.56.x` on FreeBSD.
 - `docs/software-center.md`
 - `docs/login-screen.md`
 - `docs/power.md`
+- `docs/settings.md`
 - `docs/pf.md`
 - `docs/dns.md`
 

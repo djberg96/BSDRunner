@@ -9,7 +9,7 @@
     "margin-top": 8,
     "margin-left": 10,
     "margin-right": 10,
-    "modules-left": ["custom/theme", "custom/apps", "ext/workspaces", "custom/wallpaper-animation", "hyprland/window"],
+    "modules-left": ["custom/theme", "custom/apps", "custom/settings", "ext/workspaces", "custom/wallpaper-animation", "hyprland/window"],
     "modules-center": [],
     "modules-right": ["cpu", "custom/memory", "disk", "pulseaudio", "custom/network", "custom/battery", "custom/clock", "tray", "custom/power"],
 
@@ -64,6 +64,13 @@
       "tooltip": true,
       "tooltip-format": "Open BSDRunner apps",
       "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-apps-menu.sh"
+    },
+
+    "custom/settings": {
+      "format": "",
+      "tooltip": true,
+      "tooltip-format": "Open BSDRunner Settings",
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-settings.sh"
     },
 
     "cpu": {

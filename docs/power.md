@@ -13,9 +13,9 @@ The first supported policy is intentionally small:
 - idle inhibitors from video players and other applications are honored;
 - no automatic suspend or display power-off is enabled yet.
 
-Open the panel from **Power Settings** in the BSDRunner welcome window, or
-right-click the Waybar power icon. The power menu's **Lock** action uses the
-same guarded lock helper.
+Open the panel from **Power & Lock** in BSDRunner Settings, or right-click the
+Waybar power icon. The power menu's **Lock** action uses the same guarded lock
+helper.
 
 ## Components
 

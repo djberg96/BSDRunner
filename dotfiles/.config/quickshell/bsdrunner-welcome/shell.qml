@@ -95,9 +95,9 @@ ShellRoot {
                 "action": "power"
             },
             {
-                "title": "Power Settings",
-                "subtitle": "Configure automatic screen locking",
-                "action": "power-settings"
+                "title": "System Settings",
+                "subtitle": "Configure the BSDRunner desktop",
+                "action": "settings"
             },
             {
                 "title": "Close",
