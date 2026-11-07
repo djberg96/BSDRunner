@@ -1,7 +1,11 @@
 #!/bin/sh
 
 set -eu
-PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
+if [ -n "${BSDRUNNER_SOFTWARE_TEST_PATH:-}" ]; then
+    PATH="$BSDRUNNER_SOFTWARE_TEST_PATH:/usr/bin:/bin"
+else
+    PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
+fi
 
 action="${1:-}"
 package_name="${2:-}"
@@ -156,33 +160,71 @@ protected_removed_packages() {
     done
 }
 
+preview_output_has_complete_plan() {
+    awk '
+        /^The following [0-9]+ package\(s\) will be affected \(of [0-9]+ checked\):$/ {
+            has_header = 1
+        }
+
+        /^Deinstallation has been requested for the following [0-9]+ packages \(of [0-9]+ packages in the universe\):$/ {
+            has_header = 1
+        }
+
+        /^(New packages to be INSTALLED|Installed packages to be (UPGRADED|REINSTALLED|DOWNGRADED|REMOVED)):$/ {
+            has_section = 1
+        }
+
+        /^Number of packages to be (installed|upgraded|reinstalled|downgraded|removed): [0-9]+$/ {
+            has_count = 1
+        }
+
+        END {
+            exit !(has_header && has_section && has_count)
+        }
+    ' "$1"
+}
+
 run_preview() {
     stdout_file="$1"
     stderr_file="$2"
+    preview_status=0
 
     # Do not combine pkg's -n and -y flags here. They are opposing answer
     # modes, and a trailing -y can turn the intended preview into a real
     # package transaction before validate_preview has inspected the plan.
     case "$action" in
         install)
-            pkg install -n -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            LC_ALL=C pkg install -n -- "$package_name" >"$stdout_file" 2>"$stderr_file" || preview_status=$?
             ;;
         reinstall)
-            pkg install -n -f -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            LC_ALL=C pkg install -n -f -- "$package_name" >"$stdout_file" 2>"$stderr_file" || preview_status=$?
             ;;
         upgrade)
-            pkg upgrade -n -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            LC_ALL=C pkg upgrade -n -- "$package_name" >"$stdout_file" 2>"$stderr_file" || preview_status=$?
             ;;
         upgrade-all)
-            pkg upgrade -n >"$stdout_file" 2>"$stderr_file"
+            LC_ALL=C pkg upgrade -n >"$stdout_file" 2>"$stderr_file" || preview_status=$?
             ;;
         remove)
-            pkg delete -n -- "$package_name" >"$stdout_file" 2>"$stderr_file"
+            LC_ALL=C pkg delete -n -- "$package_name" >"$stdout_file" 2>"$stderr_file" || preview_status=$?
             ;;
         *)
             return 1
             ;;
     esac
+
+    if [ "$preview_status" -eq 0 ]; then
+        return 0
+    fi
+
+    # pkg 2.8.x can return 1 after printing a successful dry-run plan. Treat
+    # that one status as success only when stdout contains a complete pkg plan;
+    # solver, repository, and argument failures must still stop the action.
+    if [ "$preview_status" -eq 1 ] && preview_output_has_complete_plan "$stdout_file"; then
+        return 0
+    fi
+
+    return "$preview_status"
 }
 
 validate_preview() {

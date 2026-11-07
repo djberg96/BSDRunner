@@ -1,0 +1,95 @@
+#!/bin/sh
+
+set -eu
+
+command_name="${1:-}"
+shift || true
+
+has_argument() {
+    expected="$1"
+    shift
+    for argument in "$@"; do
+        if [ "$argument" = "$expected" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+emit_install_plan() {
+    cat <<'EOF'
+The following 1 package(s) will be affected (of 0 checked):
+
+New packages to be INSTALLED:
+	keybase: 6.6.3_6 [FreeBSD-ports]
+
+Number of packages to be installed: 1
+
+The process will require 163 MiB more space.
+44 MiB to be downloaded.
+EOF
+}
+
+emit_removal_plan() {
+    cat <<'EOF'
+The following 2 package(s) will be affected (of 0 checked):
+
+New packages to be INSTALLED:
+	keybase: 6.6.3_6 [FreeBSD-ports]
+
+Installed packages to be REMOVED:
+	conflicting-package: 1.0
+
+Number of packages to be installed: 1
+Number of packages to be removed: 1
+EOF
+}
+
+case "$command_name" in
+    install)
+        if has_argument -n "$@"; then
+            case "${BSDRUNNER_SOFTWARE_TEST_PREVIEW:-valid-nonzero}" in
+                valid-nonzero)
+                    emit_install_plan
+                    exit 1
+                    ;;
+                valid-zero)
+                    emit_install_plan
+                    exit 0
+                    ;;
+                removal-nonzero)
+                    emit_removal_plan
+                    exit 1
+                    ;;
+                invalid-one)
+                    printf '%s\n' 'pkg: repository metadata is unavailable' >&2
+                    exit 1
+                    ;;
+                invalid-other)
+                    printf '%s\n' 'pkg: failed to solve the requested transaction' >&2
+                    exit 70
+                    ;;
+                *)
+                    printf '%s\n' 'unknown preview fixture' >&2
+                    exit 64
+                    ;;
+            esac
+        fi
+        : >"$BSDRUNNER_SOFTWARE_TEST_STATE"
+        ;;
+    info)
+        if [ -f "$BSDRUNNER_SOFTWARE_TEST_STATE" ]; then
+            exit 0
+        fi
+        exit 1
+        ;;
+    query)
+        if [ -f "$BSDRUNNER_SOFTWARE_TEST_STATE" ]; then
+            printf '%s\n' '6.6.3_6'
+        fi
+        ;;
+    *)
+        printf 'unsupported pkg fixture command: %s\n' "$command_name" >&2
+        exit 64
+        ;;
+esac
