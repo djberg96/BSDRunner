@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import QtCore
 import QtQuick
+import QtQuick.Controls
 
 ShellRoot {
     id: root
@@ -79,12 +80,6 @@ ShellRoot {
             homeDir + "/.config/bsdrunner/scripts/bsdrunner-audio-set.sh",
             String(rounded)
         ])
-    }
-
-    function setVolumeFromPosition(mouseX, width) {
-        if (width <= 0)
-            return
-        previewVolume((Math.max(0, Math.min(width, mouseX)) / width) * 100)
     }
 
     function toggleMute() {
@@ -205,15 +200,31 @@ ShellRoot {
                         font.bold: true
                     }
 
-                    Item {
+                    Slider {
+                        id: volumeSlider
                         width: parent.width
                         height: 28
+                        from: 0
+                        to: 100
+                        stepSize: 1
+                        snapMode: Slider.SnapAlways
+                        live: true
+                        value: root.currentVolume
 
-                        Rectangle {
-                            id: sliderTrack
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
+                        onMoved: root.previewVolume(value)
+                        onPressedChanged: {
+                            if (pressed) {
+                                root.dragging = true
+                            } else if (root.dragging) {
+                                root.dragging = false
+                                root.commitVolume(value)
+                            }
+                        }
+
+                        background: Rectangle {
+                            x: volumeSlider.leftPadding
+                            y: volumeSlider.topPadding + (volumeSlider.availableHeight - height) / 2
+                            width: volumeSlider.availableWidth
                             height: 10
                             radius: 5
                             color: Qt.alpha(root.backgroundColor, 0.72)
@@ -221,46 +232,22 @@ ShellRoot {
                             border.color: Qt.alpha(root.accentColor, 0.38)
 
                             Rectangle {
-                                width: Math.max(10, (root.currentVolume / 100) * parent.width)
+                                width: volumeSlider.visualPosition * parent.width
                                 height: parent.height
                                 radius: 5
                                 color: root.accentColor
                             }
+                        }
 
-                            Rectangle {
-                                width: 22
-                                height: 22
-                                radius: 11
-                                color: root.accentStrongColor
-                                border.width: 2
-                                border.color: root.accentColor
-                                x: Math.max(0, Math.min(parent.width - width, (root.currentVolume / 100) * parent.width - width / 2))
-                                y: (parent.height - height) / 2
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-
-                                onPressed: mouse => {
-                                    root.dragging = true
-                                    root.setVolumeFromPosition(mouse.x, width)
-                                }
-                                onPositionChanged: mouse => {
-                                    if (pressed)
-                                        root.setVolumeFromPosition(mouse.x, width)
-                                }
-                                onReleased: {
-                                    root.dragging = false
-                                    root.commitVolume(root.currentVolume)
-                                }
-                                onCanceled: {
-                                    root.dragging = false
-                                    stateFile.reload()
-                                    root.refreshState()
-                                }
-                            }
+                        handle: Rectangle {
+                            x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
+                            y: volumeSlider.topPadding + (volumeSlider.availableHeight - height) / 2
+                            width: 22
+                            height: 22
+                            radius: 11
+                            color: root.accentStrongColor
+                            border.width: 2
+                            border.color: root.accentColor
                         }
                     }
 
