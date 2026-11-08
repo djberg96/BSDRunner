@@ -107,8 +107,29 @@ if audio_env sh "$scripts_dir/bsdrunner-audio-set.sh" invalid >/dev/null 2>&1; t
 fi
 pass "audio setter updates and validates the master volume"
 
+cat > "$mock_bin/mixer" <<'EOF'
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+    vol=*)
+        value="${1#vol=}"
+        percent="$(awk -v value="$value" 'BEGIN { printf "%d", (value * 100) + 0.5 }')"
+        muted="$(sed -n 's/^muted=//p' "$BSDRUNNER_TEST_AUDIO_STATE")"
+        printf 'volume=%s\nmuted=%s\n' "$percent" "$muted" > "$BSDRUNNER_TEST_AUDIO_STATE"
+        ;;
+    *) exit 2 ;;
+esac
+EOF
+chmod 755 "$mock_bin/mixer"
+
+audio_env env BSDRUNNER_AUDIO_FORCE_OSS_MIXER=yes sh "$scripts_dir/bsdrunner-audio-set.sh" 73
+grep -Fx 'volume=73' "$cache_dir/audio-state" >/dev/null || fail "FreeBSD OSS setter lost one percent"
+grep -Fx 'muted=0' "$cache_dir/audio-state" >/dev/null || fail "FreeBSD OSS setter changed mute state"
+pass "FreeBSD OSS setter preserves the requested integer percent"
+
 audio_env sh "$scripts_dir/bsdrunner-audio-mute.sh"
-grep -Fx 'volume=42' "$cache_dir/audio-state" >/dev/null || fail "mute toggle changed the volume"
+grep -Fx 'volume=73' "$cache_dir/audio-state" >/dev/null || fail "mute toggle changed the volume"
 grep -Fx 'muted=1' "$cache_dir/audio-state" >/dev/null || fail "mute toggle did not refresh slider state"
 pass "audio mute toggles the master sink"
 
