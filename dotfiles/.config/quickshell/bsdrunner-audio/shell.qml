@@ -25,7 +25,8 @@ ShellRoot {
 
     property int currentVolume: 0
     property bool currentMuted: false
-    property int pendingVolume: -1
+    property bool dragging: false
+    property bool applyInFlight: false
 
     function paletteValue(key, fallback) {
         var lines = paletteFile.text().split("\n")
@@ -44,7 +45,7 @@ ShellRoot {
     readonly property color accentStrongColor: paletteValue("accent_strong", "#b7d9f2")
 
     function refreshState() {
-        if (pendingVolume >= 0)
+        if (dragging || applyInFlight)
             return
 
         var lines = stateFile.text().split("\n")
@@ -63,18 +64,16 @@ ShellRoot {
         currentMuted = muted
     }
 
-    function setVolume(value) {
+    function previewVolume(value) {
         var rounded = Math.max(0, Math.min(100, Math.round(value)))
         currentVolume = rounded
-        pendingVolume = rounded
-        applyTimer.restart()
     }
 
     function commitVolume(value) {
         var rounded = Math.max(0, Math.min(100, Math.round(value)))
         currentVolume = rounded
-        pendingVolume = -1
-        applyTimer.stop()
+        applyInFlight = true
+        applyTimeout.restart()
         Quickshell.execDetached([
             "sh",
             homeDir + "/.config/bsdrunner/scripts/bsdrunner-audio-set.sh",
@@ -85,11 +84,13 @@ ShellRoot {
     function setVolumeFromPosition(mouseX, width) {
         if (width <= 0)
             return
-        setVolume((Math.max(0, Math.min(width, mouseX)) / width) * 100)
+        previewVolume((Math.max(0, Math.min(width, mouseX)) / width) * 100)
     }
 
     function toggleMute() {
         currentMuted = !currentMuted
+        applyInFlight = true
+        applyTimeout.restart()
         Quickshell.execDetached([
             "sh",
             homeDir + "/.config/bsdrunner/scripts/bsdrunner-audio-mute.sh"
@@ -123,18 +124,21 @@ ShellRoot {
 
         onFileChanged: {
             this.reload()
+            root.applyInFlight = false
+            applyTimeout.stop()
             root.refreshState()
         }
     }
 
     Timer {
-        id: applyTimer
-        interval: 90
+        id: applyTimeout
+        interval: 1500
         repeat: false
 
         onTriggered: {
-            if (root.pendingVolume >= 0)
-                root.commitVolume(root.pendingVolume)
+            root.applyInFlight = false
+            stateFile.reload()
+            root.refreshState()
         }
     }
 
@@ -239,12 +243,23 @@ ShellRoot {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
 
-                                onPressed: mouse => root.setVolumeFromPosition(mouse.x, width)
+                                onPressed: mouse => {
+                                    root.dragging = true
+                                    root.setVolumeFromPosition(mouse.x, width)
+                                }
                                 onPositionChanged: mouse => {
                                     if (pressed)
                                         root.setVolumeFromPosition(mouse.x, width)
                                 }
-                                onReleased: root.commitVolume(root.currentVolume)
+                                onReleased: {
+                                    root.dragging = false
+                                    root.commitVolume(root.currentVolume)
+                                }
+                                onCanceled: {
+                                    root.dragging = false
+                                    stateFile.reload()
+                                    root.refreshState()
+                                }
                             }
                         }
                     }

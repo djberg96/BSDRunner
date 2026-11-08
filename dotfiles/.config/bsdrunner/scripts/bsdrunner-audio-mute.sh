@@ -16,4 +16,10 @@ else
 fi
 
 mkdir -p "$cache_dir"
-sh "$state_script" > "$cache_dir/audio-state"
+state_tmp="$(mktemp "$cache_dir/audio-state.XXXXXX")"
+if sh "$state_script" > "$state_tmp"; then
+    mv "$state_tmp" "$cache_dir/audio-state"
+else
+    rm -f "$state_tmp"
+    exit 1
+fi

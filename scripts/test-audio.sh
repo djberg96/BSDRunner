@@ -38,6 +38,13 @@ for required in \
 done
 pass "audio slider components are present"
 
+grep -Fq 'property bool dragging: false' "$audio_qml" || fail "slider does not guard state refreshes while dragging"
+grep -Fq 'property bool applyInFlight: false' "$audio_qml" || fail "slider does not guard state refreshes while applying"
+if grep -Fq 'id: applyTimer' "$audio_qml"; then
+    fail "slider still sends debounced writes during a drag"
+fi
+pass "audio slider applies volume once after dragging"
+
 jq -e '.[0].pulseaudio["on-click"] | contains("bsdrunner-audio-popup.sh")' "$waybar_config" >/dev/null || \
     fail "left click does not open the master volume slider"
 [ "$(jq -r '.[0].pulseaudio["on-click-right"]' "$waybar_config")" = "pavucontrol" ] || \
