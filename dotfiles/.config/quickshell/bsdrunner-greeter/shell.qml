@@ -251,16 +251,34 @@ ShellRoot {
 
             Rectangle {
                 anchors.fill: parent
-                color: "#000000"
-                opacity: 0.34
+                color: root.palette.frameBackground
+                opacity: 0.38
             }
 
             Rectangle {
                 anchors.fill: parent
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: Qt.rgba(0.03, 0.04, 0.05, 0.68) }
-                    GradientStop { position: 0.55; color: Qt.rgba(0.03, 0.04, 0.05, 0.28) }
-                    GradientStop { position: 1.0; color: Qt.rgba(0.03, 0.04, 0.05, 0.76) }
+                    GradientStop {
+                        position: 0.0
+                        color: Qt.rgba(root.palette.frameBackground.r,
+                                       root.palette.frameBackground.g,
+                                       root.palette.frameBackground.b,
+                                       0.72)
+                    }
+                    GradientStop {
+                        position: 0.55
+                        color: Qt.rgba(root.palette.frameBackground.r,
+                                       root.palette.frameBackground.g,
+                                       root.palette.frameBackground.b,
+                                       0.24)
+                    }
+                    GradientStop {
+                        position: 1.0
+                        color: Qt.rgba(root.palette.frameBackground.r,
+                                       root.palette.frameBackground.g,
+                                       root.palette.frameBackground.b,
+                                       0.80)
+                    }
                 }
             }
 
@@ -273,7 +291,10 @@ ShellRoot {
                     height: 424
                     anchors.centerIn: parent
                     radius: 28
-                    color: Qt.rgba(0.04, 0.05, 0.06, 0.68)
+                    color: Qt.rgba(root.palette.panelBackground.r,
+                                   root.palette.panelBackground.g,
+                                   root.palette.panelBackground.b,
+                                   0.78)
                     border.width: 2
                     border.color: root.palette.frameBorder
 
@@ -531,6 +552,14 @@ ShellRoot {
                                 spacing: 10
 
                                 Text {
+                                    text: root.palette.name.toUpperCase()
+                                    color: root.palette.accentStrong
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    font.letterSpacing: 1.4
+                                }
+
+                                Text {
                                     text: "SESSION"
                                     color: root.palette.mutedText
                                     font.pixelSize: 12
@@ -582,7 +611,10 @@ ShellRoot {
                                     width: parent.width
                                     height: sessionMenuColumn.implicitHeight + 16
                                     radius: 18
-                                    color: Qt.rgba(0.05, 0.06, 0.08, 0.92)
+                                    color: Qt.rgba(root.palette.cardBackground.r,
+                                                   root.palette.cardBackground.g,
+                                                   root.palette.cardBackground.b,
+                                                   0.94)
                                     border.width: 1
                                     border.color: root.palette.panelBorder
 

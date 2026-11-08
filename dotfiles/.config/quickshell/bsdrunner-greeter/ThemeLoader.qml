@@ -19,6 +19,9 @@ QtObject {
         return configured.length > 0 ? configured : "/etc/greetd/bsdrunner"
     }
     readonly property string activeTheme: {
+        var configured = String(Quickshell.env("BSDRUNNER_GREETER_THEME") || "").trim()
+        if (configured.length > 0)
+            return configured
         var text = themeFile.text().trim()
         return text.length > 0 ? text : "default"
     }
