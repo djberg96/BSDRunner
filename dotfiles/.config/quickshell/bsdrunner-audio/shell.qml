@@ -119,9 +119,15 @@ ShellRoot {
 
         onFileChanged: {
             this.reload()
-            root.applyInFlight = false
-            applyTimeout.stop()
-            root.refreshState()
+            if (root.applyInFlight) {
+                // Keep the optimistic slider position. Replacing the cache file
+                // can notify before FileView exposes its new contents, and
+                // repainting here briefly restores the pre-drag value.
+                root.applyInFlight = false
+                applyTimeout.stop()
+            } else {
+                root.refreshState()
+            }
         }
     }
 

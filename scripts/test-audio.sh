@@ -41,6 +41,7 @@ pass "audio slider components are present"
 grep -Fq 'property bool dragging: false' "$audio_qml" || fail "slider does not guard state refreshes while dragging"
 grep -Fq 'property bool applyInFlight: false' "$audio_qml" || fail "slider does not guard state refreshes while applying"
 grep -Fq 'Slider {' "$audio_qml" || fail "audio panel does not use the native Qt slider"
+grep -Fq 'if (root.applyInFlight)' "$audio_qml" || fail "slider does not preserve its optimistic release position"
 if grep -Fq 'id: applyTimer' "$audio_qml"; then
     fail "slider still sends debounced writes during a drag"
 fi
