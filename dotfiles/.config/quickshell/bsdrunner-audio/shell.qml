@@ -190,7 +190,7 @@ ShellRoot {
                 Column {
                     anchors.fill: parent
                     anchors.margins: 18
-                    spacing: 14
+                    spacing: 12
 
                     Text {
                         text: "Master Output"
@@ -264,9 +264,9 @@ ShellRoot {
                         spacing: 12
 
                         Rectangle {
-                            width: 110
-                            height: 36
-                            radius: 10
+                            width: 100
+                            height: 30
+                            radius: 8
                             color: muteArea.containsMouse ? Qt.alpha(root.accentColor, 0.24) : Qt.alpha(root.backgroundColor, 0.72)
                             border.width: 1
                             border.color: Qt.alpha(root.accentColor, 0.38)
@@ -275,7 +275,7 @@ ShellRoot {
                                 anchors.centerIn: parent
                                 text: root.currentMuted ? "Unmute" : "Mute"
                                 color: root.textColor
-                                font.pixelSize: 15
+                                font.pixelSize: 14
                                 font.bold: true
                             }
 
@@ -289,9 +289,9 @@ ShellRoot {
                         }
 
                         Rectangle {
-                            width: 110
-                            height: 36
-                            radius: 10
+                            width: 100
+                            height: 30
+                            radius: 8
                             color: closeArea.containsMouse ? Qt.alpha(root.accentColor, 0.24) : Qt.alpha(root.backgroundColor, 0.72)
                             border.width: 1
                             border.color: Qt.alpha(root.accentColor, 0.38)
@@ -300,7 +300,7 @@ ShellRoot {
                                 anchors.centerIn: parent
                                 text: "Close"
                                 color: root.textColor
-                                font.pixelSize: 15
+                                font.pixelSize: 14
                                 font.bold: true
                             }
 
