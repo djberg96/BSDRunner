@@ -1700,7 +1700,7 @@ ShellRoot {
                                         }
 
                                         Repeater {
-                                            model: root.selectedPackage ? (root.currentView === "updates" ? [
+                                            model: root.pendingActionId.length > 0 ? [] : root.selectedPackage ? (root.currentView === "updates" ? [
                                                 {
                                                     "id": "upgrade",
                                                     "label": "Upgrade",

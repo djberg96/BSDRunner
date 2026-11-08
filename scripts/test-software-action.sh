@@ -4,6 +4,7 @@ set -eu
 
 repo_root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 action_script="$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-software-action.sh"
+software_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-software/shell.qml"
 fixture_bin="$repo_root/tests/fixtures/software/bin"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-software-action-tests.XXXXXX")"
 command_log="$test_root/commands.log"
@@ -81,5 +82,9 @@ if grep -Fq 'pkg install -n -y' "$action_script"; then
     fail "preview must never combine pkg -n and -y"
 fi
 pass "software action keeps previews non-mutating"
+
+grep -Fq 'model: root.pendingActionId.length > 0 ? [] :' "$software_qml" || \
+    fail "package action buttons should be hidden while confirmation is pending"
+pass "software confirmation hides competing package actions"
 
 printf 'All software action tests passed.\n'
