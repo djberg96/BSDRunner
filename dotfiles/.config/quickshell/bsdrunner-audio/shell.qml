@@ -223,7 +223,10 @@ ShellRoot {
                                 root.dragging = true
                             } else if (root.dragging) {
                                 root.dragging = false
-                                root.commitVolume(value)
+                                // Commit the integer already shown to the user.
+                                // Slider.value can retain a fractional release
+                                // position and round to an adjacent step here.
+                                root.commitVolume(root.currentVolume)
                             }
                         }
 
