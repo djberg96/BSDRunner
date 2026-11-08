@@ -45,9 +45,17 @@ From the BSDRunner repository:
 ./scripts/install-greetd-greeter.sh --theme jinteki
 ```
 
-Omit `--theme` to use the current BSDRunner theme. This command builds the Rust
-bridge and installs a self-contained bundle under `/etc/greetd/bsdrunner`, but
-does not replace the active greetd configuration.
+Omit `--theme` to use the current BSDRunner theme as the fallback. This command
+builds the Rust bridge and installs a self-contained bundle under
+`/etc/greetd/bsdrunner`, but does not replace the active greetd configuration.
+
+Every greeter launch chooses one of the four corp themes (Haas-Bioroid,
+Jinteki, NBN, or Weyland) with equal probability, then chooses one of that
+theme's static wallpapers. The selected palette is applied to the login panel,
+controls, overlays, and theme label so the interface remains legible and
+visually matched to its wallpaper. A new selection is made at boot and whenever
+greetd returns after logout. Set `BSDRUNNER_GREETER_THEME` in greetd's session
+environment to pin one installed theme for diagnostics.
 
 The installer creates a timestamped backup of an existing BSDRunner bundle.
 
@@ -172,6 +180,7 @@ prompt and session start without touching the live daemon:
 cargo test --manifest-path greeter/Cargo.toml --locked
 cargo clippy --manifest-path greeter/Cargo.toml --locked --all-targets -- -D warnings
 sh greeter/tests/launcher.sh
+sh greeter/tests/theme-randomizer.sh
 ```
 
 QML files are included in `scripts/check-qml.sh`.

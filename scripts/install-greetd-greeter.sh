@@ -62,16 +62,22 @@ command -v mdo >/dev/null 2>&1 || {
 
 cargo build --locked --release --manifest-path "$repo_root/greeter/Cargo.toml"
 
-wallpaper_files() {
-    if [ -d "$theme_dir/wallpapers" ]; then
-        find "$theme_dir/wallpapers" -maxdepth 1 -type f
-    else
-        find "$repo_root/dotfiles/.config/bsdrunner/themes" \
-            -path '*/wallpapers/*' -type f
-    fi
+static_wallpapers() {
+    find "$1/wallpapers" -maxdepth 1 -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \)
 }
 
-wallpaper_files | grep -q . || {
+greeter_themes() {
+    for candidate_dir in "$repo_root/dotfiles/.config/bsdrunner/themes"/*; do
+        [ -f "$candidate_dir/palette.conf" ] || continue
+        [ -d "$candidate_dir/wallpapers" ] || continue
+        candidate="$(basename -- "$candidate_dir")"
+        [ -n "$(static_wallpapers "$candidate_dir")" ] || continue
+        printf '%s\n' "$candidate"
+    done
+}
+
+greeter_themes | grep -q . || {
     printf '%s\n' "No BSDRunner wallpapers were found." >&2
     exit 1
 }
@@ -84,8 +90,7 @@ fi
 mdo install -d -m 0755 \
     "$bundle_dir" \
     "$bundle_dir/quickshell" \
-    "$bundle_dir/themes/$theme" \
-    "$bundle_dir/themes/$theme/wallpapers" \
+    "$bundle_dir/themes" \
     /usr/local/libexec
 
 mdo install -m 0755 \
@@ -106,11 +111,23 @@ mdo install -m 0644 \
     "$repo_root/dotfiles/.config/quickshell/bsdrunner-greeter/ThemeLoader.qml" \
     "$repo_root/dotfiles/.config/quickshell/bsdrunner-greeter/ThemePalette.qml" \
     "$bundle_dir/quickshell/"
-mdo install -m 0644 "$theme_dir/palette.conf" "$bundle_dir/themes/$theme/palette.conf"
 
-wallpaper_files | while IFS= read -r wallpaper; do
-    mdo install -m 0644 "$wallpaper" "$bundle_dir/themes/$theme/wallpapers/$(basename "$wallpaper")"
+greeter_themes | while IFS= read -r greeter_theme; do
+    source_theme_dir="$repo_root/dotfiles/.config/bsdrunner/themes/$greeter_theme"
+    installed_theme_dir="$bundle_dir/themes/$greeter_theme"
+    mdo install -d -m 0755 "$installed_theme_dir" "$installed_theme_dir/wallpapers"
+    mdo install -m 0644 "$source_theme_dir/palette.conf" "$installed_theme_dir/palette.conf"
+    find "$source_theme_dir/wallpapers" -maxdepth 1 -type f | while IFS= read -r wallpaper; do
+        mdo install -m 0644 "$wallpaper" "$installed_theme_dir/wallpapers/$(basename "$wallpaper")"
+    done
 done
+
+# Keep the configured theme installed as a fallback even when it has no
+# wallpapers of its own (the neutral default theme is the common case).
+if [ ! -f "$bundle_dir/themes/$theme/palette.conf" ]; then
+    mdo install -d -m 0755 "$bundle_dir/themes/$theme"
+    mdo install -m 0644 "$theme_dir/palette.conf" "$bundle_dir/themes/$theme/palette.conf"
+fi
 printf '%s\n' "$theme" | mdo tee "$bundle_dir/current-theme" >/dev/null
 mdo chmod 0644 "$bundle_dir/current-theme"
 mdo install -m 0644 "$repo_root/greeter/greetd.toml" "$bundle_dir/config.toml"
@@ -122,7 +139,7 @@ if [ "$activate" = true ]; then
     mdo install -m 0644 "$repo_root/greeter/greetd.toml" "$config_path"
 fi
 
-printf '%s\n' ":: Installed BSDRunner greetd greeter ($theme)"
+printf '%s\n' ":: Installed BSDRunner greetd greeter (fallback: $theme; randomized themes: $(greeter_themes | tr '\n' ' ' | sed 's/ $//'))"
 printf '%s\n' "   bundle:  $bundle_dir"
 printf '%s\n' "   backend: $backend_path"
 if [ "$activate" = true ]; then

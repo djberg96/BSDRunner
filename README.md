@@ -184,8 +184,10 @@ The GUI starts in read-only status mode until you choose an action. See `docs/dn
 BSDRunner includes a native graphical greetd client built with Quickshell. The
 small Rust bridge speaks greetd's IPC protocol; greetd continues to own PAM,
 the TTY, privilege changes, and session cleanup. `ttyv0` remains available for
-recovery. See [docs/login-screen.md](docs/login-screen.md) for installation,
-testing, and rollback.
+recovery. Each greeter appearance randomly pairs one of the four corp themes
+with one of its wallpapers and applies the matching palette to the login UI.
+See [docs/login-screen.md](docs/login-screen.md) for installation, testing, and
+rollback.
 
 ## ZFS
 
