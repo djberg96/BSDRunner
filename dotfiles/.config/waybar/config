@@ -100,14 +100,15 @@
       "format-muted": " 0%",
       "format-source": "Mic {volume}%",
       "format-source-muted": "Mic muted",
-      "tooltip-format": "Output: {volume}%\nInput: {format_source}",
+      "tooltip-format": "Output: {volume}%\nInput: {format_source}\nLeft: master volume • Right: sound panel",
       "format-icons": {
         "headphone": "",
         "headset": "",
         "default": ["", "", ""]
       },
-      "tooltip-format-muted": "Output: muted\nInput: {format_source}",
-      "on-click": "pavucontrol"
+      "tooltip-format-muted": "Output: muted\nInput: {format_source}\nLeft: master volume • Right: sound panel",
+      "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-audio-popup.sh",
+      "on-click-right": "pavucontrol"
     },
 
     "custom/network": {

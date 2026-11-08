@@ -16,6 +16,7 @@ if [ -z "$qmllint_bin" ]; then
 fi
 
 qml_files="
+dotfiles/.config/quickshell/bsdrunner-audio/shell.qml
 dotfiles/.config/quickshell/bsdrunner-software/shell.qml
 dotfiles/.config/quickshell/bsdrunner-software/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-software/ThemePalette.qml
