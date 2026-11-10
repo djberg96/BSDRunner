@@ -16,12 +16,13 @@ ShellRoot {
         ? "shutdown" : "reboot"
     readonly property string actionNoun: action === "reboot" ? "restart" : "power off"
     readonly property string actionTitle: action === "reboot" ? "Restart BSDRunner" : "Power off BSDRunner"
+    readonly property string backendOverride: Quickshell.env("BSDRUNNER_POWER_BACKEND") || ""
     property var apps: []
     property bool snapshotBusy: false
+    property bool snapshotReady: false
     property bool commandBusy: false
     property bool committing: false
     property bool forceConfirmation: false
-    property int emptySnapshots: 0
     property string commandMode: ""
     property string snapshotText: ""
     property string snapshotError: ""
@@ -34,8 +35,8 @@ ShellRoot {
     function backendCommand(mode) {
         return [
             "sh",
-            Quickshell.env("BSDRUNNER_POWER_BACKEND").length > 0
-                ? Quickshell.env("BSDRUNNER_POWER_BACKEND")
+            backendOverride.length > 0
+                ? backendOverride
                 : themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-shutdown-backend.sh",
             mode,
             action
@@ -61,6 +62,7 @@ ShellRoot {
 
         snapshotBusy = false
         if (snapshotExitCode !== 0) {
+            snapshotReady = false
             commandError = snapshotError.trim().length > 0
                 ? snapshotError.trim() : "Could not inspect the open applications."
             return
@@ -71,16 +73,10 @@ ShellRoot {
             if (!payload || !payload.ok)
                 throw new Error("Invalid snapshot")
             apps = payload.apps || []
+            snapshotReady = true
             commandError = ""
-            if (apps.length === 0) {
-                emptySnapshots += 1
-                if (emptySnapshots >= 2 && !committing)
-                    commitDelay.restart()
-            } else {
-                emptySnapshots = 0
-                commitDelay.stop()
-            }
         } catch (error) {
+            snapshotReady = false
             commandError = "Could not read the open-application list."
         }
     }
@@ -117,13 +113,6 @@ ShellRoot {
         repeat: true
         running: true
         onTriggered: root.refresh()
-    }
-
-    Timer {
-        id: commitDelay
-        interval: 450
-        repeat: false
-        onTriggered: root.runCommand("commit")
     }
 
     Timer {
@@ -265,7 +254,11 @@ ShellRoot {
                         radius: 15
                         color: root.palette.cardBackground
                         border.width: 1
-                        border.color: root.apps.length > 0 ? root.palette.warning : root.palette.success
+                        border.color: root.commandError.length > 0
+                            ? root.palette.danger
+                            : !root.snapshotReady
+                                ? root.palette.accent
+                                : root.apps.length > 0 ? root.palette.warning : root.palette.success
 
                         Row {
                             anchors.fill: parent
@@ -276,12 +269,23 @@ ShellRoot {
                                 width: 48
                                 height: 48
                                 radius: 24
-                                color: Qt.alpha(root.apps.length > 0 ? root.palette.warning : root.palette.success, 0.16)
+                                color: Qt.alpha(root.commandError.length > 0
+                                    ? root.palette.danger
+                                    : !root.snapshotReady
+                                        ? root.palette.accent
+                                        : root.apps.length > 0 ? root.palette.warning : root.palette.success, 0.16)
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: root.committing ? "…" : root.apps.length > 0 ? String(root.apps.length) : "✓"
-                                    color: root.apps.length > 0 ? root.palette.warning : root.palette.success
+                                    text: root.committing || !root.snapshotReady
+                                        ? "…"
+                                        : root.commandError.length > 0
+                                            ? "!" : root.apps.length > 0 ? String(root.apps.length) : "✓"
+                                    color: root.commandError.length > 0
+                                        ? root.palette.danger
+                                        : !root.snapshotReady
+                                            ? root.palette.accent
+                                            : root.apps.length > 0 ? root.palette.warning : root.palette.success
                                     font.pixelSize: 18
                                     font.bold: true
                                 }
@@ -295,18 +299,26 @@ ShellRoot {
                                     width: parent.width
                                     text: root.committing
                                         ? "Finishing session cleanup"
-                                        : root.apps.length > 0
-                                            ? "Waiting for " + root.apps.length + (root.apps.length === 1 ? " application" : " applications")
-                                            : "Applications are closed"
+                                        : root.commandError.length > 0
+                                            ? "Unable to check applications"
+                                            : !root.snapshotReady
+                                                ? "Checking open applications"
+                                                : root.apps.length > 0
+                                                    ? "Waiting for " + root.apps.length + (root.apps.length === 1 ? " application" : " applications")
+                                                    : "Ready to " + root.actionNoun
                                     color: root.palette.primaryText
                                     font.pixelSize: 15
                                     font.bold: true
                                 }
                                 Text {
                                     width: parent.width
-                                    text: root.apps.length > 0
-                                        ? "Check the desktop for save or confirmation dialogs. This window will not block them."
-                                        : "BSDRunner will " + root.actionNoun + " when background cleanup finishes."
+                                    text: root.commandError.length > 0
+                                        ? "The desktop remains active. Cancel safely or wait while BSDRunner retries."
+                                        : !root.snapshotReady
+                                            ? "The desktop remains active while BSDRunner checks the session."
+                                            : root.apps.length > 0
+                                                ? "Check the desktop for save or confirmation dialogs. This window will not block them."
+                                                : "No applications remain. Choose " + (root.action === "reboot" ? "Restart now" : "Power off now") + " when ready."
                                     color: root.palette.mutedText
                                     font.pixelSize: 11
                                     wrapMode: Text.WordWrap
@@ -337,7 +349,7 @@ ShellRoot {
                             spacing: 7
                             clip: true
                             model: root.apps
-                            visible: root.apps.length > 0
+                            visible: root.snapshotReady && root.apps.length > 0
 
                             delegate: Rectangle {
                                 id: appRow
@@ -399,8 +411,9 @@ ShellRoot {
 
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: root.commandError.length > 0 ? "!" : "✓"
-                                color: root.commandError.length > 0 ? root.palette.danger : root.palette.success
+                                text: root.commandError.length > 0 ? "!" : !root.snapshotReady ? "…" : "✓"
+                                color: root.commandError.length > 0
+                                    ? root.palette.danger : !root.snapshotReady ? root.palette.accent : root.palette.success
                                 font.pixelSize: 34
                                 font.bold: true
                             }
@@ -409,7 +422,10 @@ ShellRoot {
                                 width: 410
                                 horizontalAlignment: Text.AlignHCenter
                                 text: root.commandError.length > 0
-                                    ? root.commandError : "No interactive applications remain."
+                                    ? root.commandError
+                                    : !root.snapshotReady
+                                        ? "Checking the current Hyprland session…"
+                                        : "No interactive applications remain."
                                 color: root.commandError.length > 0 ? root.palette.danger : root.palette.mutedText
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
@@ -457,11 +473,11 @@ ShellRoot {
                             color: retryArea.containsMouse ? root.palette.cardHover : root.palette.cardBackground
                             border.width: 1
                             border.color: root.palette.accent
-                            opacity: root.apps.length > 0 && !root.commandBusy ? 1 : 0.45
+                            opacity: !root.commandBusy && !root.snapshotBusy && !root.committing ? 1 : 0.45
 
                             Text {
                                 anchors.centerIn: parent
-                                text: "Ask again"
+                                text: root.apps.length > 0 ? "Ask again" : "Check again"
                                 color: root.palette.accent
                                 font.pixelSize: 12
                                 font.bold: true
@@ -469,10 +485,15 @@ ShellRoot {
                             MouseArea {
                                 id: retryArea
                                 anchors.fill: parent
-                                enabled: root.apps.length > 0 && !root.commandBusy
+                                enabled: !root.commandBusy && !root.snapshotBusy && !root.committing
                                 hoverEnabled: true
                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                onClicked: root.runCommand("begin")
+                                onClicked: {
+                                    if (root.apps.length > 0)
+                                        root.runCommand("begin")
+                                    else
+                                        root.refresh()
+                                }
                             }
                         }
 
@@ -482,27 +503,37 @@ ShellRoot {
                             height: parent.height
                             radius: 12
                             color: forceArea.containsMouse
-                                ? root.palette.danger : Qt.alpha(root.palette.danger, 0.18)
+                                ? root.apps.length > 0 ? root.palette.danger : root.palette.accentStrong
+                                : Qt.alpha(root.apps.length > 0 ? root.palette.danger : root.palette.accent, 0.18)
                             border.width: 1
-                            border.color: root.palette.danger
-                            opacity: root.apps.length > 0 && !root.commandBusy ? 1 : 0.45
+                            border.color: root.apps.length > 0 ? root.palette.danger : root.palette.accent
+                            opacity: root.snapshotReady && !root.commandBusy && !root.snapshotBusy ? 1 : 0.45
 
                             Text {
                                 anchors.centerIn: parent
-                                text: root.forceConfirmation
-                                    ? "Click again to discard work"
-                                    : "Force close & " + root.actionNoun
-                                color: forceArea.containsMouse ? root.palette.frameBackground : root.palette.danger
+                                text: root.apps.length > 0
+                                    ? root.forceConfirmation
+                                        ? "Click again to discard work"
+                                        : "Force close & " + root.actionNoun
+                                    : root.action === "reboot" ? "Restart now" : "Power off now"
+                                color: forceArea.containsMouse
+                                    ? root.palette.frameBackground
+                                    : root.apps.length > 0 ? root.palette.danger : root.palette.accent
                                 font.pixelSize: 11
                                 font.bold: true
                             }
                             MouseArea {
                                 id: forceArea
                                 anchors.fill: parent
-                                enabled: root.apps.length > 0 && !root.commandBusy
+                                enabled: root.snapshotReady && !root.commandBusy && !root.snapshotBusy
                                 hoverEnabled: true
                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                onClicked: root.forceClose()
+                                onClicked: {
+                                    if (root.apps.length > 0)
+                                        root.forceClose()
+                                    else
+                                        root.runCommand("commit")
+                                }
                             }
                         }
                     }

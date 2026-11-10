@@ -158,6 +158,13 @@ grep -F 'bsdrunner-power-action.sh reboot' "$layout" >/dev/null || fail "wlogout
 grep -F 'bsdrunner-power-action.sh shutdown' "$layout" >/dev/null || fail "wlogout shutdown bypasses helper"
 grep -F 'FloatingWindow {' "$prompt" >/dev/null || fail "prompt is not an ordinary window"
 if grep -F 'PanelWindow {' "$prompt" >/dev/null; then fail "prompt still uses a layer window"; fi
-pass "power menu delegates to a non-blocking BSDRunner prompt"
+grep -F 'Quickshell.env("BSDRUNNER_POWER_BACKEND") || ""' "$prompt" >/dev/null || \
+    fail "an unset backend override can break the application snapshot"
+grep -F 'root.action === "reboot" ? "Restart now" : "Power off now"' "$prompt" >/dev/null || \
+    fail "an empty application list does not offer an explicit power action"
+if grep -F 'commitDelay' "$prompt" >/dev/null; then
+    fail "an empty or invalid snapshot can still schedule an automatic reboot"
+fi
+pass "power menu delegates to a verified, explicit BSDRunner handoff"
 
 printf '%s\n' 'All power action tests passed.'

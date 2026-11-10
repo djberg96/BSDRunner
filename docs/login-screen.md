@@ -121,12 +121,13 @@ therefore remain visible and focusable. Cancel returns to the desktop without
 invoking `shutdown`; force close requires a deliberate second click and is the
 only path that sends terminating signals to an application process.
 
-Once two consecutive snapshots confirm that no interactive windows remain,
-the helper stops session infrastructure such as Waybar, `swww`, `hypridle`, and
-the desktop portals while Hyprland is still available. The FreeBSD `shutdown`
-command runs only after that cleanup. Background daemons and shell wrappers are
-not presented as applications, avoiding the misleading wait state produced by
-the former full-screen shutdown overlay.
+Once a successful snapshot confirms that no interactive windows remain, the
+handoff enables an explicit `Restart now` or `Power off now` action. Choosing it
+stops session infrastructure such as Waybar, `swww`, `hypridle`, and the desktop
+portals while Hyprland is still available. The FreeBSD `shutdown` command runs
+only after that cleanup. Background daemons and shell wrappers are not
+presented as applications, avoiding the misleading wait state produced by the
+former full-screen shutdown overlay.
 
 Output from the logged-in Hyprland session is captured in
 `~/.local/state/bsdrunner/session.log`; the preceding session is retained as
