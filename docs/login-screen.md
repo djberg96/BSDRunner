@@ -113,6 +113,27 @@ current user-owned Hyprland compositor to exit. greetd observes the session
 ending, cleans up the login's remaining process tree, reclaims VT 9, and
 starts a new graphical greeter.
 
+The `Reboot` and `Shutdown` actions use
+`~/.config/bsdrunner/scripts/bsdrunner-power-action.sh`. It asks each mapped
+application window to close through Hyprland, then opens a compact, themed
+Quickshell handoff as an ordinary desktop window. Save and confirmation dialogs
+therefore remain visible and focusable. Cancel returns to the desktop without
+invoking `shutdown`; force close requires a deliberate second click and is the
+only path that sends terminating signals to an application process.
+
+Once a successful snapshot confirms that no interactive windows remain, the
+handoff enables an explicit `Restart now` or `Power off now` action. Choosing it
+stops session infrastructure such as Waybar, `swww`, `hypridle`, and the desktop
+portals while Hyprland is still available. The FreeBSD `shutdown` command runs
+only after that cleanup. Background daemons and shell wrappers are not
+presented as applications, avoiding the misleading wait state produced by the
+former full-screen shutdown overlay.
+
+Output from the logged-in Hyprland session is captured in
+`~/.local/state/bsdrunner/session.log`; the preceding session is retained as
+`session.previous.log`. This keeps expected client-disconnect diagnostics off
+the login VT while preserving them for troubleshooting.
+
 BSDRunner's FreeBSD greetd build makes each session worker a process reaper.
 This keeps applications that daemonize or create a new process group, such as
 Code and D-Bus, scoped to the login that launched them. When Hyprland exits,
@@ -181,6 +202,8 @@ cargo test --manifest-path greeter/Cargo.toml --locked
 cargo clippy --manifest-path greeter/Cargo.toml --locked --all-targets -- -D warnings
 sh greeter/tests/launcher.sh
 sh greeter/tests/theme-randomizer.sh
+sh scripts/test-power-actions.sh
+sh scripts/test-greeter-session.sh
 ```
 
 QML files are included in `scripts/check-qml.sh`.
