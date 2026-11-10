@@ -21,14 +21,14 @@
 
 {
   "label" : "reboot",
-  "action" : "command -v doas >/dev/null 2>&1 && doas -n shutdown -r now || shutdown -r now",
+  "action" : "sh ~/.config/bsdrunner/scripts/bsdrunner-power-action.sh reboot",
   "text" : "Reboot",
   "keybind" : "r"
 }
 
 {
   "label" : "shutdown",
-  "action" : "command -v doas >/dev/null 2>&1 && doas -n shutdown -p now || shutdown -p now",
+  "action" : "sh ~/.config/bsdrunner/scripts/bsdrunner-power-action.sh shutdown",
   "text" : "Shutdown",
   "keybind" : "s"
 }

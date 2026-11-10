@@ -23,6 +23,7 @@ Recommended next layer after the base session works:
 ```sh
 sudo pkg install \
   quickshell \
+  jq \
   waybar \
   wlogout \
   hypridle \
@@ -62,7 +63,11 @@ If you prefer a lighter Qt file manager to experiment with later:
 sudo pkg install pcmanfm-qt
 ```
 
-For the bundled power menu, `wlogout` is expected. If you want the shutdown and reboot buttons to work without a password prompt, a `doas` rule for `shutdown` may be useful on FreeBSD.
+The bundled power menu uses `wlogout` for the initial choice and Quickshell for
+BSDRunner's interactive shutdown handoff. If applications remain open, the
+handoff leaves their save and confirmation dialogs usable. If you use
+BSDRunner's `mdo`, the power helper invokes `shutdown` through it. Other
+installations can use a passwordless `doas` rule for `shutdown` instead.
 
 ## Recommended Fonts
 
