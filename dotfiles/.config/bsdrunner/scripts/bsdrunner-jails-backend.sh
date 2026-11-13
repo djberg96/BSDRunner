@@ -14,6 +14,9 @@ if [ "$test_mode" = "1" ]; then
     resolvconf_interfaces_dir="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$etc_dir/resolvconf/interfaces}"
     jail_policy_file="${BSDRUNNER_JAILS_TEST_POLICY_FILE:-$etc_dir/jail-policies.conf}"
     jail_forward_file="${BSDRUNNER_JAILS_TEST_FORWARD_FILE:-$etc_dir/jail-port-forwards.conf}"
+    blackship_manifest="${BSDRUNNER_JAILS_TEST_BLACKSHIP_MANIFEST:-$state_dir/blackship.toml}"
+    blackship_data_dir="${BSDRUNNER_JAILS_TEST_BLACKSHIP_DATA_DIR:-$state_dir/blackship-data}"
+    blackship_context_dir="${BSDRUNNER_JAILS_TEST_BLACKSHIP_CONTEXT_DIR:-$state_dir/blackship-contexts}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
@@ -25,8 +28,27 @@ else
     resolvconf_interfaces_dir="/var/run/resolvconf/interfaces"
     jail_policy_file="${HOME}/.config/bsdrunner/pf/jail-policies.conf"
     jail_forward_file="${HOME}/.config/bsdrunner/pf/jail-port-forwards.conf"
+    blackship_manifest="${BSDRUNNER_BLACKSHIP_MANIFEST:-/usr/local/etc/bsdrunner/blackship.toml}"
+    blackship_data_dir="${BSDRUNNER_BLACKSHIP_DATA_DIR:-/var/db/bsdrunner/blackship}"
+    blackship_context_dir="${BSDRUNNER_BLACKSHIP_CONTEXT_DIR:-/var/db/bsdrunner/blackship/contexts}"
 fi
 export PATH
+
+blackship_min_version="0.4.1"
+blackship_release_version="0.4.1"
+blackship_release_sha256="86fc256505b9faa8c26fca01f2018a8f1e5d1c48b902b95f84da9b432060516f"
+blackship_release_url="https://github.com/seuros/blackship/releases/download/blackship-v0.4.1/blackship-freebsd-amd64.tar.gz"
+blackship_network_name="bsdrunner"
+blackship_bridge="blackship0"
+blackship_project="bsdrunner"
+case "$0" in
+    */*) backend_path_dir=${0%/*} ;;
+    *) backend_path_dir=. ;;
+esac
+backend_dir="$(CDPATH= cd -- "$backend_path_dir" && pwd)"
+blackship_preset_source="${BSDRUNNER_BLACKSHIP_PRESET_SOURCE:-$backend_dir/../jails/presets}"
+blackship_rc_source="${BSDRUNNER_BLACKSHIP_RC_SOURCE:-$backend_dir/../jails/bsdrunner_blackship.rc}"
+blackship_rc_target="${BSDRUNNER_BLACKSHIP_RC_TARGET:-/usr/local/etc/rc.d/bsdrunner_blackship}"
 
 action="${1:-snapshot}"
 state_file="$state_dir/last-result.conf"
@@ -46,6 +68,161 @@ json_escape() {
             first = 0
         }
     '
+}
+
+version_at_least() {
+    current="$1"
+    minimum="$2"
+    awk -v current="$current" -v minimum="$minimum" '
+        function part(version, position, values, count) {
+            sub(/[^0-9.].*$/, "", version)
+            count = split(version, values, ".")
+            return position <= count ? values[position] + 0 : 0
+        }
+        BEGIN {
+            for (i = 1; i <= 3; i++) {
+                a = part(current, i)
+                b = part(minimum, i)
+                if (a > b) exit 0
+                if (a < b) exit 1
+            }
+            exit 0
+        }
+    '
+}
+
+blackship_json_field() {
+    field="$1"
+    if command -v jq >/dev/null 2>&1; then
+        jq -r --arg field "$field" '(.data[$field] // .[$field] // empty) | select(type == "string")' 2>/dev/null | awk 'NF { print; exit }'
+    else
+        sed -n "s/^[[:space:]]*\"${field}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | awk 'NF { print; exit }'
+    fi
+}
+
+blackship_json_number() {
+    field="$1"
+    if command -v jq >/dev/null 2>&1; then
+        jq -r --arg field "$field" '(.data[$field] // .[$field] // empty) | select(type == "number")' 2>/dev/null | awk 'NF { print; exit }'
+    else
+        sed -n "s/^[[:space:]]*\"${field}\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p" | awk 'NF { print; exit }'
+    fi
+}
+
+blackship_capabilities() {
+    command -v blackship >/dev/null 2>&1 || return 1
+    blackship --format json capabilities 2>/dev/null
+}
+
+blackship_status_values() {
+    blackship_available=false
+    blackship_compatible=false
+    blackship_version=""
+    blackship_schema=""
+    blackship_capabilities_output=""
+
+    command -v blackship >/dev/null 2>&1 || return 0
+    blackship_available=true
+    blackship_capabilities_output="$(blackship_capabilities 2>/dev/null || true)"
+    [ -n "$blackship_capabilities_output" ] || return 0
+    blackship_version="$(printf '%s\n' "$blackship_capabilities_output" | blackship_json_field blackship_version)"
+    blackship_schema="$(printf '%s\n' "$blackship_capabilities_output" | blackship_json_number output_schema_version)"
+    if [ "$blackship_schema" = "1" ] && [ -n "$blackship_version" ] && version_at_least "$blackship_version" "$blackship_min_version"; then
+        blackship_compatible=true
+    fi
+}
+
+valid_json_or_empty() {
+    value="$1"
+    [ -n "$value" ] || return 1
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s\n' "$value" | jq -e . >/dev/null 2>&1
+    else
+        printf '%s\n' "$value" | awk '
+            NR == 1 && /^[[:space:]]*\{/ { started = 1 }
+            { last = $0 }
+            END { exit started && last ~ /\}[[:space:]]*$/ ? 0 : 1 }
+        '
+    fi
+}
+
+blackship_read_json() {
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || return 1
+    blackship --config "$blackship_manifest" --format json "$@" 2>/dev/null
+}
+
+blackship_read_json_privileged() {
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || return 1
+    run_privileged blackship --config "$blackship_manifest" --format json "$@" 2>/dev/null
+}
+
+blackship_snapshot_json() {
+    blackship_status_values
+    manifest_exists=false
+    [ -r "$blackship_manifest" ] && manifest_exists=true
+
+    recommended_address="$(blackship_recommended_address 2>/dev/null || true)"
+    printf '{"available":%s,"compatible":%s,"minimum_version":"%s","version":"%s","output_schema_version":%s,"manifest":"%s","configured":%s,"recommended_address":"%s"' \
+        "$blackship_available" "$blackship_compatible" "$blackship_min_version" \
+        "$(printf '%s' "$blackship_version" | json_escape)" \
+        "${blackship_schema:-null}" \
+        "$(printf '%s' "$blackship_manifest" | json_escape)" "$manifest_exists" "$(printf '%s' "$recommended_address" | json_escape)"
+
+    printf ',"capabilities":'
+    if valid_json_or_empty "$blackship_capabilities_output"; then
+        printf '%s' "$blackship_capabilities_output"
+    else
+        printf 'null'
+    fi
+
+    printf ',"managed":'
+    if [ -r "$blackship_manifest" ]; then
+        awk '
+            function esc(value) { gsub(/\\/, "\\\\", value); gsub(/"/, "\\\"", value); return value }
+            function flush(autostart, preset) {
+                if (name == "") return
+                autostart = tags ~ /"autostart"/ ? "true" : "false"
+                preset = "blank"
+                if (tags ~ /"nginx"/) preset = "nginx"
+                else if (tags ~ /"postgres"/) preset = "postgres"
+                else if (tags ~ /"ollama"/) preset = "ollama"
+                if (!first) printf ","
+                first = 0
+                printf "{\"name\":\"%s\",\"preset\":\"%s\",\"autostart\":%s}", esc(name), preset, autostart
+            }
+            BEGIN { printf "["; first = 1; name = ""; tags = "" }
+            /^\[\[jails\]\]/ { flush(); name = ""; tags = ""; in_jail = 1; next }
+            in_jail && /^[[:space:]]*name[[:space:]]*=/ { name = $0; sub(/^[^=]*=[[:space:]]*"/, "", name); sub(/"[[:space:]]*$/, "", name) }
+            in_jail && /^[[:space:]]*tags[[:space:]]*=/ { tags = $0 }
+            END { flush(); printf "]" }
+        ' "$blackship_manifest"
+    else
+        printf '[]'
+    fi
+
+    for probe in host inventory networks releases ports stats health; do
+        output=""
+        if [ "$blackship_compatible" = true ] && [ "$manifest_exists" = true ]; then
+            case "$probe" in
+                host) output="$(blackship_read_json host 2>/dev/null || true)" ;;
+                inventory) output="$(blackship_read_json ps --host 2>/dev/null || true)" ;;
+                networks) output="$(blackship_read_json network list 2>/dev/null || true)" ;;
+                releases) output="$(blackship_read_json releases list 2>/dev/null || true)" ;;
+                ports) output="$(blackship_read_json ports 2>/dev/null || true)" ;;
+                stats) output="$(blackship_read_json stats 2>/dev/null || true)" ;;
+                health) output="$(blackship_read_json_privileged --non-interactive health 2>/dev/null || true)" ;;
+            esac
+        fi
+        printf ',"%s":' "$probe"
+        if valid_json_or_empty "$output"; then
+            printf '%s' "$output"
+        else
+            printf 'null'
+        fi
+    done
+    printf '}'
 }
 
 run_privileged() {
@@ -1114,6 +1291,7 @@ emit_snapshot() {
     fi
 
     printf '{'
+    printf '"schema_version":2,'
     printf '"ok":true,'
     printf '"message":"%s",' "$(printf '%s' "$last_message" | json_escape)"
     printf '"tools":{"jls":%s,"jail":%s,"service":%s,"bastille":%s,"mdo":%s},' \
@@ -1148,6 +1326,8 @@ emit_snapshot() {
     port_forwards_json
     printf ',"simple_services":'
     simple_services_json
+    printf ',"blackship":'
+    blackship_snapshot_json
     printf ',"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
         "$(printf '%s' "$last_tone" | json_escape)" \
         "$(printf '%s' "$last_message" | json_escape)" \
@@ -1175,6 +1355,17 @@ do_lifecycle() {
     esac
 
     case "$backend" in
+        blackship)
+            blackship_status_values
+            if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.1 or newer and configure the BSDRunner project."
+                exit 1
+            fi
+            blackship_manifest_has_name "$name" || {
+                emit_action_result false "The selected jail is not managed by BSDRunner Blackship." "Refresh the inventory before retrying."
+                exit 1
+            }
+            ;;
         bastille)
             if ! command -v bastille >/dev/null 2>&1; then
                 emit_action_result false "Bastille is unavailable." "Install Bastille or use a native jail entry."
@@ -1188,6 +1379,23 @@ do_lifecycle() {
             exit 1
             ;;
     esac
+
+    if [ "$backend" = "blackship" ]; then
+        case "$verb" in
+            start) blackship_verb=up ;;
+            stop) blackship_verb=down ;;
+            restart) blackship_verb=restart ;;
+        esac
+        if output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive "$blackship_verb" "$name" 2>&1)"; then
+            write_last_result "success" "$(printf '%s %s.' "$verb" "$name")"
+            emit_action_result true "$(printf '%s %s.' "$verb" "$name")" "$output"
+        else
+            write_last_result "error" "Unable to ${verb} ${name}."
+            emit_action_result false "Unable to ${verb} ${name}." "$output"
+            exit 1
+        fi
+        return
+    fi
 
     if [ "$backend" = "bastille" ]; then
         if output="$(run_privileged bastille "$verb" "$name" 2>&1)"; then
@@ -1269,6 +1477,26 @@ bastille_jail_running_matches() {
     '
 }
 
+blackship_jail_matches() {
+    match_name="$1"
+    match_address="$2"
+    [ -r "$blackship_manifest" ] || return 1
+    awk -v requested="$match_name" -v address="$match_address" '
+        function value(line, result) {
+            result = line
+            sub(/^[^=]*=[[:space:]]*"/, "", result)
+            sub(/"[[:space:]]*$/, "", result)
+            return result
+        }
+        /^\[\[jails\]\]/ { if (selected && matched) found = 1; selected = 0; matched = 0 }
+        /^[[:space:]]*name[[:space:]]*=/ { selected = value($0) == requested }
+        selected && /^[[:space:]]*ip_cidr[[:space:]]*=/ {
+            candidate = value($0); sub(/\/.*/, "", candidate); matched = candidate == address
+        }
+        END { if (selected && matched) found = 1; exit found ? 0 : 1 }
+    ' "$blackship_manifest"
+}
+
 apply_outbound_policy() {
     policy_name="$1"
     policy_address="$(address_ipv4_value "$2")"
@@ -1306,10 +1534,10 @@ do_policy_set() {
         emit_action_result false "Outbound policy confirmation did not match." "Return to the selected jail and confirm again."
         exit 1
     }
-    bastille_jail_matches "$name" "$policy_address" || {
-        emit_action_result false "The selected Bastille jail could not be verified." "Refresh the inventory before changing its outbound policy."
+    if ! bastille_jail_matches "$name" "$policy_address" && ! blackship_jail_matches "$name" "$policy_address"; then
+        emit_action_result false "The selected managed jail could not be verified." "Refresh the inventory before changing its outbound policy."
         exit 1
-    }
+    fi
 
     if output="$(apply_outbound_policy "$name" "$policy_address" "$policy" 2>&1)"; then
         write_last_result "success" "Applied outbound policy to ${name}."
@@ -1363,10 +1591,10 @@ do_port_forward() {
         emit_action_result false "Port-forward confirmation did not match." "Return to the selected jail and confirm again."
         exit 1
     }
-    bastille_jail_matches "$name" "$forward_address" || {
-        emit_action_result false "The selected Bastille jail could not be verified." "Refresh the inventory before changing its port forwards."
+    if ! bastille_jail_matches "$name" "$forward_address" && ! blackship_jail_matches "$name" "$forward_address"; then
+        emit_action_result false "The selected managed jail could not be verified." "Refresh the inventory before changing its port forwards."
         exit 1
-    }
+    fi
     [ -r "$pf_backend" ] || {
         emit_action_result false "The BSDRunner firewall backend is unavailable." "$pf_backend"
         exit 1
@@ -1515,6 +1743,17 @@ do_console() {
     }
 
     case "$backend" in
+        blackship)
+            blackship_status_values
+            if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.1 or newer and configure its project."
+                exit 1
+            fi
+            blackship_manifest_has_name "$name" || {
+                emit_action_result false "The selected jail is not managed by BSDRunner Blackship." "Refresh the inventory before retrying."
+                exit 1
+            }
+            ;;
         bastille)
             if ! command -v bastille >/dev/null 2>&1; then
                 emit_action_result false "Bastille is unavailable." "Install Bastille or use a native jail entry."
@@ -1548,7 +1787,9 @@ do_console() {
         privilege_prefix=""
     fi
 
-    if [ "$backend" = "bastille" ]; then
+    if [ "$backend" = "blackship" ]; then
+        console_command="${privilege_prefix}blackship --config '$blackship_manifest' console '$name'"
+    elif [ "$backend" = "bastille" ]; then
         console_command="${privilege_prefix}bastille console '$name'"
     else
         console_command="${privilege_prefix}jexec '$name' login -f root || ${privilege_prefix}jexec '$name' /bin/sh"
@@ -2168,6 +2409,678 @@ $policy_output"
     fi
 }
 
+valid_pool_name() {
+    case "${1:-}" in
+        ''|-*|*[!A-Za-z0-9_.:-]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+valid_blackship_preset() {
+    case "${1:-}" in
+        blank|nginx|postgres|ollama) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+host_physical_memory() {
+    if [ "$test_mode" = 1 ] && [ -n "${BSDRUNNER_JAILS_TEST_PHYSMEM:-}" ]; then
+        printf '%s\n' "$BSDRUNNER_JAILS_TEST_PHYSMEM"
+    else
+        sysctl -n hw.physmem 2>/dev/null || printf '0\n'
+    fi
+}
+
+blackship_network_values() {
+    proposed="${1:-}"
+    printf '%s\n' "$proposed" | awk -F '[./]' '
+        NF == 5 && $5 == 24 {
+            for (i = 1; i <= 4; i++)
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+            if ($4 < 2 || $4 > 254) exit 1
+            printf "%d.%d.%d.0/24|%d.%d.%d.1|%d.%d.%d.%d\n", $1,$2,$3,$1,$2,$3,$1,$2,$3,$4
+            exit 0
+        }
+        { exit 1 }
+    '
+}
+
+blackship_manifest_has_name() {
+    requested="$1"
+    [ -r "$blackship_manifest" ] || return 1
+    awk -v requested="$requested" '
+        /^[[:space:]]*name[[:space:]]*=/ {
+            value = $0
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            if (value == requested) found = 1
+        }
+        END { exit found ? 0 : 1 }
+    ' "$blackship_manifest"
+}
+
+blackship_manifest_subnet() {
+    [ -r "$blackship_manifest" ] || return 1
+    awk -v requested="$blackship_network_name" '
+        /^\[\[networks\]\]/ { selected = 0 }
+        /^[[:space:]]*name[[:space:]]*=/ {
+            value = $0; sub(/^[^=]*=[[:space:]]*"/, "", value); sub(/"[[:space:]]*$/, "", value)
+            selected = value == requested
+        }
+        selected && /^[[:space:]]*subnet[[:space:]]*=/ {
+            value = $0; sub(/^[^=]*=[[:space:]]*"/, "", value); sub(/"[[:space:]]*$/, "", value)
+            print value; exit
+        }
+    ' "$blackship_manifest"
+}
+
+blackship_recommended_address() {
+    subnet="$(blackship_manifest_subnet 2>/dev/null || true)"
+    [ -n "$subnet" ] || return 1
+    prefix="$(printf '%s\n' "${subnet%%/*}" | awk -F '.' 'NF == 4 { printf "%s.%s.%s", $1, $2, $3 }')"
+    [ -n "$prefix" ] || return 1
+    awk -v prefix="$prefix" '
+        /^[[:space:]]*ip_cidr[[:space:]]*=/ {
+            value = $0; sub(/^[^=]*=[[:space:]]*"/, "", value); sub(/"[[:space:]]*$/, "", value); sub(/\/.*/, "", value)
+            split(value, parts, "."); if (parts[1] "." parts[2] "." parts[3] == prefix) used[parts[4]] = 1
+        }
+        END {
+            for (host = 20; host <= 254; host++)
+                if (!used[host]) { printf "%s.%d/24\n", prefix, host; exit 0 }
+            exit 1
+        }
+    ' "$blackship_manifest"
+}
+
+blackship_address_available() {
+    requested="${1%%/*}"
+    ! awk -v requested="$requested" '
+        /^[[:space:]]*ip_cidr[[:space:]]*=/ {
+            value = $0; sub(/^[^=]*=[[:space:]]*"/, "", value); sub(/"[[:space:]]*$/, "", value); sub(/\/.*/, "", value)
+            if (value == requested) found = 1
+        }
+        END { exit found ? 0 : 1 }
+    ' "$blackship_manifest"
+}
+
+blackship_address_in_network() {
+    requested_address="${1%%/*}"
+    managed_subnet="$(blackship_manifest_subnet 2>/dev/null || true)"
+    [ -n "$managed_subnet" ] || return 1
+    printf '%s|%s\n' "$requested_address" "${managed_subnet%%/*}" | awk -F '[|.]' '
+        NF == 8 && $1 == $5 && $2 == $6 && $3 == $7 && $4 >= 2 && $4 <= 254 { ok = 1 }
+        END { exit ok ? 0 : 1 }
+    '
+}
+
+blackship_project_manifest() {
+    pool="$1"
+    subnet="$2"
+    gateway="$3"
+    cat <<EOF
+# BSDRunner managed Blackship manifest. Edit through BSDRunner Jails.
+[config]
+project = "$blackship_project"
+data_dir = "$blackship_data_dir"
+releases_dir = "$blackship_data_dir/releases"
+cache_dir = "$blackship_data_dir/cache"
+zfs_enabled = true
+zpool = "$pool"
+dataset = "bsdrunner/blackship"
+
+[[networks]]
+name = "$blackship_network_name"
+subnet = "$subnet"
+gateway = "$gateway"
+EOF
+}
+
+blackship_check_candidate() {
+    candidate="$1"
+    blackship --config "$candidate" --format json check >/dev/null 2>&1
+}
+
+install_managed_file() {
+    source_file="$1"
+    target_file="$2"
+    target_dir="${target_file%/*}"
+    run_privileged install -d -m 0755 "$target_dir"
+    run_privileged install -m 0644 "$source_file" "$target_file"
+}
+
+do_blackship_install_preview() {
+    blackship_status_values
+    supported=false
+    [ "$(uname -s 2>/dev/null || true)" = "FreeBSD" ] && [ "$(uname -m 2>/dev/null || true)" = "amd64" ] && supported=true
+    printf '{"ok":true,"mutates":false,"supported":%s,"installed":%s,"compatible":%s,"installed_version":"%s","version":"%s","url":"%s","sha256":"%s"}\n' \
+        "$supported" "$blackship_available" "$blackship_compatible" \
+        "$(printf '%s' "$blackship_version" | json_escape)" "$blackship_release_version" \
+        "$blackship_release_url" "$blackship_release_sha256"
+}
+
+do_blackship_install() {
+    confirmation="${1:-}"
+    [ "$confirmation" = "$blackship_release_version" ] || {
+        emit_action_result false "Blackship installation confirmation did not match." "Type ${blackship_release_version} exactly."
+        exit 1
+    }
+    [ "$(uname -s 2>/dev/null || true)" = "FreeBSD" ] && [ "$(uname -m 2>/dev/null || true)" = "amd64" ] || {
+        emit_action_result false "This Blackship build requires FreeBSD amd64." "No binary was installed."
+        exit 1
+    }
+    blackship_status_values
+    if [ "$blackship_compatible" = true ]; then
+        emit_action_result true "Blackship ${blackship_version} is already compatible." "No downgrade was performed."
+        return
+    fi
+
+    install_tmp="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-blackship.XXXXXX")"
+    trap 'rm -rf "$install_tmp"' EXIT HUP INT TERM
+    archive="$install_tmp/blackship.tar.gz"
+    if [ -n "${BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE:-}" ]; then
+        cp "$BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE" "$archive"
+    elif command -v fetch >/dev/null 2>&1; then
+        fetch -q -o "$archive" "$blackship_release_url"
+    elif command -v curl >/dev/null 2>&1; then
+        curl -fL -o "$archive" "$blackship_release_url"
+    else
+        emit_action_result false "No HTTPS download tool is available." "Install fetch or curl."
+        exit 1
+    fi
+    actual_sha="$(sha256 -q "$archive" 2>/dev/null || true)"
+    [ "$actual_sha" = "$blackship_release_sha256" ] || {
+        emit_action_result false "Blackship checksum verification failed." "Expected ${blackship_release_sha256}; received ${actual_sha:-unknown}."
+        exit 1
+    }
+    [ "$(tar -tzf "$archive" 2>/dev/null)" = "blackship" ] || {
+        emit_action_result false "The Blackship archive layout is unexpected." "Only a single blackship binary is accepted."
+        exit 1
+    }
+    tar -xzf "$archive" -C "$install_tmp" blackship
+    chmod 0755 "$install_tmp/blackship"
+    capability_output="$("$install_tmp/blackship" --format json capabilities 2>/dev/null || true)"
+    candidate_version="$(printf '%s\n' "$capability_output" | blackship_json_field blackship_version)"
+    candidate_schema="$(printf '%s\n' "$capability_output" | blackship_json_number output_schema_version)"
+    [ "$candidate_schema" = "1" ] && version_at_least "$candidate_version" "$blackship_min_version" || {
+        emit_action_result false "The downloaded Blackship binary is incompatible." "Version ${candidate_version:-unknown}, schema ${candidate_schema:-unknown}."
+        exit 1
+    }
+    if ! run_privileged install -m 0755 "$install_tmp/blackship" /usr/local/bin/blackship; then
+        emit_action_result false "Privilege escalation was denied." "The verified Blackship binary was not installed."
+        exit 1
+    fi
+    rm -rf "$install_tmp"
+    trap - EXIT HUP INT TERM
+    write_last_result success "Installed Blackship ${candidate_version}."
+    emit_action_result true "Installed Blackship ${candidate_version}." "The official binary matched the pinned SHA-256 checksum."
+}
+
+do_blackship_project_preview() {
+    pool="${1:-}"
+    address="${2:-10.0.1.10/24}"
+    valid_pool_name "$pool" || {
+        emit_action_result false "Invalid ZFS pool." "$pool"
+        exit 1
+    }
+    network_values="$(blackship_network_values "$address" 2>/dev/null || true)"
+    [ -n "$network_values" ] || {
+        emit_action_result false "Invalid Blackship network address." "Use an IPv4 /24 address such as 10.0.1.10/24."
+        exit 1
+    }
+    subnet="${network_values%%|*}"
+    remainder="${network_values#*|}"
+    gateway="${remainder%%|*}"
+    blackship_status_values
+    ready=false
+    [ "$blackship_compatible" = true ] && address_route_available "$address" && ready=true
+    printf '{"ok":true,"mutates":false,"ready":%s,"pool":"%s","address":"%s","network":{"name":"%s","subnet":"%s","gateway":"%s","bridge":"%s"},"manifest":"%s","commands":["install managed Blackship manifest","blackship network create %s --subnet %s --gateway %s --bridge %s","apply BSDRunner PF NAT and Blackship anchors"]}\n' \
+        "$ready" "$(printf '%s' "$pool" | json_escape)" "$(printf '%s' "$address" | json_escape)" \
+        "$blackship_network_name" "$subnet" "$gateway" "$blackship_bridge" \
+        "$(printf '%s' "$blackship_manifest" | json_escape)" "$blackship_network_name" "$subnet" "$gateway" "$blackship_bridge"
+}
+
+do_blackship_project_setup() {
+    pool="${1:-}"
+    address="${2:-}"
+    confirmation="${3:-}"
+    [ "$confirmation" = "$pool" ] || {
+        emit_action_result false "Blackship project confirmation did not match." "Type the selected ZFS pool exactly."
+        exit 1
+    }
+    valid_pool_name "$pool" || { emit_action_result false "Invalid ZFS pool." "$pool"; exit 1; }
+    zfs_pool_exists "$pool" || { emit_action_result false "The selected ZFS pool is unavailable." "$pool"; exit 1; }
+    address_route_available "$address" || { emit_action_result false "The Blackship network overlaps an active host route." "$address"; exit 1; }
+    network_values="$(blackship_network_values "$address" 2>/dev/null || true)"
+    [ -n "$network_values" ] || { emit_action_result false "Invalid Blackship network address." "$address"; exit 1; }
+    subnet="${network_values%%|*}"
+    remainder="${network_values#*|}"
+    gateway="${remainder%%|*}"
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship 0.4.1 or newer is required." "Install Blackship first."; exit 1; }
+    if [ -r "$blackship_manifest" ] && grep -q '^\[\[jails\]\]' "$blackship_manifest"; then
+        emit_action_result false "The BSDRunner Blackship project already contains jails." "Project setup will not replace a populated managed manifest."
+        exit 1
+    fi
+
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-manifest.XXXXXX")"
+    blackship_project_manifest "$pool" "$subnet" "$gateway" >"$candidate"
+    blackship_check_candidate "$candidate" || { rm -f "$candidate"; emit_action_result false "Blackship rejected the managed project." "No manifest was installed."; exit 1; }
+    if ! install_managed_file "$candidate" "$blackship_manifest"; then
+        rm -f "$candidate"
+        emit_action_result false "Privilege escalation was denied." "The validated Blackship manifest was not installed."
+        exit 1
+    fi
+    rm -f "$candidate"
+    if ! blackship_sync_autostart_service; then
+        emit_action_result false "The Blackship project exists, but boot-service setup was denied." "The validated manifest was retained; retry setup after checking privileges."
+        exit 1
+    fi
+
+    network_output="$(blackship_read_json network list 2>/dev/null || true)"
+    if ! printf '%s\n' "$network_output" | grep -q "\"name\"[[:space:]]*:[[:space:]]*\"$blackship_network_name\""; then
+        run_privileged blackship --config "$blackship_manifest" --non-interactive network create "$blackship_network_name" --subnet "$subnet" --gateway "$gateway" --bridge "$blackship_bridge" >/dev/null
+    fi
+    external_interface="$(default_interface_value 2>/dev/null || true)"
+    [ -n "$external_interface" ] || { emit_action_result false "The Blackship project exists, but no default network interface was found." "Configure networking and retry PF setup."; exit 1; }
+    pf_output="$(sh "$pf_backend" blackship-network "$subnet" "$external_interface" 2>&1)" || {
+        emit_action_result false "The Blackship project exists, but PF setup failed." "$pf_output"
+        exit 1
+    }
+    write_last_result success "Configured the BSDRunner Blackship project."
+    emit_action_result true "Configured Blackship storage and private networking." "$pf_output"
+}
+
+blackship_postgres_package() {
+    if [ "$test_mode" = "1" ]; then
+        printf 'postgresql18-server|18\n'
+        return
+    fi
+    for major in 18 17; do
+        package="postgresql${major}-server"
+        if pkg rquery -r FreeBSD-ports '%n' "$package" 2>/dev/null | grep -Fx "$package" >/dev/null; then
+            printf '%s|%s\n' "$package" "$major"
+            return
+        fi
+    done
+    return 1
+}
+
+blackship_preset_metadata() {
+    preset="$1"
+    case "$preset" in
+        blank) printf 'Blank FreeBSD jail|None|none|A clean FreeBSD userland for learning or custom work.\n' ;;
+        nginx) printf 'nginx web server|nginx-lite|80/tcp|A small private web server with a welcome page.\n' ;;
+        postgres) printf 'PostgreSQL database|postgresql18-server|5432/tcp|A private appdb database with generated credentials.\n' ;;
+        ollama) printf 'Ollama local AI|ollama|11434/tcp|Experimental amd64 CPU service; models are not downloaded automatically.\n' ;;
+    esac
+}
+
+do_blackship_preset_preview() {
+    preset="${1:-}"
+    name="${2:-}"
+    release="${3:-}"
+    address="${4:-}"
+    autostart="${5:-no}"
+    outbound_policy="${6:-internet-only}"
+    valid_blackship_preset "$preset" || { emit_action_result false "Unknown jail starter." "$preset"; exit 1; }
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    valid_release "$release" || { emit_action_result false "Invalid FreeBSD release." "$release"; exit 1; }
+    valid_jail_ipv4 "$address" || { emit_action_result false "Invalid jail address." "$address"; exit 1; }
+    [ "$autostart" = yes ] || [ "$autostart" = no ] || { emit_action_result false "Invalid autostart choice." "$autostart"; exit 1; }
+    valid_outbound_policy "$outbound_policy" || { emit_action_result false "Invalid outbound policy." "$outbound_policy"; exit 1; }
+    ready=true
+    notes=""
+    if [ -n "$fixture_file" ]; then
+        notes="Demo preview only; creation remains disabled."
+    else
+        blackship_status_values
+        [ "$blackship_compatible" = true ] || { ready=false; notes="Blackship 0.4.1 or newer is required."; }
+        [ -r "$blackship_manifest" ] || { ready=false; notes="${notes}${notes:+ }Configure Blackship storage and networking first."; }
+        if blackship_manifest_has_name "$name"; then ready=false; notes="${notes}${notes:+ }The jail name is already in use."; fi
+        collect_jail_conflicts "$name" "$address"
+        [ "$conflict_name_available" = true ] || { ready=false; notes="${notes}${notes:+ }The jail name is already used by an external or legacy jail."; }
+        [ "$conflict_address_available" = true ] || { ready=false; notes="${notes}${notes:+ }The address is already used by an external or legacy jail."; }
+        blackship_address_in_network "$address" || { ready=false; notes="${notes}${notes:+ }The address is outside the managed private network."; }
+        blackship_address_available "$address" || { ready=false; notes="${notes}${notes:+ }The address is already assigned to another managed jail."; }
+        host_release="$(host_release_value | awk 'NF { print; exit }')"
+        release_is_host_compatible "$host_release" "$release" || { ready=false; notes="${notes}${notes:+ }The selected release is newer than the host."; }
+        if [ "$preset" = ollama ]; then
+            physical="$(host_physical_memory)"
+            [ "$physical" -ge 8589934592 ] 2>/dev/null || { ready=false; notes="${notes}${notes:+ }Ollama requires at least 8 GiB of host RAM."; }
+            [ "$(uname -m 2>/dev/null || true)" = amd64 ] || { ready=false; notes="${notes}${notes:+ }The Ollama starter supports amd64 only."; }
+            if [ "$test_mode" != 1 ]; then
+                storage_probe="$blackship_data_dir"
+                [ -d "$storage_probe" ] || storage_probe="${blackship_data_dir%/*}"
+                available_kb="$(df -Pk "$storage_probe" 2>/dev/null | awk 'NR == 2 { print $4; exit }')"
+                [ "${available_kb:-0}" -ge 20971520 ] 2>/dev/null || { ready=false; notes="${notes}${notes:+ }Ollama requires at least 20 GiB of free storage before model downloads."; }
+            fi
+        fi
+    fi
+    metadata="$(blackship_preset_metadata "$preset")"
+    label="${metadata%%|*}"; metadata="${metadata#*|}"; package="${metadata%%|*}"; metadata="${metadata#*|}"; port="${metadata%%|*}"; description="${metadata#*|}"
+    if [ "$preset" = postgres ] && [ -z "$fixture_file" ]; then
+        postgres_value="$(blackship_postgres_package 2>/dev/null || true)"
+        if [ -n "$postgres_value" ]; then
+            package="${postgres_value%%|*}"
+        else
+            ready=false
+            notes="${notes}${notes:+ }Neither postgresql18-server nor postgresql17-server is available from the configured repository."
+        fi
+    fi
+    if [ "$ready" = true ] && [ -z "$fixture_file" ]; then
+        preview_context="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-preset-preview.XXXXXX")"
+        preview_candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-preview.XXXXXX")"
+        preview_valid=true
+        preview_failure=""
+        network_values="$(blackship_network_values "$address")"
+        preview_subnet="${network_values%%|*}"
+        if ! render_blackship_context "$preset" "$release" "$preview_subnet" "$preview_context"; then
+            preview_valid=false
+            preview_failure="BSDRunner could not render the generated Jailfile."
+        fi
+        if [ "$preview_valid" = true ]; then
+            if ! preview_output="$(blackship template validate "$preview_context/Jailfile" 2>&1)"; then
+                preview_valid=false
+                preview_failure="Jailfile validation failed: ${preview_output}"
+            fi
+        fi
+        if [ "$preview_valid" = true ]; then
+            cp "$blackship_manifest" "$preview_candidate"
+            append_blackship_jail "$preview_candidate" "$preset" "$name" "$release" "$address" "$preview_context" "$autostart"
+            if ! preview_output="$(blackship --config "$preview_candidate" --format json check 2>&1)"; then
+                preview_valid=false
+                preview_failure="Manifest validation failed: ${preview_output}"
+            fi
+        fi
+        if [ "$preview_valid" = true ]; then
+            if ! preview_output="$(blackship --config "$preview_candidate" armada --file "$preview_candidate" up "$name" --dry-run 2>&1)"; then
+                preview_valid=false
+                preview_failure="Blackship dry-run failed: ${preview_output}"
+            fi
+        fi
+        rm -rf "$preview_context"
+        rm -f "$preview_candidate"
+        if [ "$preview_valid" != true ]; then
+            ready=false
+            notes="${notes}${notes:+ }${preview_failure:-Blackship rejected the generated manifest, Jailfile, or dry-run plan.}"
+        fi
+    fi
+    printf '{"ok":true,"mutates":false,"backend":"blackship","ready":%s,"preset":"%s","label":"%s","description":"%s","inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","outbound_policy":"%s"},"packages":["%s"],"ports":["%s"],"private_by_default":true,"notes":["%s"],"commands":["blackship template validate %s/Jailfile","blackship --config %s check","blackship --config %s armada --file %s up %s --dry-run","blackship --config %s armada --file %s up %s","bsdrunner-pf-backend.sh jail-policy %s %s %s RESOLVER"]}\n' \
+        "$ready" "$preset" "$(printf '%s' "$label" | json_escape)" "$(printf '%s' "$description" | json_escape)" \
+        "$(printf '%s' "$name" | json_escape)" "$release" "$address" "$autostart" "$outbound_policy" \
+        "$(printf '%s' "$package" | json_escape)" "$port" "$(printf '%s' "$notes" | json_escape)" \
+        "$(printf '%s' "$blackship_context_dir/$name" | json_escape)" "$(printf '%s' "$blackship_manifest" | json_escape)" \
+        "$(printf '%s' "$blackship_manifest" | json_escape)" "$(printf '%s' "$blackship_manifest" | json_escape)" "$name" \
+        "$(printf '%s' "$blackship_manifest" | json_escape)" "$(printf '%s' "$blackship_manifest" | json_escape)" "$name" "$name" "${address%%/*}" "$outbound_policy"
+}
+
+render_blackship_context() {
+    preset="$1"
+    release="$2"
+    subnet="$3"
+    destination="$4"
+    source="$blackship_preset_source/$preset"
+    [ -r "$source/Jailfile" ] || return 1
+    mkdir -p "$destination"
+    postgres_package="postgresql18-server"
+    postgres_major="18"
+    if [ "$preset" = postgres ]; then
+        postgres_value="$(blackship_postgres_package 2>/dev/null || true)"
+        [ -n "$postgres_value" ] || return 1
+        postgres_package="${postgres_value%%|*}"
+        postgres_major="${postgres_value#*|}"
+    fi
+    sed -e "s|%%RELEASE%%|$release|g" \
+        -e "s|%%POSTGRES_PACKAGE%%|$postgres_package|g" \
+        -e "s|%%POSTGRES_MAJOR%%|$postgres_major|g" \
+        -e "s|%%NETWORK_CIDR%%|$subnet|g" \
+        "$source/Jailfile" >"$destination/Jailfile"
+    for asset in "$source"/*; do
+        [ -f "$asset" ] || continue
+        [ "${asset##*/}" = Jailfile ] && continue
+        cp "$asset" "$destination/${asset##*/}"
+    done
+}
+
+append_blackship_jail() {
+    candidate="$1" preset="$2" name="$3" release="$4" address="$5" context="$6" autostart="$7"
+    ip="${address%%/*}"
+    tags="\"bsdrunner\", \"$preset\""
+    [ "$autostart" = yes ] && tags="$tags, \"autostart\""
+    cat >>"$candidate" <<EOF
+
+[[jails]]
+name = "$name"
+release = "$release"
+build = "$context"
+hostname = "$name.local"
+tags = [$tags]
+
+[jails.network]
+vnet = true
+networks = ["$blackship_network_name"]
+bridge = "$blackship_bridge"
+ip_cidr = "$address"
+
+[jails.network.dns]
+nameservers = ["$(jail_resolver_address_value "$(jail_resolver_source_value 2>/dev/null || true)" 2>/dev/null || printf '1.1.1.1')"]
+mode = "custom"
+EOF
+    case "$preset" in
+        nginx)
+            cat >>"$candidate" <<'EOF'
+
+[jails.resources]
+memory = "512m"
+cpu = "100"
+maxproc = 128
+
+[jails.healthcheck]
+enabled = true
+[[jails.healthcheck.checks]]
+name = "nginx"
+command = "service nginx onestatus"
+target = "jail"
+EOF
+            ;;
+        postgres)
+            cat >>"$candidate" <<'EOF'
+
+[jails.resources]
+memory = "2g"
+cpu = "200"
+maxproc = 256
+
+[jails.healthcheck]
+enabled = true
+[[jails.healthcheck.checks]]
+name = "postgres"
+command = "service postgresql onestatus"
+target = "jail"
+start_period = 30
+EOF
+            ;;
+        ollama)
+            physical="$(host_physical_memory)"
+            [ "$physical" -gt 0 ] 2>/dev/null || physical=8589934592
+            memory_mb="$((physical / 1024 / 1024 * 75 / 100))"
+            [ "$memory_mb" -ge 4096 ] || memory_mb=4096
+            cat >>"$candidate" <<EOF
+
+[jails.resources]
+memory = "${memory_mb}m"
+cpu = "400"
+maxproc = 512
+
+[jails.healthcheck]
+enabled = true
+[[jails.healthcheck.checks]]
+name = "ollama-api"
+command = "fetch -qo /dev/null http://127.0.0.1:11434/api/tags"
+target = "jail"
+start_period = 120
+EOF
+            ;;
+    esac
+}
+
+blackship_create_postgres_credentials() {
+    name="$1"
+    password="$(openssl rand -hex 18)"
+    sql="CREATE ROLE app LOGIN PASSWORD '${password}'; CREATE DATABASE appdb OWNER app;"
+    if printf '%s\n' "$sql" | run_privileged blackship --config "$blackship_manifest" --non-interactive exec "$name" -- /usr/bin/su -l postgres -c '/usr/local/bin/psql postgres' >/dev/null 2>&1; then
+        printf '%s\n' "$password"
+        return 0
+    fi
+    return 1
+}
+
+do_blackship_preset_create() {
+    preset="${1:-}" name="${2:-}" release="${3:-}" address="${4:-}" autostart="${5:-no}" confirmation="${6:-}" outbound_policy="${7:-internet-only}"
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Jail confirmation did not match." "Type the jail name exactly."; exit 1; }
+    preview="$(do_blackship_preset_preview "$preset" "$name" "$release" "$address" "$autostart" "$outbound_policy")"
+    printf '%s\n' "$preview" | grep -q '"ready":true' || { emit_action_result false "The Blackship starter is not ready." "$preview"; exit 1; }
+    network_values="$(blackship_network_values "$address")"; subnet="${network_values%%|*}"
+    temp_context="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-preset.XXXXXX")"
+    render_blackship_context "$preset" "$release" "$subnet" "$temp_context" || { rm -rf "$temp_context"; emit_action_result false "Unable to render the jail starter." "$preset"; exit 1; }
+    blackship template validate "$temp_context/Jailfile" >/dev/null 2>&1 || { rm -rf "$temp_context"; emit_action_result false "Blackship rejected the generated Jailfile." "$preset"; exit 1; }
+
+    managed_context="$blackship_context_dir/$name"
+    if ! run_privileged install -d -m 0755 "$managed_context"; then
+        rm -rf "$temp_context"
+        emit_action_result false "Privilege escalation was denied." "No manifest entry was added."
+        exit 1
+    fi
+    for asset in "$temp_context"/*; do
+        if ! run_privileged install -m 0644 "$asset" "$managed_context/${asset##*/}"; then
+            rm -rf "$temp_context"
+            emit_action_result false "Setup incomplete for ${name}." "The context directory was retained, but no manifest entry was added. Retry after checking privileges."
+            exit 1
+        fi
+    done
+    rm -rf "$temp_context"
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-manifest.XXXXXX")"
+    cp "$blackship_manifest" "$candidate"
+    append_blackship_jail "$candidate" "$preset" "$name" "$release" "$address" "$managed_context" "$autostart"
+    blackship_check_candidate "$candidate" || { rm -f "$candidate"; emit_action_result false "Blackship rejected the updated manifest." "The installed context was retained for diagnosis."; exit 1; }
+    if ! install_managed_file "$candidate" "$blackship_manifest"; then
+        rm -f "$candidate"
+        emit_action_result false "Setup incomplete for ${name}." "The rendered context was retained, but privilege escalation denied the manifest update."
+        exit 1
+    fi
+    rm -f "$candidate"
+    blackship_sync_autostart_service || true
+
+    if ! build_output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive armada --file "$blackship_manifest" up "$name" 2>&1)"; then
+        write_last_result warning "Added ${name}, but setup is incomplete."
+        emit_action_result false "Setup incomplete for ${name}." "The manifest entry and completed work were retained. Retry creation or open a console after starting the jail.\n$build_output"
+        exit 1
+    fi
+    policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" 2>&1 || true)"
+    credentials=""
+    credential_note=""
+    if [ "$preset" = postgres ]; then
+        credentials="$(blackship_create_postgres_credentials "$name" 2>/dev/null || true)"
+        if [ -n "$credentials" ]; then
+            credential_note="\nDatabase: appdb\nUser: app\nPassword (shown once): $credentials"
+        else
+            credential_note="\nPostgreSQL is running, but appdb credentials need attention. Use Reset database password."
+        fi
+    fi
+    write_last_result success "Created ${name} with Blackship."
+    emit_action_result true "Created ${name} with Blackship." "$build_output\n$policy_output$credential_note"
+}
+
+do_blackship_postgres_reset() {
+    name="${1:-}" confirmation="${2:-}"
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Database confirmation did not match." "Type the jail name exactly."; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    password="$(openssl rand -hex 18)"
+    sql="ALTER ROLE app WITH PASSWORD '${password}';"
+    if printf '%s\n' "$sql" | run_privileged blackship --config "$blackship_manifest" --non-interactive exec "$name" -- /usr/bin/su -l postgres -c '/usr/local/bin/psql postgres' >/dev/null 2>&1; then
+        emit_action_result true "Reset the app database password." "Database: appdb\nUser: app\nPassword (shown once): $password"
+    else
+        emit_action_result false "Unable to reset the app database password." "Confirm that this is a running PostgreSQL starter jail."
+        exit 1
+    fi
+}
+
+blackship_sync_autostart_service() {
+    enabled=no
+    if awk '
+        /^[[:space:]]*tags[[:space:]]*=/ && /"autostart"/ { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$blackship_manifest"; then
+        enabled=yes
+    fi
+    [ -r "$blackship_rc_source" ] || return 1
+    run_privileged install -m 0555 "$blackship_rc_source" "$blackship_rc_target"
+    if [ "$enabled" = yes ]; then
+        run_privileged sysrc bsdrunner_blackship_enable=YES >/dev/null
+    else
+        run_privileged sysrc bsdrunner_blackship_enable=NO >/dev/null
+    fi
+}
+
+do_blackship_autostart() {
+    name="${1:-}"
+    desired="${2:-}"
+    confirmation="${3:-}"
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    case "$desired" in yes|no) ;; *) emit_action_result false "Invalid autostart choice." "$desired"; exit 1 ;; esac
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Autostart confirmation did not match." "Type the jail name exactly."; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-manifest.XXXXXX")"
+    awk -v requested="$name" -v desired="$desired" '
+        function section_name(line, value) {
+            value = line
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            return value
+        }
+        /^\[\[jails\]\]/ { in_jail = 1; selected = 0 }
+        in_jail && /^[[:space:]]*name[[:space:]]*=/ { selected = section_name($0) == requested }
+        selected && /^[[:space:]]*tags[[:space:]]*=/ {
+            line = $0
+            gsub(/,[[:space:]]*"autostart"/, "", line)
+            gsub(/"autostart"[[:space:]]*,[[:space:]]*/, "", line)
+            gsub(/"autostart"/, "", line)
+            gsub(/,[[:space:]]*,/, ",", line)
+            if (desired == "yes") sub(/][[:space:]]*$/, ", \"autostart\"]", line)
+            print line
+            next
+        }
+        { print }
+    ' "$blackship_manifest" >"$candidate"
+    blackship_check_candidate "$candidate" || { rm -f "$candidate"; emit_action_result false "Blackship rejected the autostart update." "The manifest was not changed."; exit 1; }
+    install_managed_file "$candidate" "$blackship_manifest"
+    rm -f "$candidate"
+    blackship_sync_autostart_service || { emit_action_result false "Updated the manifest, but could not synchronize the boot service." "Retry after checking privileges."; exit 1; }
+    emit_action_result true "Updated starts-at-boot for ${name}." "Autostart is ${desired}."
+}
+
+do_blackship_details() {
+    name="${1:-}"
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not compatible." "Version 0.4.1 or newer with JSON schema 1 is required."; exit 1; }
+    stats="$(blackship_read_json stats "$name" 2>/dev/null || true)"
+    health="$(blackship_read_json_privileged --non-interactive health "$name" 2>/dev/null || true)"
+    ports="$(blackship_read_json ports "$name" 2>/dev/null || true)"
+    audit="$(blackship_read_json audit "$name" 2>/dev/null || true)"
+    printf '{"ok":true,"schema_version":2,"name":"%s","stats":' "$(printf '%s' "$name" | json_escape)"
+    if valid_json_or_empty "$stats"; then printf '%s' "$stats"; else printf 'null'; fi
+    printf ',"health":'
+    if valid_json_or_empty "$health"; then printf '%s' "$health"; else printf 'null'; fi
+    printf ',"ports":'
+    if valid_json_or_empty "$ports"; then printf '%s' "$ports"; else printf 'null'; fi
+    printf ',"audit":'
+    if valid_json_or_empty "$audit"; then printf '%s' "$audit"; else printf 'null'; fi
+    printf '}\n'
+}
+
 if [ -n "$fixture_file" ]; then
     case "$action" in
         snapshot)
@@ -2178,7 +3091,7 @@ if [ -n "$fixture_file" ]; then
             cat "$fixture_file"
             exit 0
             ;;
-        preview|storage-preview|network-preview)
+        preview|storage-preview|network-preview|blackship-install-preview|blackship-project-preview|blackship-preset-preview)
             ;;
         *)
             emit_action_result false "Actions are disabled in demo mode." "Restart Jails normally to manage real jails."
@@ -2229,6 +3142,33 @@ case "$action" in
         ;;
     create)
         do_create "${2:-}" "${3:-}" "${4:-}" "${5:-yes}" "${6:-}" "${7:-thick}" "${8:-internet-only}"
+        ;;
+    blackship-install-preview)
+        do_blackship_install_preview
+        ;;
+    blackship-install)
+        do_blackship_install "${2:-}"
+        ;;
+    blackship-project-preview)
+        do_blackship_project_preview "${2:-}" "${3:-10.0.1.10/24}"
+        ;;
+    blackship-project-setup)
+        do_blackship_project_setup "${2:-}" "${3:-}" "${4:-}"
+        ;;
+    blackship-preset-preview)
+        do_blackship_preset_preview "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-no}" "${7:-internet-only}"
+        ;;
+    blackship-preset-create)
+        do_blackship_preset_create "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-no}" "${7:-}" "${8:-internet-only}"
+        ;;
+    blackship-details)
+        do_blackship_details "${2:-}"
+        ;;
+    blackship-postgres-reset)
+        do_blackship_postgres_reset "${2:-}" "${3:-}"
+        ;;
+    blackship-autostart)
+        do_blackship_autostart "${2:-}" "${3:-}" "${4:-}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"

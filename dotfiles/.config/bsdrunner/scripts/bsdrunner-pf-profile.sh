@@ -22,6 +22,9 @@ ssh_real_port_configured="no"
 jail_nat="no"
 jail_interface="bastille0"
 jail_ext_if=""
+blackship_nat="no"
+blackship_subnet=""
+blackship_ext_if=""
 
 valid_interface() {
     case "${1:-}" in
@@ -62,6 +65,17 @@ valid_ipv4() {
             for (i = 1; i <= 4; i++)
                 if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255)
                     exit 1
+        }
+    '
+}
+
+valid_ipv4_subnet24() {
+    printf '%s\n' "${1:-}" | awk -F '[./]' '
+        NF != 5 || $5 != 24 { exit 1 }
+        {
+            for (i = 1; i <= 4; i++)
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+            if ($4 != 0) exit 1
         }
     '
 }
@@ -176,6 +190,15 @@ load_profile() {
                     jail_ext_if=""
                 fi
                 ;;
+            blackship_nat)
+                blackship_nat="$(normalize_bool "$value")"
+                ;;
+            blackship_subnet)
+                if valid_ipv4_subnet24 "$value"; then blackship_subnet="$value"; else blackship_subnet=""; fi
+                ;;
+            blackship_ext_if)
+                if valid_interface "$value"; then blackship_ext_if="$value"; else blackship_ext_if=""; fi
+                ;;
         esac
     done <"$profile_file"
 
@@ -184,6 +207,9 @@ load_profile() {
     fi
     if [ "$jail_nat" = "yes" ] && { ! valid_interface "$jail_interface" || ! valid_interface "$jail_ext_if"; }; then
         jail_nat="no"
+    fi
+    if [ "$blackship_nat" = "yes" ] && { ! valid_ipv4_subnet24 "$blackship_subnet" || ! valid_interface "$blackship_ext_if"; }; then
+        blackship_nat="no"
     fi
 }
 
@@ -205,6 +231,11 @@ emit_settings() {
         printf 'jail_nat=yes\n'
         printf 'jail_interface=%s\n' "$jail_interface"
         printf 'jail_ext_if=%s\n' "$jail_ext_if"
+    fi
+    if [ "$blackship_nat" = "yes" ]; then
+        printf 'blackship_nat=yes\n'
+        printf 'blackship_subnet=%s\n' "$blackship_subnet"
+        printf 'blackship_ext_if=%s\n' "$blackship_ext_if"
     fi
 }
 
@@ -250,6 +281,10 @@ private_nets = "{ 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16
 EOF
         fi
     fi
+    if [ "$blackship_nat" = "yes" ]; then
+        printf 'blackship_ext_if = "%s"\n' "$blackship_ext_if"
+        printf 'blackship_subnet = "%s"\n' "$blackship_subnet"
+    fi
 
     if [ "$allow_ssh_lan" = "yes" ]; then
         cat <<'EOF'
@@ -267,7 +302,7 @@ EOF
 EOF
     fi
 
-    if [ "$jail_nat" = "yes" ]; then
+    if [ "$jail_nat" = "yes" ] || [ "$blackship_nat" = "yes" ]; then
         cat <<'EOF'
 
 set skip on lo
@@ -298,6 +333,16 @@ EOF
         done
         cat <<'EOF'
 rdr-anchor "rdr/*"
+
+EOF
+    fi
+
+    if [ "$blackship_nat" = "yes" ]; then
+        cat <<'EOF'
+# Blackship owns per-jail rules in these anchors; BSDRunner owns subnet NAT.
+nat on $blackship_ext_if inet from $blackship_subnet to any -> ($blackship_ext_if:0)
+nat-anchor "blackship"
+rdr-anchor "blackship"
 
 EOF
     fi
@@ -372,6 +417,14 @@ EOF
 
 # Bastille stores per-jail inbound pass rules here when port redirects are used.
 anchor "bastille/*"
+EOF
+    fi
+    if [ "$blackship_nat" = "yes" ]; then
+        cat <<'EOF'
+
+# Blackship restores its managed per-jail filter rules in this namespace.
+anchor "blackship"
+anchor "blackship/*"
 EOF
     fi
 

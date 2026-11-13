@@ -32,6 +32,10 @@ ssh_tarpit_renderer_target="${BSDRUNNER_PF_TARPIT_RENDERER_TARGET:-/usr/local/li
 jail_nat="no"
 jail_interface="bastille0"
 jail_ext_if=""
+blackship_nat="no"
+blackship_subnet=""
+blackship_ext_if=""
+blackship_manifest="${BSDRUNNER_BLACKSHIP_MANIFEST:-/usr/local/etc/bsdrunner/blackship.toml}"
 sshd_config_file="${BSDRUNNER_PF_SSHD_CONFIG_FILE:-/etc/ssh/sshd_config}"
 
 valid_interface() {
@@ -63,6 +67,17 @@ valid_ipv4() {
             for (i = 1; i <= 4; i++)
                 if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255)
                     exit 1
+        }
+    '
+}
+
+valid_ipv4_subnet24() {
+    printf '%s\n' "${1:-}" | awk -F '[./]' '
+        NF != 5 || $5 != 24 { exit 1 }
+        {
+            for (i = 1; i <= 4; i++)
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+            if ($4 != 0) exit 1
         }
     '
 }
@@ -240,6 +255,15 @@ load_profile() {
                     jail_ext_if=""
                 fi
                 ;;
+            blackship_nat)
+                blackship_nat="$(normalize_bool "$value")"
+                ;;
+            blackship_subnet)
+                if valid_ipv4_subnet24 "$value"; then blackship_subnet="$value"; else blackship_subnet=""; fi
+                ;;
+            blackship_ext_if)
+                if valid_interface "$value"; then blackship_ext_if="$value"; else blackship_ext_if=""; fi
+                ;;
         esac
     done <"$profile_file"
 
@@ -248,6 +272,9 @@ load_profile() {
     fi
     if [ "$jail_nat" = "yes" ] && { ! valid_interface "$jail_interface" || ! valid_interface "$jail_ext_if"; }; then
         jail_nat="no"
+    fi
+    if [ "$blackship_nat" = "yes" ] && { ! valid_ipv4_subnet24 "$blackship_subnet" || ! valid_interface "$blackship_ext_if"; }; then
+        blackship_nat="no"
     fi
 }
 
@@ -272,6 +299,11 @@ write_profile() {
             printf 'jail_interface=%s\n' "$jail_interface"
             printf 'jail_ext_if=%s\n' "$jail_ext_if"
         fi
+        if [ "$blackship_nat" = "yes" ]; then
+            printf 'blackship_nat=yes\n'
+            printf 'blackship_subnet=%s\n' "$blackship_subnet"
+            printf 'blackship_ext_if=%s\n' "$blackship_ext_if"
+        fi
     } >"$profile_file"
 }
 
@@ -293,6 +325,11 @@ emit_settings() {
         printf 'jail_nat=yes\n'
         printf 'jail_interface=%s\n' "$jail_interface"
         printf 'jail_ext_if=%s\n' "$jail_ext_if"
+    fi
+    if [ "$blackship_nat" = "yes" ]; then
+        printf 'blackship_nat=yes\n'
+        printf 'blackship_subnet=%s\n' "$blackship_subnet"
+        printf 'blackship_ext_if=%s\n' "$blackship_ext_if"
     fi
 }
 
@@ -573,6 +610,7 @@ rules_summary_json() {
     printf ',{"id":"tarpit","label":"SSH tarpit","description":"endlessh listens on port 22 while real SSH moves to the stored high port.","enabled":%s}' "$(bool_json "$allow_ssh_tarpit")"
     printf ',{"id":"logging","label":"Blocked attempt logging","description":"Blocked packets are written to pflog.","enabled":%s}' "$(bool_json "$log_blocked")"
     printf ',{"id":"jail_nat","label":"Bastille jail networking","description":"Running Bastille jails use the managed PF NAT and anchor rules.","enabled":%s}' "$(bool_json "$jail_nat")"
+    printf ',{"id":"blackship_nat","label":"Blackship private networking","description":"BSDRunner-managed Blackship jails use private NAT and Blackship PF anchors.","enabled":%s}' "$(bool_json "$blackship_nat")"
     printf ']'
 }
 
@@ -671,6 +709,7 @@ emit_snapshot() {
     printf '"allow_ssh_tarpit":%s,' "$(bool_json "$allow_ssh_tarpit")"
     printf '"log_blocked":%s' "$(bool_json "$log_blocked")"
     printf ',"jail_nat":%s' "$(bool_json "$jail_nat")"
+    printf ',"blackship_nat":%s' "$(bool_json "$blackship_nat")"
     printf '},'
     printf '"rules":'
     rules_summary_json
@@ -1107,6 +1146,20 @@ sync_ssh_services_with_profile() {
     printf '%s\n%s\n' "$running_output" "$boot_output"
 }
 
+restore_blackship_anchors() {
+    [ "$blackship_nat" = "yes" ] || return 0
+    if ! command -v blackship >/dev/null 2>&1 || [ ! -r "$blackship_manifest" ]; then
+        printf '%s\n' "Blackship anchor restore skipped; Blackship or its managed manifest is unavailable."
+        return 0
+    fi
+    if output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive setup 2>&1)"; then
+        printf '%s\n' "$output"
+    else
+        printf '%s\n' "PF reloaded, but Blackship could not restore its runtime anchors: $output"
+    fi
+    return 0
+}
+
 do_apply() {
     mode="${1:-normal}"
     load_profile
@@ -1155,18 +1208,20 @@ $sshd_output"
         return
     fi
 
-    if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)" && sshd_output="$(sync_ssh_services_with_profile 2>&1)"; then
+    if install_output="$(install_rendered_profile "$rendered" 2>&1)" && reload_output="$(reload_pf 2>&1)" && blackship_output="$(restore_blackship_anchors 2>&1)" && sshd_output="$(sync_ssh_services_with_profile 2>&1)"; then
         write_applied_state "$current_profile_checksum"
         write_last_result "success" "BSDRunner firewall profile applied."
         emit_action_result true "BSDRunner firewall profile applied." "$validation
 $install_output
 $reload_output
+$blackship_output
 $sshd_output"
     else
         write_last_result "error" "Unable to install, reload, or synchronize the firewall profile."
         emit_action_result false "Unable to install, reload, or synchronize the firewall profile." "$validation
 ${install_output:-}
 ${reload_output:-}
+${blackship_output:-}
 ${sshd_output:-}"
         exit 1
     fi
@@ -1197,6 +1252,29 @@ do_jail_network() {
     jail_nat="yes"
     jail_interface="$requested_jail_if"
     jail_ext_if="$requested_ext_if"
+    write_profile
+    do_apply normal
+}
+
+do_blackship_network() {
+    requested_subnet="${1:-}"
+    requested_ext_if="${2:-}"
+    valid_ipv4_subnet24 "$requested_subnet" || {
+        emit_action_result false "Invalid Blackship subnet." "Use a private /24 network address such as 10.0.1.0/24."
+        exit 1
+    }
+    valid_interface "$requested_ext_if" || {
+        emit_action_result false "Invalid external interface." "$requested_ext_if"
+        exit 1
+    }
+    if ! ifconfig "$requested_ext_if" >/dev/null 2>&1; then
+        emit_action_result false "The external interface is unavailable." "$requested_ext_if"
+        exit 1
+    fi
+    load_profile
+    blackship_nat="yes"
+    blackship_subnet="$requested_subnet"
+    blackship_ext_if="$requested_ext_if"
     write_profile
     do_apply normal
 }
@@ -1461,9 +1539,11 @@ do_disable() {
 }
 
 do_reload() {
-    if output="$(reload_pf 2>&1)"; then
+    load_profile
+    if output="$(reload_pf 2>&1)" && blackship_output="$(restore_blackship_anchors 2>&1)"; then
         write_last_result "success" "Firewall rules reloaded."
-        emit_action_result true "Firewall rules reloaded." "$output"
+        emit_action_result true "Firewall rules reloaded." "$output
+$blackship_output"
     else
         write_last_result "error" "Unable to reload firewall rules."
         emit_action_result false "Unable to reload firewall rules." "$output"
@@ -1516,6 +1596,9 @@ case "$action" in
         ;;
     jail-network)
         do_jail_network "${2:-}" "${3:-}"
+        ;;
+    blackship-network)
+        do_blackship_network "${2:-}" "${3:-}"
         ;;
     jail-policy)
         do_jail_policy "${2:-}" "${3:-}" "${4:-}" "${5:-}"

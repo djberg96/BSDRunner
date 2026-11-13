@@ -1,5 +1,6 @@
 {
   "ok": true,
+  "schema_version": 2,
   "demo": true,
   "message": "Loaded Jails demo data.",
   "tools": {
@@ -41,41 +42,14 @@
     "14.3-RELEASE",
     "15.0-RELEASE"
   ],
-  "running": [
-    {
-      "name": "web",
-      "jid": "4",
-      "hostname": "web.home.arpa",
-      "path": "/jails/web",
-      "ipv4": "10.0.0.20",
-      "ipv6": "fd00::20",
-      "state": "running",
-      "backend": "native",
-      "autostart": "YES",
-      "release": "15.0-RELEASE"
-    }
-  ],
-  "configured": [
-    {
-      "name": "postgres",
-      "jid": "",
-      "hostname": "postgres.home.arpa",
-      "path": "/jails/postgres",
-      "ipv4": "10.0.0.21",
-      "ipv6": "",
-      "state": "configured",
-      "backend": "native",
-      "autostart": "NO",
-      "release": "15.0-RELEASE",
-      "source": "/etc/jail.conf.d/postgres.conf"
-    }
-  ],
+  "running": [],
+  "configured": [],
   "bastille": [
     {
-      "name": "build",
+      "name": "legacy-build",
       "jid": "0",
-      "hostname": "build",
-      "path": "/usr/local/bastille/jails/build/root",
+      "hostname": "legacy-build",
+      "path": "/usr/local/bastille/jails/legacy-build/root",
       "ipv4": "10.0.0.22",
       "ipv6": "",
       "state": "stopped",
@@ -84,9 +58,85 @@
       "release": "14.3-RELEASE"
     }
   ],
+  "blackship": {
+    "available": true,
+    "compatible": true,
+    "minimum_version": "0.4.1",
+    "version": "0.4.1",
+    "output_schema_version": 1,
+    "configured": true,
+    "manifest": "/usr/local/etc/bsdrunner/blackship.toml",
+    "managed": [
+      {"name": "web", "preset": "nginx", "autostart": true},
+      {"name": "postgres", "preset": "postgres", "autostart": false}
+    ],
+    "inventory": {
+      "schema_version": 1,
+      "ok": true,
+      "data": {
+        "project": "bsdrunner",
+        "config_path": "/usr/local/etc/bsdrunner/blackship.toml",
+        "jails": [
+          {
+            "service_name": "web",
+            "full_name": "bsdrunner-web",
+            "manager": "blackship",
+            "managed": true,
+            "configured": true,
+            "running": true,
+            "state": "Running",
+            "jid": 4,
+            "release": "15.0-RELEASE",
+            "hostname": "web.local",
+            "ip": "10.0.1.20",
+            "ips": ["10.0.1.20"],
+            "path": "/var/db/bsdrunner/blackship/jails/bsdrunner-web",
+            "networks": ["bsdrunner"],
+            "depends_on": []
+          },
+          {
+            "service_name": "postgres",
+            "full_name": "bsdrunner-postgres",
+            "manager": "blackship",
+            "managed": true,
+            "configured": true,
+            "running": false,
+            "state": "Stopped",
+            "jid": null,
+            "release": "15.0-RELEASE",
+            "hostname": "postgres.local",
+            "ip": "10.0.1.21",
+            "ips": ["10.0.1.21"],
+            "path": "/var/db/bsdrunner/blackship/jails/bsdrunner-postgres",
+            "networks": ["bsdrunner"],
+            "depends_on": []
+          }
+        ]
+      }
+    },
+    "host": null,
+    "networks": null,
+    "releases": null,
+    "ports": null,
+    "stats": {
+      "schema_version": 1,
+      "ok": true,
+      "data": [
+        {"jid": "4", "name": "bsdrunner-web", "processes": 3, "cpu_percent": 0.2, "rss_mib": 24}
+      ]
+    },
+    "health": {
+      "schema_version": 1,
+      "ok": true,
+      "data": [
+        {"jail": "bsdrunner-web", "status": "Healthy", "checks": [{"name": "nginx", "passed": true, "output": "nginx is running", "duration_ms": 8, "age_ms": 0, "failures": 0}]},
+        {"jail": "bsdrunner-postgres", "status": "Unknown", "checks": []}
+      ]
+    }
+  },
   "outbound_policies": [
     {
-      "name": "build",
+      "name": "legacy-build",
       "ipv4": "10.0.0.22",
       "policy": "internet-only",
       "resolver": "192.168.1.1"
@@ -94,7 +144,7 @@
   ],
   "port_forwards": [
     {
-      "name": "build",
+      "name": "legacy-build",
       "ipv4": "10.0.0.22",
       "protocol": "tcp",
       "host_port": 8080,
@@ -103,7 +153,7 @@
   ],
   "simple_services": [
     {
-      "name": "build",
+      "name": "legacy-build",
       "ipv4": "10.0.0.22",
       "service": "nginx",
       "package": "nginx",

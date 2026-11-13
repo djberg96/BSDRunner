@@ -1,16 +1,17 @@
 # BSDRunner Jails
 
-BSDRunner Jails is a first-pass Quickshell control surface for learning and
-operating FreeBSD jails.
+BSDRunner Jails is a beginner-oriented Quickshell control surface for learning
+and operating FreeBSD jails. New service jails use Blackship 0.4.1 or newer;
+existing Bastille and native jails remain visible and operable without migration.
 
 The UI is intentionally read-mostly. It helps a new user answer:
 
 - what jails exist
 - whether each jail is running or only configured
-- whether native FreeBSD jail tools or Bastille are available
+- whether Blackship is ready for new jails and which legacy manager owns each existing jail
 - what path, hostname, IP address, JID, and backend a selected jail uses
 - which lifecycle actions are safe for the selected state
-- what a proposed Bastille thick- or thin-jail creation would do before any command runs
+- what a proposed Blackship starter would install and expose before any command runs
 - how storage, userland, networking, configuration, and lifecycle fit together
   while creating a basic jail through a guarded wizard
 
@@ -31,12 +32,12 @@ launch the installed app with the bundled sample snapshot:
 sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh --demo
 ```
 
-Demo mode shows running native, configured native, and stopped Bastille-backed
-jails. It is read-only: the backend rejects lifecycle, policy, port-forward,
+Demo mode shows a healthy nginx jail, a stopped PostgreSQL jail, the experimental
+Ollama starter, and an external Bastille jail. It is read-only: the backend rejects lifecycle, policy, port-forward,
 and guided-service mutations while the demo fixture is active. The installed fixture lives at
 `~/.config/bsdrunner/jails/demo-snapshot.json`.
 
-The **Create Basic Jail** wizard remains available in demo mode so every step and
+The **Create a Service Jail** wizard remains available in demo mode so every step and
 the generated plan can be explored. Its final creation action is disabled.
 
 ## Backend
@@ -48,6 +49,11 @@ The launcher runs:
 ```
 
 The snapshot action returns JSON with:
+
+- `schema_version: 2`
+- Blackship capabilities plus best-effort JSON envelopes for `host`, `ps --host`,
+  `network list`, `releases`, `ports`, `stats`, and `health`
+- compatibility status requiring Blackship `>= 0.4.1` and output schema v1
 
 - tool detection for `jls`, `jail`, `service`, `bastille`, and `mdo`
 - `jail_enable` and `bastille_enable` service settings when `sysrc` exists
@@ -62,6 +68,48 @@ The snapshot action returns JSON with:
   `bastille list -a` form as compatibility fallbacks
 - nginx installation, boot, and runtime status for running Bastille jails
 - the last action result
+
+## New Blackship service jails
+
+The setup checklist is: install Blackship, choose a ZFS pool, create the private
+network, then pick a starter. The confirmed installer accepts only the official
+FreeBSD amd64 0.4.1 archive, verifies SHA-256
+`86fc256505b9faa8c26fca01f2018a8f1e5d1c48b902b95f84da9b432060516f`,
+validates `capabilities`, and does not downgrade a compatible newer release.
+
+BSDRunner owns one project:
+
+- manifest: `/usr/local/etc/bsdrunner/blackship.toml`
+- state: `/var/db/bsdrunner/blackship`
+- dataset: `POOL/bsdrunner/blackship`
+- private network: `bsdrunner` on `blackship0`
+
+Candidate manifests and every generated Jailfile are checked by Blackship before
+the root-owned canonical files are replaced. Addresses are static within the
+managed route-safe `/24`; inbound LAN exposure remains a separate confirmed PF
+port-forward action. Lifecycle, console, dependency ordering, health, stats,
+ports, and audit details delegate to Blackship.
+
+The starter choices are:
+
+- **Blank FreeBSD** for learning and custom work.
+- **nginx web server**, using `nginx-lite`, a BSDRunner welcome page, and a
+  private health-checked HTTP service.
+- **PostgreSQL database**, preferring `postgresql18-server` and falling back to
+  17. It creates `appdb` and `app`; the generated password is shown once and is
+  never persisted by BSDRunner. Port 5432 is never published automatically.
+- **Ollama local AI — Experimental**, amd64 and CPU-only, with Vulkan disabled.
+  It requires at least 8 GiB RAM and 20 GiB free storage, downloads no models,
+  and does not support GPU passthrough.
+
+Autostart defaults off. Opting in adds an `autostart` manifest tag. The small
+`bsdrunner_blackship` rc service is enabled only while at least one managed jail
+has that tag. If provisioning fails after the manifest entry is installed,
+BSDRunner retains the completed work and reports **Setup incomplete** so the user
+can retry or open a console.
+
+The remainder of this document describes the retained Bastille/native compatibility
+path for existing jails.
 
 Some Bastille releases require root even for inventory commands. The backend
 first tries the read directly, then retries it through `mdo` when available.

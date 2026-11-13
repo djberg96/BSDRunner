@@ -126,4 +126,17 @@ fi
 grep -Fx 'pfctl -k 10.0.0.20' "$command_log" >/dev/null || fail "port-forward removal should clear existing jail states"
 pass "PF backend removes a jail port forward and clears states"
 
+blackship_output="$test_root/blackship-network.json"
+run_backend blackship-network 10.44.0.0/24 wlan0 >"$blackship_output"
+jq -e '.ok == true and .message == "BSDRunner firewall profile applied."' "$blackship_output" >/dev/null || fail "Blackship network setup should apply the managed PF profile"
+grep -Fx 'blackship_nat=yes' "$profile_dir/profile.conf" >/dev/null || fail "Blackship NAT should persist in the friendly profile"
+grep -Fx 'blackship_subnet=10.44.0.0/24' "$profile_dir/profile.conf" >/dev/null || fail "Blackship subnet should persist"
+grep -Fx 'nat on $blackship_ext_if inet from $blackship_subnet to any -> ($blackship_ext_if:0)' "$config_file" >/dev/null || fail "Blackship subnet NAT should be rendered"
+grep -Fx 'nat-anchor "blackship"' "$config_file" >/dev/null || fail "Blackship NAT anchor should be rendered"
+grep -Fx 'rdr-anchor "blackship"' "$config_file" >/dev/null || fail "Blackship redirect anchor should be rendered"
+grep -Fx 'anchor "blackship/*"' "$config_file" >/dev/null || fail "Blackship filter namespace should be rendered"
+run_backend reload >/dev/null
+grep -Fx 'anchor "blackship/*"' "$config_file" >/dev/null || fail "Blackship anchors should survive BSDRunner PF reloads"
+pass "PF backend preserves Blackship NAT and anchor namespaces"
+
 printf 'All PF backend tests passed.\n'

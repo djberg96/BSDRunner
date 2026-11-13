@@ -1,0 +1,6 @@
+FROM %%RELEASE%%
+LABEL name=bsdrunner-nginx version=1 purpose=web-server
+RUN pkg install -y nginx-lite
+RUN sysrc nginx_enable=YES
+COPY index.html /usr/local/www/nginx/index.html
+EXPOSE 80/tcp

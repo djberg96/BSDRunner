@@ -77,6 +77,10 @@ ShellRoot {
     property string selectedJailName: ""
     property string selectedJailBackend: ""
     property string selectedBeginnerTopic: "storage"
+    property string selectedPreset: "blank"
+    property bool technicalDetailsVisible: false
+    property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.1"})
+    property var blackshipJails: []
     property var runningJails: []
     property var configuredJails: []
     property var bastilleJails: []
@@ -115,7 +119,7 @@ ShellRoot {
     property string forwardJailPort: "80"
     property string previewAddress: "10.0.0.20/24"
     property bool previewAddressCustomized: false
-    property bool previewAutostart: true
+    property bool previewAutostart: false
     property var previewPayload: null
     property string previewError: ""
     property string previewStdoutText: ""
@@ -136,6 +140,12 @@ ShellRoot {
         {"id": "lan", "label": "LAN + Internet", "detail": "Private and public networks"},
         {"id": "none", "label": "No outbound", "detail": "Block new connections"}
     ]
+    readonly property var starterChoices: [
+        {"id": "blank", "label": "Blank FreeBSD", "detail": "Learn or build your own service"},
+        {"id": "nginx", "label": "nginx web", "detail": "Small private welcome site"},
+        {"id": "postgres", "label": "PostgreSQL", "detail": "Private app database"},
+        {"id": "ollama", "label": "Ollama • Experimental", "detail": "CPU-only local AI API"}
+    ]
     readonly property int wizardCaptionFontSize: 12
     readonly property int wizardBodyFontSize: 13
     readonly property int wizardControlFontSize: 14
@@ -146,19 +156,19 @@ ShellRoot {
             "id": "storage",
             "title": "1. Storage",
             "body": "A jail needs a filesystem root. ZFS datasets are the cleanest place to keep those roots.",
-            "detail": "Start by deciding where jail roots live. Bastille conventionally uses POOL/bastille, then creates child datasets for releases, jails, cache, backups, and templates."
+            "detail": "BSDRunner uses POOL/bsdrunner/blackship for new managed service jails. Existing Bastille and native jail storage stays untouched."
         },
         {
             "id": "userland",
             "title": "2. Userland",
             "body": "FreeBSD does not create a full system tree by itself. You fetch or extract a release first.",
-            "detail": "The jail shares the host kernel, but it still needs its own /bin, /etc, /usr, and packages. Bastille can bootstrap this; native jails usually start from a fetched base.txz or an existing template."
+            "detail": "Blackship prepares the FreeBSD release and validates the selected starter Jailfile before it creates the service root."
         },
         {
             "id": "network",
             "title": "3. Network",
             "body": "A private jail address needs a loopback interface and PF NAT before it can reach the network.",
-            "detail": "BSDRunner keeps the pieces separate: Bastille owns its loopback interface and dynamic jail table, while the managed PF profile supplies NAT and Bastille's redirect/filter anchors."
+            "detail": "Blackship owns the private bridge and per-jail rules. BSDRunner supplies subnet NAT, outbound policy, and the required PF anchor namespaces."
         },
         {
             "id": "config",
@@ -191,10 +201,69 @@ ShellRoot {
     function mergedJails() {
         var merged = []
         var seen = {}
+        addJails(merged, seen, blackshipJails || [])
         addJails(merged, seen, bastilleJails || [])
         addJails(merged, seen, runningJails || [])
         addJails(merged, seen, configuredJails || [])
         return merged
+    }
+
+    function normalizedBlackshipJails(info) {
+        var result = []
+        var report = info && info.inventory && info.inventory.data ? info.inventory.data : null
+        var rows = report && report.jails ? report.jails : []
+        var metadata = info && info.managed ? info.managed : []
+        var statsRows = info && info.stats && info.stats.data ? info.stats.data : []
+        var healthRows = info && info.health && info.health.data ? info.health.data : []
+        for (var i = 0; i < rows.length; i += 1) {
+            var row = rows[i]
+            if (!row.managed)
+                continue
+            var managed = null
+            for (var m = 0; m < metadata.length; m += 1) {
+                if (metadata[m].name === (row.service_name || row.full_name)) {
+                    managed = metadata[m]
+                    break
+                }
+            }
+            var rawState = (row.state || (row.running ? "Running" : "Stopped")).toLowerCase()
+            var preset = managed ? managed.preset || "blank" : "blank"
+            var purpose = preset === "nginx" ? "Private nginx web server" : preset === "postgres" ? "Private PostgreSQL database" : preset === "ollama" ? "Experimental CPU-only local AI" : "Blank FreeBSD jail"
+            var stats = null
+            var health = null
+            for (var s = 0; s < statsRows.length; s += 1) {
+                if (statsRows[s].name === row.full_name) {
+                    stats = statsRows[s]
+                    break
+                }
+            }
+            for (var h = 0; h < healthRows.length; h += 1) {
+                if (healthRows[h].jail === row.full_name) {
+                    health = healthRows[h]
+                    break
+                }
+            }
+            result.push({
+                "name": row.service_name || row.full_name,
+                "full_name": row.full_name,
+                "backend": "blackship",
+                "manager": "blackship",
+                "state": row.running || rawState === "up" ? "Running" : "Stopped",
+                "jid": row.jid,
+                "release": row.release || "",
+                "hostname": row.hostname || "",
+                "ipv4": row.ip || (row.ips && row.ips.length > 0 ? row.ips[0] : ""),
+                "path": row.path || "",
+                "dependencies": row.depends_on || [],
+                "network": row.networks && row.networks.length > 0 ? row.networks.join(", ") : "bsdrunner",
+                "autostart": managed && managed.autostart ? "On" : "Off",
+                "preset": preset,
+                "purpose": purpose,
+                "health": health ? health.status || "Unknown" : (row.running ? "Checking" : "Stopped"),
+                "resources": stats ? stats.cpu_percent + "% CPU • " + stats.rss_mib + " MiB RAM • " + stats.processes + " processes" : (row.running ? "Usage unavailable" : "No current usage")
+            })
+        }
+        return result
     }
 
     function addJails(target, seen, source) {
@@ -233,7 +302,7 @@ ShellRoot {
     }
 
     function headline() {
-        if (!tools.jls && !tools.bastille)
+        if (!tools.jls && !tools.bastille && !blackshipInfo.available)
             return "No Jail Tools"
         if (jails.length === 0)
             return "No Jails Yet"
@@ -243,7 +312,7 @@ ShellRoot {
     }
 
     function headlineTone() {
-        if (!tools.jls && !tools.bastille)
+        if (!tools.jls && !tools.bastille && !blackshipInfo.available)
             return "error"
         if (runningCount() > 0)
             return "success"
@@ -264,7 +333,11 @@ ShellRoot {
     function backendLabel(jail) {
         if (!jail)
             return "No backend"
-        return jail.backend === "bastille" ? "Bastille" : "Native jail"
+        if (jail.backend === "blackship")
+            return "Managed by Blackship"
+        if (jail.backend === "bastille")
+            return "Managed by Bastille"
+        return "External jail"
     }
 
     function stateTone(jail) {
@@ -525,11 +598,15 @@ ShellRoot {
         if (!selectedJail || runningAction)
             return false
         if (actionId.indexOf("policy-set|") === 0)
-            return selectedJail.backend === "bastille" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
+            return (selectedJail.backend === "bastille" || selectedJail.backend === "blackship") && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
         if (actionId.indexOf("forward-add|") === 0 || actionId.indexOf("forward-remove|") === 0)
-            return selectedJail.backend === "bastille" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
+            return (selectedJail.backend === "bastille" || selectedJail.backend === "blackship") && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown"
         if (actionId.indexOf("service-action|") === 0)
             return selectedJail.backend === "bastille" && (selectedJail.state || "").toLowerCase() === "running" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown" && selectedSimpleService && selectedSimpleService.status_known
+        if (actionId === "blackship-postgres-reset")
+            return selectedJail.backend === "blackship" && selectedJail.preset === "postgres"
+        if (actionId.indexOf("blackship-autostart|") === 0)
+            return selectedJail.backend === "blackship"
         if (actionId === "start")
             return canStart(selectedJail)
         if (actionId === "stop")
@@ -584,6 +661,14 @@ ShellRoot {
             activeActionJailPort = ""
             activeActionService = serviceParts[1]
             activeActionServiceVerb = serviceParts[2]
+        } else if (pendingActionId.indexOf("blackship-autostart|") === 0) {
+            activeActionId = "blackship-autostart"
+            activeActionPolicy = pendingActionId.split("|")[1]
+            activeActionProtocol = ""
+            activeActionHostPort = ""
+            activeActionJailPort = ""
+            activeActionService = ""
+            activeActionServiceVerb = ""
         } else {
             activeActionId = pendingActionId
             activeActionPolicy = ""
@@ -634,8 +719,12 @@ ShellRoot {
         networkSetupDetails = ""
         releaseMenuOpen = false
         chooseDefaultStoragePool()
-        if (!previewAddressCustomized && networkInfo && networkInfo.recommended_address)
-            previewAddress = networkInfo.recommended_address
+        if (!previewAddressCustomized) {
+            if (blackshipInfo && blackshipInfo.recommended_address)
+                previewAddress = blackshipInfo.recommended_address
+            else if (networkInfo && networkInfo.recommended_address)
+                previewAddress = networkInfo.recommended_address
+        }
     }
 
     function closeCreatePreview() {
@@ -659,7 +748,7 @@ ShellRoot {
     }
 
     function storageReady() {
-        return bastilleSetup || (storageInfo && storageInfo.configured)
+        return blackshipInfo && blackshipInfo.compatible && blackshipInfo.configured
     }
 
     function chooseDefaultStoragePool() {
@@ -688,6 +777,8 @@ ShellRoot {
     }
 
     function storageTargetDataset() {
+        if (selectedStoragePool.length > 0)
+            return selectedStoragePool + "/bsdrunner/blackship"
         if (storageInfo && storageInfo.target_dataset && storageInfo.target_dataset.length > 0)
             return storageInfo.target_dataset
         if (selectedStoragePool.length === 0)
@@ -697,7 +788,11 @@ ShellRoot {
     }
 
     function canConfigureStorage() {
-        return !demoMode && tools.bastille && !storageReady() && !storageSetupRunning && selectedStoragePool.length > 0 && storageConfirmation === selectedStoragePool
+        if (demoMode || storageSetupRunning || storageReady())
+            return false
+        if (!blackshipInfo.compatible)
+            return storageConfirmation === "0.4.1"
+        return selectedStoragePool.length > 0 && storageConfirmation === selectedStoragePool
     }
 
     function startStorageSetup() {
@@ -705,7 +800,7 @@ ShellRoot {
             return
         storageSetupRunning = true
         storageSetupStage = "configuring"
-        storageSetupMessage = "Configuring Bastille storage on " + selectedStoragePool + "…"
+        storageSetupMessage = blackshipInfo.compatible ? "Configuring Blackship storage and private networking on " + selectedStoragePool + "…" : "Installing verified Blackship 0.4.1…"
         storageSetupDetails = ""
         storageStdoutText = ""
         storageStderrText = ""
@@ -733,7 +828,7 @@ ShellRoot {
             return
         }
         storageSetupStage = "complete"
-        storageSetupMessage = payload.message || "Configured Bastille storage."
+        storageSetupMessage = payload.message || "Completed Blackship setup step."
         storageSetupDetails = payload.details || ""
         storageConfirmation = ""
         statusTone = "success"
@@ -743,11 +838,11 @@ ShellRoot {
     }
 
     function networkReady() {
-        return networkInfo && networkInfo.ready
+        return storageReady()
     }
 
     function canConfigureNetwork() {
-        return !demoMode && tools.bastille && !networkReady() && !networkSetupRunning && previewAddress.length > 0 && networkConfirmation === previewAddress
+        return false
     }
 
     function startNetworkSetup() {
@@ -796,7 +891,7 @@ ShellRoot {
         if (wizardBusy)
             return false
         if (wizardStep === 0)
-            return tools.bastille && storageReady()
+            return storageReady()
         if (wizardStep === 1)
             return previewRelease.length > 0
         if (wizardStep === 2)
@@ -865,14 +960,14 @@ ShellRoot {
         creationError = ""
         creationMessage = ""
         creationBootstrapped = false
-        if (previewPayload.checks && !previewPayload.checks.release_bootstrapped) {
+        if (previewPayload.backend !== "blackship" && previewPayload.checks && !previewPayload.checks.release_bootstrapped) {
             creationStage = "bootstrapping"
             creationMessage = "Downloading and preparing " + previewRelease + "…"
             startProvisionAction("bootstrap")
         } else {
             creationStage = "creating"
             creationMessage = "Creating " + previewName + "…"
-            startProvisionAction("create")
+            startProvisionAction(previewPayload.backend === "blackship" ? "blackship-create" : "create")
         }
     }
 
@@ -901,6 +996,11 @@ ShellRoot {
             creationStage = "failed"
             creationError = payload ? payload.message || "Jail creation failed." : "The Jails backend returned invalid creation data."
             creationMessage = payload ? payload.details || provisionStderrText : provisionStderrText
+            if (provisionAction === "blackship-create") {
+                selectedJailName = previewName
+                selectedJailBackend = "blackship"
+                refreshSnapshot()
+            }
             return
         }
         if (provisionAction === "bootstrap") {
@@ -919,28 +1019,25 @@ ShellRoot {
         statusMessage = creationMessage
         actionDetails = payload.details || ""
         selectedJailName = previewName
-        selectedJailBackend = "bastille"
+        selectedJailBackend = provisionAction === "blackship-create" ? "blackship" : "bastille"
         refreshSnapshot()
     }
 
     function wizardDetailText() {
         if (wizardStep === 0) {
-            var storageLines = ["STORAGE", "", "Bastille keeps releases, jail roots, cache, backups, and templates beneath one installation root.", ""]
+            var storageLines = ["INSTALL + STORAGE", "", "New BSDRunner jails use one managed Blackship project. The first setup installs Blackship if needed, then places releases and jail roots under POOL/bsdrunner/blackship.", ""]
             if (storageReady()) {
-                storageLines.push("[ok] Bastille storage is " + (storageInfo.initialized || bastilleSetup ? "initialized." : "configured."))
-                storageLines.push("Pool: " + (storageInfo.zfs_pool || "filesystem-backed"))
-                storageLines.push("Dataset: " + (storageInfo.target_dataset || "managed beneath " + (storageInfo.prefix || "/usr/local/bastille")))
-                if (!storageInfo.initialized && !bastilleSetup)
-                    storageLines.push("The first release bootstrap will create the dataset hierarchy.")
+                storageLines.push("[ok] Blackship " + (blackshipInfo.version || "0.4.1+") + " is compatible.")
+                storageLines.push("[ok] Managed manifest: /usr/local/etc/bsdrunner/blackship.toml")
+                storageLines.push("[ok] Dataset: " + storageTargetDataset())
             } else {
                 storageLines.push("SELECTED PLAN")
+                storageLines.push(blackshipInfo.compatible ? "[ok] Compatible Blackship installed" : "[ ] Install verified Blackship 0.4.1")
                 storageLines.push("Pool: " + (selectedStoragePool || "No ZFS pool detected"))
                 storageLines.push("Dataset: " + storageTargetDataset())
-                storageLines.push("Mount root: " + (storageInfo.prefix || "/usr/local/bastille"))
-                storageLines.push("Command: bastille setup storage " + (selectedStoragePool || "<pool>"))
+                storageLines.push("Private network: bsdrunner on blackship0")
                 storageLines.push("")
-                storageLines.push("This command configures storage only. It does not modify PF, interfaces, or jail networking.")
-                storageLines.push("The first release bootstrap creates the conventional dataset hierarchy. Existing unrelated datasets are untouched.")
+                storageLines.push("The installer verifies the pinned SHA-256 and validates Blackship's capabilities. Project setup validates the candidate manifest before atomic installation and adds only the required PF NAT and anchors.")
             }
             if (storageSetupStage === "failed") {
                 storageLines.push("")
@@ -951,19 +1048,16 @@ ShellRoot {
             return storageLines.join("\n")
         }
         if (wizardStep === 1)
-            return "USERLAND\n\nChoose a FreeBSD release no newer than the host, then choose how Bastille stores the jail userland. Thick creates an independent copy and is recommended for beginners. Thin shares the bootstrapped release base and uses less space, but base updates require more care.\n\nSelected: " + previewRelease + " • " + previewJailType.charAt(0).toUpperCase() + previewJailType.slice(1) + "\nHost: " + (hostRelease || "Unknown") + "\nBootstrapped: " + (bastilleReleases.length > 0 ? bastilleReleases.join(", ") : "None; the selected release will be downloaded.")
+            return "USERLAND\n\nChoose a FreeBSD release no newer than the host. Blackship validates the starter Jailfile and prepares an isolated root for the selected service.\n\nSelected starter: " + selectedPreset + "\nRelease: " + previewRelease + "\nHost: " + (hostRelease || "Unknown")
         if (wizardStep === 2) {
-            var networkLines = ["NETWORK", "", "The jail uses a private IPv4 address on Bastille's loopback interface. BSDRunner adds only the PF NAT and anchor rules needed for outbound access and future port redirects.", ""]
-            networkLines.push((networkInfo.loopback_ready ? "[ok] " : "[!] ") + "Loopback " + (networkInfo.loopback_interface || "bastille0"))
-            networkLines.push((networkInfo.pf_running ? "[ok] " : "[!] ") + "PF running")
-            networkLines.push((networkInfo.nat_ready ? "[ok] " : "[!] ") + "Bastille NAT table")
-            networkLines.push((networkInfo.rdr_anchor_ready ? "[ok] " : "[!] ") + "Port-redirect anchor")
-            networkLines.push((networkInfo.filter_anchor_ready ? "[ok] " : "[!] ") + "Bastille filter anchor")
+            var networkLines = ["NETWORK", "", "The jail gets a stable private address. It can make allowed outbound connections, but no LAN port is exposed unless you confirm a separate port-forward action.", ""]
+            networkLines.push((networkReady() ? "[ok] " : "[!] ") + "Blackship network bsdrunner on blackship0")
+            networkLines.push((networkReady() ? "[ok] " : "[!] ") + "BSDRunner PF NAT + Blackship anchors")
             networkLines.push("")
             networkLines.push("Jail address: " + previewAddress)
             networkLines.push("External interface: " + (networkInfo.external_interface || "Not detected"))
             networkLines.push("")
-            networkLines.push("After your typed confirmation, setup runs only `bastille setup --yes loopback`, then renders, validates, installs, and reloads BSDRunner's managed PF profile. It never runs `bastille setup pf`.")
+            networkLines.push("Project setup validates the generated manifest, creates the private network, then renders, validates, installs, and reloads BSDRunner's managed PF profile.")
             if (networkSetupStage === "failed") {
                 networkLines.push("")
                 networkLines.push("[!] " + networkSetupMessage)
@@ -1011,6 +1105,28 @@ ShellRoot {
         if (!previewPayload)
             return "Enter the proposed jail details, then generate a read-only plan. No commands will run."
 
+        if (previewPayload.backend === "blackship") {
+            var starterLines = [previewPayload.ready ? "READY TO CREATE" : "NEEDS ATTENTION"]
+            starterLines.push("Starter: " + (previewPayload.label || selectedPreset))
+            starterLines.push("Purpose: " + (previewPayload.description || "Managed FreeBSD service"))
+            starterLines.push("Release: " + previewRelease)
+            starterLines.push("Private address: " + previewAddress)
+            starterLines.push("Outbound: " + outboundPolicyLabel(previewOutboundPolicy))
+            starterLines.push("Starts at boot: " + (previewAutostart ? "Yes" : "No (recommended default)"))
+            starterLines.push("Packages: " + ((previewPayload.packages || []).join(", ") || "None"))
+            starterLines.push("Expected ports: " + ((previewPayload.ports || []).join(", ") || "None"))
+            if (selectedPreset === "ollama")
+                starterLines.push("Guidance: 8 GiB RAM minimum, 20 GiB free before models; CPU only; no GPU passthrough.")
+            starterLines.push("")
+            starterLines.push("BLACKSHIP OPERATIONS")
+            var starterCommands = previewPayload.commands || []
+            for (var c = 0; c < starterCommands.length; c += 1)
+                starterLines.push("$ " + starterCommands[c])
+            var starterNotes = previewPayload.notes || []
+            for (var n = 0; n < starterNotes.length; n += 1)
+                if (starterNotes[n]) starterLines.push("! " + starterNotes[n])
+            return starterLines.join("\n")
+        }
         var checks = previewPayload.checks || {}
         var lines = ["READINESS"]
         lines.push((checks.bastille_installed ? "[ok] " : "[!] ") + "Bastille installed")
@@ -1102,6 +1218,10 @@ ShellRoot {
         outboundPolicies = payload.outbound_policies || []
         portForwards = payload.port_forwards || []
         simpleServices = payload.simple_services || []
+        blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.1"}
+        blackshipJails = normalizedBlackshipJails(blackshipInfo)
+        if (!previewAddressCustomized && blackshipInfo.recommended_address)
+            previewAddress = blackshipInfo.recommended_address
         lastResultTone = payload.last_result ? payload.last_result.tone || "info" : "info"
         lastResultMessage = payload.last_result ? payload.last_result.message || payload.message : payload.message
         lastResultTimestamp = payload.last_result ? payload.last_result.timestamp || "" : ""
@@ -1191,6 +1311,10 @@ ShellRoot {
                 ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend, root.activeActionProtocol, root.activeActionHostPort, root.activeActionJailPort, root.activeActionName]
                 : root.activeActionId === "service-action"
                     ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "service-action", root.activeActionName, root.activeActionBackend, root.activeActionService, root.activeActionServiceVerb, root.activeActionName]
+                : root.activeActionId === "blackship-postgres-reset"
+                    ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-postgres-reset", root.activeActionName, root.activeActionName]
+                : root.activeActionId === "blackship-autostart"
+                    ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-autostart", root.activeActionName, root.activeActionPolicy, root.activeActionName]
                 : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
         stdout: StdioCollector {
             waitForEnd: true
@@ -1219,7 +1343,7 @@ ShellRoot {
         id: createPreviewProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "preview", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.previewJailType, root.previewOutboundPolicy]
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-preset-preview", root.selectedPreset, root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.previewOutboundPolicy]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1247,7 +1371,9 @@ ShellRoot {
         id: storageSetupProcess
         property var controller: root
 
-        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "storage-setup", root.selectedStoragePool, root.storageConfirmation]
+        command: root.blackshipInfo.compatible
+            ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-project-setup", root.selectedStoragePool, root.previewAddress, root.storageConfirmation]
+            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-install", root.storageConfirmation]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1305,7 +1431,9 @@ ShellRoot {
 
         command: root.provisionAction === "bootstrap"
             ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "bootstrap", root.previewRelease, root.previewRelease]
-            : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "create", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation, root.previewJailType, root.previewOutboundPolicy]
+            : root.provisionAction === "blackship-create"
+                ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-preset-create", root.selectedPreset, root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation, root.previewOutboundPolicy]
+                : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "create", root.previewName, root.previewRelease, root.previewAddress, root.previewAutostart ? "yes" : "no", root.creationConfirmation, root.previewJailType, root.previewOutboundPolicy]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -1430,7 +1558,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: root.tools.bastille ? "Bastille detected" : "Native jail mode"
+                                    text: root.blackshipInfo.compatible ? "Blackship " + (root.blackshipInfo.version || "ready") : root.tools.bastille ? "Legacy Bastille support" : "Blackship setup required"
                                     color: root.palette.mutedText
                                     font.pixelSize: 12
                                     elide: Text.ElideRight
@@ -1498,7 +1626,7 @@ ShellRoot {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Create Basic Jail"
+                                    text: "Create a Service"
                                     color: root.palette.primaryText
                                     font.pixelSize: 13
                                     font.bold: true
@@ -1537,7 +1665,7 @@ ShellRoot {
                                     Text {
                                         anchors.fill: parent
                                         anchors.margins: 8
-                                        text: "Walk through storage, userland, networking, config, and creation with Bastille."
+                                        text: "Pick a starter and review storage, networking, packages, ports, resources, and exact Blackship operations."
                                         color: root.palette.primaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -1774,7 +1902,41 @@ ShellRoot {
                                 elide: Text.ElideRight
                             }
 
+                            Text {
+                                width: parent.width
+                                text: root.selectedJail ? (root.selectedJail.purpose || "FreeBSD service") + "\nPrivate address: " + root.valueOrUnknown(root.selectedJail.ipv4) + "  •  Health: " + (root.selectedJail.health || ((root.selectedJail.state || "").toLowerCase() === "running" ? "Checking" : "Stopped")) + "\nResources: " + (root.selectedJail.resources || "Managed limits") + "  •  Starts at boot: " + root.valueOrUnknown(root.selectedJail.autostart) : "Select a jail to see its purpose and status."
+                                color: root.palette.secondaryText
+                                font.pixelSize: 12
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 34
+                                radius: 6
+                                color: technicalMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: (root.technicalDetailsVisible ? "Hide" : "Show") + " technical details"
+                                    color: root.palette.accent
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: technicalMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.technicalDetailsVisible = !root.technicalDetailsVisible
+                                }
+                            }
+
                             Grid {
+                                visible: root.technicalDetailsVisible
                                 width: parent.width
                                 columns: 2
                                 rowSpacing: 8
@@ -1782,12 +1944,14 @@ ShellRoot {
 
                                 Repeater {
                                     model: [
+                                        {"label": "Manager", "value": root.selectedJail ? root.backendLabel(root.selectedJail) : "None"},
                                         {"label": "JID", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.jid) : "None"},
-                                        {"label": "IP address", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.ipv4) : "None"},
+                                        {"label": "Runtime name", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.full_name || root.selectedJail.name) : "None"},
                                         {"label": "Hostname", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.hostname) : "None"},
-                                        {"label": "Autostart", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.autostart) : "None"},
                                         {"label": "Release", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.release) : "None"},
-                                        {"label": "Root path", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.path) : "None"}
+                                        {"label": "Dataset / root", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.path) : "None"},
+                                        {"label": "Manifest", "value": root.selectedJail && root.selectedJail.backend === "blackship" ? "/usr/local/etc/bsdrunner/blackship.toml" : "External"},
+                                        {"label": "Dependencies", "value": root.selectedJail && root.selectedJail.dependencies && root.selectedJail.dependencies.length > 0 ? root.selectedJail.dependencies.join(", ") : "None"}
                                     ]
 
                                     Rectangle {
@@ -1837,7 +2001,7 @@ ShellRoot {
 
                             Text {
                                 width: parent.width
-                                text: root.selectedJail ? "Current: " + root.outboundPolicyLabel(root.outboundPolicyFor(root.selectedJail)) : "Select a Bastille jail to manage egress."
+                                text: root.selectedJail ? "Current: " + root.outboundPolicyLabel(root.outboundPolicyFor(root.selectedJail)) : "Select a managed jail to control outbound access."
                                 color: root.palette.secondaryText
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
@@ -1916,7 +2080,7 @@ ShellRoot {
                                 width: parent.width
                                 text: root.selectedJail && root.selectedJail.backend === "bastille"
                                     ? "Expose a port on " + (root.networkInfo.external_interface || "the host uplink") + " to this jail. Only add services you intend other machines to reach."
-                                    : "Select a Bastille jail to manage inbound ports."
+                                    : "Select a managed jail to manage inbound ports."
                                 color: root.palette.secondaryText
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
@@ -2209,7 +2373,7 @@ ShellRoot {
                                     Text {
                                         width: parent.width
                                         text: !root.selectedJail || root.selectedJail.backend !== "bastille"
-                                            ? "Guided services are available for Bastille jails."
+                                            ? "Guided service controls are available for supported legacy jails."
                                             : (root.selectedJail.state || "").toLowerCase() !== "running"
                                                 ? "Start this jail to inspect and manage nginx."
                                                 : !root.selectedSimpleService || !root.selectedSimpleService.status_known
@@ -2484,7 +2648,9 @@ ShellRoot {
                                         {"id": "start", "label": "Start", "detail": "Boot this jail userland"},
                                         {"id": "stop", "label": "Stop", "detail": "Shut the jail down"},
                                         {"id": "restart", "label": "Restart", "detail": "Stop, then start again"},
-                                        {"id": "console", "label": "Console", "detail": "Open a root shell"}
+                                        {"id": "console", "label": "Console", "detail": "Open a root shell"},
+                                        {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Toggle the managed rc service"},
+                                        {"id": "blackship-postgres-reset", "label": "Reset DB password", "detail": "Show a new app password once"}
                                     ]
 
                                     Rectangle {
@@ -2673,12 +2839,14 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                id: blackshipSetupCard
+
                                 width: parent.width
                                 height: 112
                                 radius: 8
-                                color: root.tools.bastille ? Qt.alpha(root.palette.success, 0.12) : root.palette.panelBackground
+                                color: blackshipSetupMouse.containsMouse ? root.palette.cardHover : root.blackshipInfo.compatible ? Qt.alpha(root.palette.success, 0.12) : root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.tools.bastille ? root.palette.success : root.palette.frameBorder
+                                border.color: root.blackshipInfo.compatible ? root.palette.success : root.palette.warning
 
                                 Column {
                                     anchors.fill: parent
@@ -2687,19 +2855,28 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Bastille"
-                                        color: root.tools.bastille ? root.palette.success : root.palette.primaryText
+                                        text: root.blackshipInfo.compatible ? "Blackship " + (root.blackshipInfo.version || "ready") : "Set up Blackship"
+                                        color: root.blackshipInfo.compatible ? root.palette.success : root.palette.warning
                                         font.pixelSize: 13
                                         font.bold: true
                                     }
 
                                     Text {
                                         width: parent.width
-                                        text: root.tools.bastille ? "Installed. This UI can list Bastille jails and use Bastille lifecycle commands." : "Not installed. Native jail status still works; Bastille can remain an optional automation layer."
+                                        text: root.blackshipInfo.compatible ? (root.blackshipInfo.configured ? "Installed and configured for new BSDRunner service jails." : "Installed. Click to choose storage and create the private network.") : "Click to install the pinned, verified 0.4.1 FreeBSD amd64 binary. Existing Bastille/native jails remain operable."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
                                     }
+                                }
+
+                                MouseArea {
+                                    id: blackshipSetupMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !root.storageReady()
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.openCreatePreview()
                                 }
                             }
 
@@ -2718,7 +2895,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Create Jail"
+                                    text: "Create a Service Jail"
                                         color: root.palette.primaryText
                                         font.pixelSize: 13
                                         font.bold: true
@@ -2726,7 +2903,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: "Start a guided flow through Storage, Userland, Network, Config, and Lifecycle. Nothing changes until typed confirmation."
+                                    text: "Pick Blank FreeBSD, nginx, PostgreSQL, or experimental Ollama. New jails are private and Blackship-managed."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -2757,7 +2934,7 @@ ShellRoot {
 
                 Rectangle {
                     width: 960
-                    height: 610
+                    height: 680
                     anchors.centerIn: parent
                     radius: 10
                     color: root.palette.cardBackground
@@ -2780,7 +2957,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Create Basic Jail"
+                                    text: "Create a Service Jail"
                                     color: root.palette.primaryText
                                     font.pixelSize: 22
                                     font.bold: true
@@ -2788,7 +2965,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Guided " + root.previewJailType + " jail • every setup or creation change requires typed confirmation"
+                                    text: "Blackship-managed • private by default • typed confirmation before changes"
                                     color: root.palette.accent
                                     font.pixelSize: root.wizardControlFontSize
                                     font.bold: true
@@ -2818,6 +2995,61 @@ ShellRoot {
                                     enabled: !root.wizardBusy
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: root.closeCreatePreview()
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            height: 58
+                            spacing: 8
+
+                            Repeater {
+                                model: root.starterChoices
+
+                                Rectangle {
+                                    id: starterCard
+                                    required property var modelData
+                                    readonly property bool selected: root.selectedPreset === modelData.id
+                                    width: (parent.width - 24) / 4
+                                    height: 58
+                                    radius: 7
+                                    color: selected ? Qt.alpha(root.palette.accent, 0.18) : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: selected ? root.palette.accent : root.palette.panelBorder
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 7
+                                        spacing: 2
+
+                                        Text {
+                                            width: parent.width
+                                            text: starterCard.modelData.label
+                                            color: starterCard.selected ? root.palette.accent : root.palette.primaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: starterCard.modelData.detail
+                                            color: root.palette.mutedText
+                                            font.pixelSize: 10
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: !root.wizardBusy
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.selectedPreset = starterCard.modelData.id
+                                            root.invalidateCreatePlan()
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2864,7 +3096,7 @@ ShellRoot {
 
                         Row {
                             width: parent.width
-                            height: parent.height - 112
+                            height: parent.height - 182
                             spacing: 14
 
                             Rectangle {
@@ -2904,7 +3136,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.storageReady() ? "Bastille storage ready" : "Choose a ZFS pool"
+                                                text: root.storageReady() ? "Blackship project ready" : root.blackshipInfo.compatible ? "Choose a ZFS pool" : "Install Blackship 0.4.1"
                                                 color: root.palette.primaryText
                                                 font.pixelSize: root.wizardHeadingFontSize
                                                 font.bold: true
@@ -2912,7 +3144,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.storageReady() ? "Bastille will own the release and jail datasets beneath its installation root." : "Bastille will use its conventional “bastille” dataset. Other datasets are left alone."
+                                                text: root.storageReady() ? "BSDRunner owns one Blackship project, its private network, and the service jail datasets." : root.blackshipInfo.compatible ? "BSDRunner will use POOL/bsdrunner/blackship and create a route-safe private network." : "The official FreeBSD amd64 binary is pinned and SHA-256 verified. Compatible newer versions are never downgraded."
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: root.wizardBodyFontSize
                                                 wrapMode: Text.WordWrap
@@ -2921,7 +3153,7 @@ ShellRoot {
                                             Text {
                                                 visible: root.storageReady()
                                                 width: parent.width
-                                                text: "✓ " + (root.storageInfo.target_dataset || root.storageInfo.prefix || "/usr/local/bastille")
+                                                text: "✓ " + root.storageTargetDataset()
                                                 color: root.palette.success
                                                 font.pixelSize: root.wizardBodyFontSize
                                                 font.bold: true
@@ -2931,7 +3163,7 @@ ShellRoot {
                                             Text {
                                                 visible: root.storageReady()
                                                 width: parent.width
-                                                text: root.storageInfo.initialized || root.bastilleSetup ? "Dataset hierarchy initialized" : "The Userland step will initialize the hierarchy"
+                                                text: "Manifest and private network configured"
                                                 color: root.palette.mutedText
                                                 font.pixelSize: root.wizardCaptionFontSize
                                                 wrapMode: Text.WordWrap
@@ -2993,7 +3225,7 @@ ShellRoot {
                                             Text {
                                                 visible: !root.storageReady()
                                                 width: parent.width
-                                                text: "Type “" + root.selectedStoragePool + "” to confirm"
+                                                text: "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.1") + "” to confirm"
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: root.wizardCaptionFontSize
                                                 font.bold: true
@@ -3007,14 +3239,14 @@ ShellRoot {
                                                 radius: 6
                                                 color: root.palette.panelBackground
                                                 border.width: 1
-                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === root.selectedStoragePool && root.selectedStoragePool.length > 0 ? root.palette.success : root.palette.panelBorder
+                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.1") ? root.palette.success : root.palette.panelBorder
 
                                                 TextInput {
                                                     id: storageConfirmationInput
                                                     anchors.fill: parent
                                                     anchors.margins: 10
                                                     text: root.storageConfirmation
-                                                    enabled: !root.storageSetupRunning && root.selectedStoragePool.length > 0
+                                                    enabled: !root.storageSetupRunning && (!root.blackshipInfo.compatible || root.selectedStoragePool.length > 0)
                                                     color: root.palette.primaryText
                                                     selectionColor: root.palette.accent
                                                     selectedTextColor: root.palette.panelBackground
@@ -3026,18 +3258,20 @@ ShellRoot {
                                             }
 
                                             Rectangle {
+                                                id: storageSetupButton
+
                                                 visible: !root.storageReady()
                                                 width: parent.width
                                                 height: 42
                                                 radius: 7
-                                                color: storageSetupMouse.enabled ? (storageSetupMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.18)) : root.palette.panelBackground
+                                                color: root.canConfigureStorage() ? (storageSetupMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.18)) : root.palette.panelBackground
                                                 border.width: 1
-                                                border.color: storageSetupMouse.enabled ? root.palette.success : root.palette.panelBorder
+                                                border.color: root.canConfigureStorage() ? root.palette.success : root.palette.panelBorder
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: root.demoMode ? "Setup Disabled in Demo" : root.storageSetupRunning ? "Configuring Storage…" : "Configure Bastille Storage"
-                                                    color: storageSetupMouse.enabled ? root.palette.success : root.palette.mutedText
+                                                    text: root.demoMode ? "Setup Disabled in Demo" : root.storageSetupRunning ? "Working…" : !root.canConfigureStorage() ? "Type the confirmation above to continue" : root.blackshipInfo.compatible ? "Create Blackship Project" : "Install Verified Blackship"
+                                                    color: root.canConfigureStorage() ? root.palette.success : root.palette.mutedText
                                                     font.pixelSize: root.wizardBodyFontSize
                                                     font.bold: true
                                                 }
@@ -3046,9 +3280,17 @@ ShellRoot {
                                                     id: storageSetupMouse
                                                     anchors.fill: parent
                                                     hoverEnabled: true
-                                                    enabled: root.canConfigureStorage()
+                                                    enabled: !root.demoMode && !root.storageSetupRunning && !root.storageReady()
                                                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                    onClicked: root.startStorageSetup()
+                                                    onClicked: {
+                                                        if (root.canConfigureStorage()) {
+                                                            root.startStorageSetup()
+                                                            return
+                                                        }
+                                                        root.storageSetupStage = "failed"
+                                                        root.storageSetupMessage = "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.1") + "” exactly in the confirmation field first."
+                                                        storageConfirmationInput.forceActiveFocus()
+                                                    }
                                                 }
                                             }
 
@@ -3081,7 +3323,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.networkReady() ? "Jail networking ready" : "Configure private jail networking"
+                                                text: root.networkReady() ? "Blackship private network ready" : "Configure private jail networking"
                                                 color: root.palette.primaryText
                                                 font.pixelSize: root.wizardHeadingFontSize
                                                 font.bold: true
@@ -3090,7 +3332,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: (root.networkInfo.loopback_ready ? "✓" : "!") + " " + (root.networkInfo.loopback_interface || "bastille0") + "   " + (root.networkInfo.nat_ready && root.networkInfo.rdr_anchor_ready && root.networkInfo.filter_anchor_ready ? "✓ PF NAT + anchors" : "! PF NAT + anchors")
+                                                text: root.networkReady() ? "✓ blackship0   ✓ PF NAT + Blackship anchors" : "! Finish Blackship project setup in Storage"
                                                 color: root.networkReady() ? root.palette.success : root.palette.warning
                                                 font.pixelSize: root.wizardBodyFontSize
                                                 font.bold: true
@@ -3587,7 +3829,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.previewAutostart ? "Bastille boot enabled" : "Adds --no-boot"
+                                                text: root.previewAutostart ? "Starts through BSDRunner's Blackship boot service" : "Off by default"
                                                 color: root.palette.mutedText
                                                 font.pixelSize: root.wizardCaptionFontSize
                                             }
@@ -3766,7 +4008,7 @@ ShellRoot {
                                     Text {
                                         visible: root.wizardStep !== 2
                                         width: parent.width
-                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.tools.bastille ? "Bastille is not detected; install it before creating a jail." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool and configure Bastille storage." : "Bastille is installed, but no ZFS pool was detected.") : !root.networkReady() ? "Configure the Bastille loopback and BSDRunner PF jail rules." : (root.bastilleSetup ? "Bastille inventory and networking are ready" : "Storage and networking configured; bootstrap will initialize storage") + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
+                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.blackshipInfo.compatible ? "Install the verified Blackship 0.4.1 binary to create new service jails." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool to create the BSDRunner Blackship project and private network." : "Blackship is installed, but no ZFS pool was detected.") : "Blackship storage and private networking are ready" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
                                         color: !root.demoMode && root.tools.bastille && root.storageReady() && root.networkReady() ? root.palette.success : root.palette.warning
                                         font.pixelSize: root.wizardCaptionFontSize
                                         wrapMode: Text.WordWrap
