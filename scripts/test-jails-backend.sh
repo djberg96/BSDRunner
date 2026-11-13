@@ -102,6 +102,19 @@ grep -F 'function managerLabel(jail)' "$jails_qml" >/dev/null || \
 [ "$(grep -Fc 'ToolTip.text: String(' "$jails_qml")" -ge 2 ] || \
     fail "technical detail values should expose their full text on hover"
 pass "technical details remain readable in both layouts"
+grep -F 'activeTab = "manifest"' "$jails_qml" >/dev/null || \
+    fail "the Manifest field should open an in-window viewer"
+grep -F '"blackship-manifest-view", root.selectedJailName' "$jails_qml" >/dev/null || \
+    fail "the manifest viewer should use the guarded backend action"
+grep -F 'readOnly: true' "$jails_qml" >/dev/null || \
+    fail "the managed manifest viewer should be read-only"
+pass "the managed manifest opens in a read-only viewer"
+grep -F "blackship --config '\$blackship_manifest' exec '\$name' -- /bin/sh" "$backend" >/dev/null || \
+    fail "Blackship consoles should use an interactive shell instead of 0.4.2's broken console command"
+if grep -F "blackship --config '\$blackship_manifest' console '\$name'" "$backend" >/dev/null; then
+    fail "Blackship 0.4.2's console command should not be used"
+fi
+pass "Blackship consoles avoid the 0.4.2 jexec dash bug"
 [ "$(grep -Fc 'visible: root.selectedJail && root.selectedJail.backend === "bastille"' "$jails_qml")" -ge 2 ] || \
     fail "legacy simple-service controls should be hidden for Blackship jails"
 pass "legacy simple-service controls stay out of Blackship jail details"
@@ -710,6 +723,13 @@ BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$blackship_sn
 assert_json "$blackship_snapshot" \
     '.blackship.rctl_enabled == true and .blackship.managed[0].name == "web" and .blackship.managed[0].preset == "nginx"' \
     "managed metadata should retain the jail name instead of a nested health-check name"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view web >"$test_root/blackship-manifest.json"
+assert_json "$test_root/blackship-manifest.json" \
+    '.ok == true and .schema_version == 2 and (.path | endswith("/blackship.toml")) and (.content | contains("name = \"web\""))' \
+    "managed Blackship jails should expose the canonical manifest read-only"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view unmanaged >"$test_root/blackship-manifest-unmanaged.json"; then
+    fail "the manifest viewer should reject unmanaged jail names"
+fi
 
 if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL=1 run_backend blackship-preset-create postgres retrydb 15.0-RELEASE 10.44.0.24/24 no retrydb internet-only >"$test_root/blackship-retry-failed.json"; then
     fail "the simulated Armada failure should retain an incomplete PostgreSQL jail"

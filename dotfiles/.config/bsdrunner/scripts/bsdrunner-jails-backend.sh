@@ -1828,7 +1828,11 @@ do_console() {
     fi
 
     if [ "$backend" = "blackship" ]; then
-        console_command="${privilege_prefix}blackship --config '$blackship_manifest' console '$name'"
+        # Blackship 0.4.2's console command passes a literal "-" to jexec,
+        # which jexec treats as the executable name. Its exec path is otherwise
+        # equivalent and opens a reliable interactive shell when no script is
+        # supplied.
+        console_command="${privilege_prefix}blackship --config '$blackship_manifest' exec '$name' -- /bin/sh"
     elif [ "$backend" = "bastille" ]; then
         console_command="${privilege_prefix}bastille console '$name'"
     else
@@ -3248,6 +3252,24 @@ do_blackship_details() {
     printf '}\n'
 }
 
+do_blackship_manifest_view() {
+    name="${1:-}"
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+
+    manifest_content=""
+    if [ -r "$blackship_manifest" ]; then
+        manifest_content="$(cat "$blackship_manifest")"
+    elif ! manifest_content="$(run_privileged cat "$blackship_manifest" 2>/dev/null)"; then
+        emit_action_result false "Unable to read the Blackship manifest." "$blackship_manifest"
+        exit 1
+    fi
+
+    printf '{"ok":true,"schema_version":2,"path":"%s","content":"%s"}\n' \
+        "$(printf '%s' "$blackship_manifest" | json_escape)" \
+        "$(printf '%s' "$manifest_content" | json_escape)"
+}
+
 if [ -n "$fixture_file" ]; then
     case "$action" in
         snapshot)
@@ -3330,6 +3352,9 @@ case "$action" in
         ;;
     blackship-details)
         do_blackship_details "${2:-}"
+        ;;
+    blackship-manifest-view)
+        do_blackship_manifest_view "${2:-}"
         ;;
     blackship-postgres-reset)
         do_blackship_postgres_reset "${2:-}" "${3:-}"

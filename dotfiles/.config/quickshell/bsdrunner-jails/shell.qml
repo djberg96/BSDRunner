@@ -17,6 +17,16 @@ ShellRoot {
     property bool runningAction: false
     property bool beginnerMapVisible: true
     property string activeTab: "jails"
+    property bool manifestLoading: false
+    property string manifestPath: ""
+    property string manifestContent: ""
+    property string manifestError: ""
+    property string manifestStdoutText: ""
+    property string manifestStderrText: ""
+    property int manifestExitCode: 0
+    property bool manifestExited: false
+    property bool manifestStdoutFinished: false
+    property bool manifestStderrFinished: false
     property bool createPreviewLoading: false
     property int wizardStep: 0
     property bool demoMode: false
@@ -797,6 +807,48 @@ ShellRoot {
         activeTab = "jails"
     }
 
+    function openManifestViewer() {
+        if (!selectedJail || selectedJail.backend !== "blackship" || manifestProcess.running)
+            return
+        activeTab = "manifest"
+        manifestLoading = true
+        manifestPath = "/usr/local/etc/bsdrunner/blackship.toml"
+        manifestContent = ""
+        manifestError = ""
+        manifestStdoutText = ""
+        manifestStderrText = ""
+        manifestExitCode = 0
+        manifestExited = false
+        manifestStdoutFinished = false
+        manifestStderrFinished = false
+        manifestProcess.running = true
+    }
+
+    function closeManifestViewer() {
+        if (manifestLoading)
+            return
+        activeTab = "jails"
+    }
+
+    function maybeFinalizeManifest() {
+        if (!manifestExited || !manifestStdoutFinished || !manifestStderrFinished)
+            return
+        manifestLoading = false
+        var payload = null
+        try {
+            payload = JSON.parse(manifestStdoutText || "{}")
+        } catch (error) {
+            manifestError = manifestStderrText || "The manifest viewer received invalid JSON."
+            return
+        }
+        if (manifestExitCode !== 0 || !payload.ok) {
+            manifestError = payload.message || manifestStderrText || "Unable to load the Blackship manifest."
+            return
+        }
+        manifestPath = payload.path || manifestPath
+        manifestContent = payload.content || ""
+    }
+
     function invalidateCreatePlan() {
         previewPayload = null
         previewError = ""
@@ -1427,6 +1479,34 @@ ShellRoot {
             createPreviewProcess.controller.previewExitCode = exitCode
             createPreviewProcess.controller.previewExited = true
             createPreviewProcess.controller.maybeFinalizeCreatePreview()
+        }
+    }
+
+    Process {
+        id: manifestProcess
+        property var controller: root
+
+        command: ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-manifest-view", root.selectedJailName]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                manifestProcess.controller.manifestStdoutText = text
+                manifestProcess.controller.manifestStdoutFinished = true
+                manifestProcess.controller.maybeFinalizeManifest()
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                manifestProcess.controller.manifestStderrText = text
+                manifestProcess.controller.manifestStderrFinished = true
+                manifestProcess.controller.maybeFinalizeManifest()
+            }
+        }
+        onExited: function (exitCode) {
+            manifestProcess.controller.manifestExitCode = exitCode
+            manifestProcess.controller.manifestExited = true
+            manifestProcess.controller.maybeFinalizeManifest()
         }
     }
 
@@ -2069,7 +2149,7 @@ ShellRoot {
                                             Text {
                                                 width: parent.width
                                                 text: detailCell.modelData.value
-                                                color: root.palette.primaryText
+                                                color: detailCell.modelData.label === "Manifest" && root.selectedJail && root.selectedJail.backend === "blackship" ? root.palette.accent : root.palette.primaryText
                                                 font.pixelSize: 13
                                                 elide: Text.ElideRight
                                             }
@@ -2079,7 +2159,12 @@ ShellRoot {
                                             id: detailValueMouse
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            acceptedButtons: Qt.NoButton
+                                            acceptedButtons: Qt.LeftButton
+                                            cursorShape: detailCell.modelData.label === "Manifest" && root.selectedJail && root.selectedJail.backend === "blackship" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: {
+                                                if (detailCell.modelData.label === "Manifest" && root.selectedJail && root.selectedJail.backend === "blackship")
+                                                    root.openManifestViewer()
+                                            }
                                         }
                                     }
                                 }
@@ -3268,7 +3353,7 @@ ShellRoot {
                                                 Text {
                                                     width: parent.width
                                                     text: compactDetailCell.modelData.value
-                                                    color: root.palette.primaryText
+                                                    color: compactDetailCell.modelData.label === "Manifest" && root.selectedJail && root.selectedJail.backend === "blackship" ? root.palette.accent : root.palette.primaryText
                                                     font.pixelSize: 13
                                                     elide: Text.ElideRight
                                                 }
@@ -3278,10 +3363,151 @@ ShellRoot {
                                                 id: compactDetailValueMouse
                                                 anchors.fill: parent
                                                 hoverEnabled: true
-                                                acceptedButtons: Qt.NoButton
+                                                acceptedButtons: Qt.LeftButton
+                                                cursorShape: compactDetailCell.modelData.label === "Manifest" && root.selectedJail && root.selectedJail.backend === "blackship" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: {
+                                                    if (compactDetailCell.modelData.label === "Manifest" && root.selectedJail && root.selectedJail.backend === "blackship")
+                                                        root.openManifestViewer()
+                                                }
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.activeTab === "manifest"
+                anchors.fill: parent
+                z: 20
+                color: root.palette.panelBackground
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    color: root.palette.panelBackground
+
+                    Column {
+                        anchors.fill: parent
+                        spacing: 12
+
+                        Row {
+                            width: parent.width
+                            height: 48
+                            spacing: 12
+
+                            Column {
+                                width: parent.width - 214
+                                spacing: 3
+
+                                Text {
+                                    width: parent.width
+                                    text: "Blackship manifest"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: root.manifestPath
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 11
+                                    elide: Text.ElideMiddle
+                                }
+                            }
+
+                            Rectangle {
+                                width: 92
+                                height: 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 7
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.success
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Read only"
+                                    color: root.palette.success
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+                            }
+
+                            Rectangle {
+                                width: 98
+                                height: 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 7
+                                color: manifestBackMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                opacity: root.manifestLoading ? 0.45 : 1.0
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Back to Jails"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: manifestBackMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !root.manifestLoading
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.closeManifestViewer()
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: parent.height - 60
+                            radius: 8
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.manifestError.length > 0 ? root.palette.danger : root.palette.frameBorder
+
+                            Text {
+                                visible: root.manifestLoading || root.manifestError.length > 0
+                                anchors.centerIn: parent
+                                width: parent.width - 48
+                                text: root.manifestLoading ? "Loading the managed manifest…" : root.manifestError
+                                color: root.manifestError.length > 0 ? root.palette.danger : root.palette.secondaryText
+                                font.pixelSize: 14
+                                wrapMode: Text.WordWrap
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            ScrollView {
+                                id: manifestScrollView
+
+                                visible: !root.manifestLoading && root.manifestError.length === 0
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                clip: true
+                                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+                                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                                TextArea {
+                                    text: root.manifestContent
+                                    readOnly: true
+                                    selectByMouse: true
+                                    wrapMode: TextEdit.NoWrap
+                                    color: root.palette.primaryText
+                                    selectionColor: root.palette.accent
+                                    selectedTextColor: root.palette.panelBackground
+                                    font.family: "monospace"
+                                    font.pixelSize: 13
+                                    padding: 12
+                                    background: null
                                 }
                             }
                         }
