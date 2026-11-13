@@ -107,7 +107,7 @@ ShellRoot {
     property bool actionExited: false
     property bool actionStdoutFinished: false
     property bool actionStderrFinished: false
-    property string previewName: "web"
+    property string previewName: ""
     property string previewRelease: "15.0-RELEASE"
     property bool previewReleaseCustomized: false
     property bool previewReleaseCustom: false
@@ -314,6 +314,40 @@ ShellRoot {
         selectedJailName = jail ? jail.name || "" : ""
         selectedJailBackend = jail ? jail.backend || "native" : ""
         clearPendingAction()
+    }
+
+    function jailNameInUse(candidate) {
+        var all = jails
+        for (var i = 0; i < all.length; i += 1) {
+            if (all[i].name === candidate || all[i].full_name === candidate)
+                return true
+        }
+        var managed = blackshipInfo && blackshipInfo.managed ? blackshipInfo.managed : []
+        for (var m = 0; m < managed.length; m += 1) {
+            if (managed[m].name === candidate)
+                return true
+        }
+        return false
+    }
+
+    function suggestedPresetName(presetId) {
+        if (presetId === "blank")
+            return ""
+        var suffix = 1
+        var candidate = presetId + "_" + suffix
+        while (jailNameInUse(candidate)) {
+            suffix += 1
+            candidate = presetId + "_" + suffix
+        }
+        return candidate
+    }
+
+    function selectStarterPreset(presetId) {
+        var changed = selectedPreset !== presetId
+        selectedPreset = presetId
+        if (changed || previewName.length === 0)
+            previewName = suggestedPresetName(presetId)
+        invalidateCreatePlan()
     }
 
     function headline() {
@@ -717,6 +751,7 @@ ShellRoot {
     function openCreatePreview() {
         createPreviewVisible = true
         wizardStep = 0
+        previewName = suggestedPresetName(selectedPreset)
         previewPayload = null
         previewError = ""
         creationStage = "idle"
@@ -3061,8 +3096,7 @@ ShellRoot {
                                         enabled: !root.wizardBusy
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            root.selectedPreset = starterCard.modelData.id
-                                            root.invalidateCreatePlan()
+                                            root.selectStarterPreset(starterCard.modelData.id)
                                         }
                                     }
                                 }
@@ -3440,7 +3474,7 @@ ShellRoot {
                                     Text {
                                         visible: root.wizardStep === 3
                                         width: parent.width
-                                        text: "Jail name"
+                                        text: "Jail name" + (root.selectedPreset === "blank" ? " • required" : "")
                                         color: root.palette.secondaryText
                                         font.pixelSize: root.wizardBodyFontSize
                                         font.bold: true

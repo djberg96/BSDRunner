@@ -73,6 +73,11 @@ command -v jq >/dev/null 2>&1 || fail "jq is required to run the Jails backend t
 grep -F 'return storageConfirmation === "0.4.2"' "$jails_qml" >/dev/null || \
     fail "the Blackship installer confirmation gate should match the pinned release"
 pass "Blackship installer confirmation matches the pinned release"
+grep -F 'candidate = presetId + "_" + suffix' "$jails_qml" >/dev/null || \
+    fail "service starters should derive numbered names from their selected preset"
+grep -F 'if (presetId === "blank")' "$jails_qml" >/dev/null || \
+    fail "blank starters should require the user to supply a name"
+pass "starter names are preset-aware and blank jails remain unnamed"
 
 demo_output="$test_root/demo.json"
 BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
