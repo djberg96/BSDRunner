@@ -1932,7 +1932,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        width: root.beginnerMapVisible ? 382 : parent.width - 330
+                        width: 382
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -1980,6 +1980,7 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                visible: root.beginnerMapVisible
                                 width: parent.width
                                 height: 34
                                 radius: 6
@@ -2005,7 +2006,7 @@ ShellRoot {
                             }
 
                             Grid {
-                                visible: root.technicalDetailsVisible
+                                visible: root.beginnerMapVisible && root.technicalDetailsVisible
                                 width: parent.width
                                 columns: 2
                                 rowSpacing: 8
@@ -2613,8 +2614,8 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: root.pendingActionId ? 108 : 0
-                                visible: root.pendingActionId.length > 0
+                                height: root.beginnerMapVisible && root.pendingActionId ? 108 : 0
+                                visible: root.beginnerMapVisible && root.pendingActionId.length > 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -2701,6 +2702,7 @@ ShellRoot {
                             }
 
                             Text {
+                                visible: root.beginnerMapVisible
                                 width: parent.width
                                 text: "Actions"
                                 color: root.palette.accent
@@ -2709,6 +2711,7 @@ ShellRoot {
                             }
 
                             Grid {
+                                visible: root.beginnerMapVisible
                                 width: parent.width
                                 columns: 2
                                 rowSpacing: 8
@@ -2775,8 +2778,7 @@ ShellRoot {
                     }
 
                     Rectangle {
-                        visible: root.beginnerMapVisible
-                        width: root.beginnerMapVisible ? parent.width - 726 : 0
+                        width: parent.width - 726
                         height: parent.height
                         radius: 8
                         color: root.palette.cardBackground
@@ -2784,6 +2786,7 @@ ShellRoot {
                         border.color: root.palette.frameBorder
 
                         Flickable {
+                            visible: root.beginnerMapVisible
                             anchors.fill: parent
                             anchors.margins: 14
                             contentWidth: width
@@ -2987,6 +2990,264 @@ ShellRoot {
                                     onClicked: root.openCreatePreview()
                                 }
                             }
+                            }
+                        }
+
+                        Flickable {
+                            visible: !root.beginnerMapVisible
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            contentWidth: width
+                            contentHeight: compactActionsContent.height
+                            clip: true
+
+                            Column {
+                                id: compactActionsContent
+
+                                width: parent.width
+                                spacing: 12
+
+                                Text {
+                                    width: parent.width
+                                    text: "Actions"
+                                    color: root.palette.accent
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+
+                                Grid {
+                                    width: parent.width
+                                    columns: 2
+                                    rowSpacing: 8
+                                    columnSpacing: 8
+
+                                    Repeater {
+                                        model: [
+                                            {"id": "start", "label": "Start", "detail": "Boot this jail userland"},
+                                            {"id": "stop", "label": "Stop", "detail": "Shut the jail down"},
+                                            {"id": "restart", "label": "Restart", "detail": "Stop, then start again"},
+                                            {"id": "console", "label": "Console", "detail": "Open a root shell"},
+                                            {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Reconcile tagged jails at boot"},
+                                            {"id": "blackship-postgres-reset", "label": "Reset DB password", "detail": "Show a new app password once"}
+                                        ]
+
+                                        Rectangle {
+                                            id: compactActionCell
+                                            required property var modelData
+
+                                            width: (parent.width - 8) / 2
+                                            height: 58
+                                            radius: 7
+                                            color: compactActionMouse.containsMouse && root.actionAvailable(compactActionCell.modelData.id) ? root.palette.cardHover : root.palette.panelBackground
+                                            opacity: root.actionAvailable(compactActionCell.modelData.id) ? 1.0 : 0.45
+                                            border.width: 1
+                                            border.color: root.palette.panelBorder
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 8
+                                                spacing: 3
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: compactActionCell.modelData.label
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: compactActionCell.modelData.detail
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 11
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: compactActionMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: root.actionAvailable(compactActionCell.modelData.id)
+                                                onClicked: root.requestAction(compactActionCell.modelData.id, compactActionCell.modelData.label, compactActionCell.modelData.label + " " + root.selectedJail.name + "?")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: root.pendingActionId ? 108 : 0
+                                    visible: root.pendingActionId.length > 0
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.toneColor("warning")
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 8
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.pendingActionLabel
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.pendingActionDescription
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 12
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 2
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Row {
+                                            width: parent.width
+                                            height: 28
+                                            spacing: 8
+
+                                            Rectangle {
+                                                width: 92
+                                                height: parent.height
+                                                radius: 6
+                                                color: compactConfirmMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.warning, 0.18)
+                                                border.width: 1
+                                                border.color: root.palette.warning
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "Confirm"
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    id: compactConfirmMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    onClicked: root.confirmPendingAction()
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                width: 80
+                                                height: parent.height
+                                                radius: 6
+                                                color: compactCancelMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                                border.width: 1
+                                                border.color: root.palette.panelBorder
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "Cancel"
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    id: compactCancelMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    onClicked: root.clearPendingAction()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 34
+                                    radius: 6
+                                    color: compactTechnicalMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.panelBorder
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (root.technicalDetailsVisible ? "Hide" : "Show") + " technical details"
+                                        color: root.palette.accent
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: compactTechnicalMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.technicalDetailsVisible = !root.technicalDetailsVisible
+                                    }
+                                }
+
+                                Grid {
+                                    id: compactTechnicalDetails
+
+                                    visible: root.technicalDetailsVisible
+                                    width: parent.width
+                                    columns: 2
+                                    rowSpacing: 8
+                                    columnSpacing: 8
+
+                                    Repeater {
+                                        model: [
+                                            {"label": "Manager", "value": root.selectedJail ? root.backendLabel(root.selectedJail) : "None"},
+                                            {"label": "JID", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.jid) : "None"},
+                                            {"label": "Runtime name", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.full_name || root.selectedJail.name) : "None"},
+                                            {"label": "Hostname", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.hostname) : "None"},
+                                            {"label": "Release", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.release) : "None"},
+                                            {"label": "Dataset / root", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.path) : "None"},
+                                            {"label": "Manifest", "value": root.selectedJail && root.selectedJail.backend === "blackship" ? "/usr/local/etc/bsdrunner/blackship.toml" : "External"},
+                                            {"label": "Dependencies", "value": root.selectedJail && root.selectedJail.dependencies && root.selectedJail.dependencies.length > 0 ? root.selectedJail.dependencies.join(", ") : "None"}
+                                        ]
+
+                                        Rectangle {
+                                            id: compactDetailCell
+                                            required property var modelData
+
+                                            width: (parent.width - 8) / 2
+                                            height: 58
+                                            radius: 7
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.palette.frameBorder
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 8
+                                                spacing: 3
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: compactDetailCell.modelData.label
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: compactDetailCell.modelData.value
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

@@ -88,6 +88,15 @@ if grep -F 'createPreviewVisible' "$jails_qml" >/dev/null; then
     fail "the creation workflow should not use the former modal visibility state"
 fi
 pass "service creation uses the in-window Create tab"
+[ "$(grep -Fc 'visible: !root.beginnerMapVisible' "$jails_qml")" -ge 1 ] || \
+    fail "hiding the beginner map should reveal the compact action rail"
+grep -F 'id: compactActionsContent' "$jails_qml" >/dev/null || \
+    fail "the collapsed beginner map area should hold jail actions"
+grep -F 'id: compactTechnicalMouse' "$jails_qml" >/dev/null || \
+    fail "the collapsed beginner map area should hold the technical-details toggle"
+grep -F 'id: compactTechnicalDetails' "$jails_qml" >/dev/null || \
+    fail "the collapsed beginner map area should hold expanded technical details"
+pass "hiding the beginner map replaces it with jail controls"
 [ "$(grep -Fc 'visible: root.selectedJail && root.selectedJail.backend === "bastille"' "$jails_qml")" -ge 2 ] || \
     fail "legacy simple-service controls should be hidden for Blackship jails"
 pass "legacy simple-service controls stay out of Blackship jail details"
