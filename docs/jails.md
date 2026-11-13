@@ -1,7 +1,7 @@
 # BSDRunner Jails
 
 BSDRunner Jails is a beginner-oriented Quickshell control surface for learning
-and operating FreeBSD jails. New service jails use Blackship 0.4.1 or newer;
+and operating FreeBSD jails. New service jails use Blackship 0.4.2 or newer;
 existing Bastille and native jails remain visible and operable without migration.
 
 The UI is intentionally read-mostly. It helps a new user answer:
@@ -52,8 +52,9 @@ The snapshot action returns JSON with:
 
 - `schema_version: 2`
 - Blackship capabilities plus best-effort JSON envelopes for `host`, `ps --host`,
-  `network list`, `releases`, `ports`, `stats`, and `health`
-- compatibility status requiring Blackship `>= 0.4.1` and output schema v1
+  `network list`, `releases`, `ports`, and `stats`; `ps --host` supplies passive
+  health and effective autostart summaries without launching checks
+- compatibility status requiring Blackship `>= 0.4.2` and output schema v1
 
 - tool detection for `jls`, `jail`, `service`, `bastille`, and `mdo`
 - `jail_enable` and `bastille_enable` service settings when `sysrc` exists
@@ -73,8 +74,8 @@ The snapshot action returns JSON with:
 
 The setup checklist is: install Blackship, choose a ZFS pool, create the private
 network, then pick a starter. The confirmed installer accepts only the official
-FreeBSD amd64 0.4.1 archive, verifies SHA-256
-`86fc256505b9faa8c26fca01f2018a8f1e5d1c48b902b95f84da9b432060516f`,
+FreeBSD amd64 0.4.2 archive, verifies SHA-256
+`912a6180938e0ed40a72ffa9bfda07a4dd221afa0aad94c5188fb930b1f50a5f`,
 validates `capabilities`, and does not downgrade a compatible newer release.
 
 BSDRunner owns one project:
@@ -104,7 +105,9 @@ The starter choices are:
 
 Autostart defaults off. Opting in adds an `autostart` manifest tag. The small
 `bsdrunner_blackship` rc service is enabled only while at least one managed jail
-has that tag. If provisioning fails after the manifest entry is installed,
+has that tag and runs Blackship's native `autostart` reconciliation at boot.
+Tagged jails and their dependencies start in order; other project jails remain
+stopped. If provisioning fails after the manifest entry is installed,
 BSDRunner retains the completed work and reports **Setup incomplete** so the user
 can retry or open a console.
 

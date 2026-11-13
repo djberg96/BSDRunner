@@ -202,7 +202,7 @@ See `docs/zfs.md` for the backend commands and scope.
 ## Jails
 
 BSDRunner includes a beginner-focused FreeBSD jails surface. New jails are
-Blackship 0.4.1+ managed services; existing Bastille and native jails remain
+Blackship 0.4.2+ managed services; existing Bastille and native jails remain
 listed and keep their guarded lifecycle actions.
 
 ```sh

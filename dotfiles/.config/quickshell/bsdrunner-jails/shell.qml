@@ -79,7 +79,7 @@ ShellRoot {
     property string selectedBeginnerTopic: "storage"
     property string selectedPreset: "blank"
     property bool technicalDetailsVisible: false
-    property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.1"})
+    property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.2"})
     property var blackshipJails: []
     property var runningJails: []
     property var configuredJails: []
@@ -214,7 +214,6 @@ ShellRoot {
         var rows = report && report.jails ? report.jails : []
         var metadata = info && info.managed ? info.managed : []
         var statsRows = info && info.stats && info.stats.data ? info.stats.data : []
-        var healthRows = info && info.health && info.health.data ? info.health.data : []
         for (var i = 0; i < rows.length; i += 1) {
             var row = rows[i]
             if (!row.managed)
@@ -228,20 +227,36 @@ ShellRoot {
             }
             var rawState = (row.state || (row.running ? "Running" : "Stopped")).toLowerCase()
             var preset = managed ? managed.preset || "blank" : "blank"
+            var tags = row.tags || []
+            if (tags.indexOf("nginx") >= 0)
+                preset = "nginx"
+            else if (tags.indexOf("postgres") >= 0)
+                preset = "postgres"
+            else if (tags.indexOf("ollama") >= 0)
+                preset = "ollama"
             var purpose = preset === "nginx" ? "Private nginx web server" : preset === "postgres" ? "Private PostgreSQL database" : preset === "ollama" ? "Experimental CPU-only local AI" : "Blank FreeBSD jail"
             var stats = null
-            var health = null
             for (var s = 0; s < statsRows.length; s += 1) {
                 if (statsRows[s].name === row.full_name) {
                     stats = statsRows[s]
                     break
                 }
             }
-            for (var h = 0; h < healthRows.length; h += 1) {
-                if (healthRows[h].jail === row.full_name) {
-                    health = healthRows[h]
-                    break
+            var healthSummary = row.health || null
+            var healthLabel = row.running ? "Not checked" : "Stopped"
+            if (healthSummary) {
+                if (healthSummary.configured === false) {
+                    healthLabel = "Not configured"
+                } else if (healthSummary.status) {
+                    healthLabel = healthSummary.status.replace(/_/g, " ")
+                    healthLabel = healthLabel.charAt(0).toUpperCase() + healthLabel.slice(1)
                 }
+                if (healthSummary.reason === "stopped")
+                    healthLabel = "Stopped"
+                else if (healthSummary.reason === "stale_jid")
+                    healthLabel = "Waiting for a fresh check"
+                else if (healthSummary.reason === "state_unavailable")
+                    healthLabel = "Health unavailable"
             }
             result.push({
                 "name": row.service_name || row.full_name,
@@ -256,10 +271,10 @@ ShellRoot {
                 "path": row.path || "",
                 "dependencies": row.depends_on || [],
                 "network": row.networks && row.networks.length > 0 ? row.networks.join(", ") : "bsdrunner",
-                "autostart": managed && managed.autostart ? "On" : "Off",
+                "autostart": row.autostart === true || (!row.hasOwnProperty("autostart") && managed && managed.autostart) ? "On" : "Off",
                 "preset": preset,
                 "purpose": purpose,
-                "health": health ? health.status || "Unknown" : (row.running ? "Checking" : "Stopped"),
+                "health": healthLabel,
                 "resources": stats ? stats.cpu_percent + "% CPU • " + stats.rss_mib + " MiB RAM • " + stats.processes + " processes" : (row.running ? "Usage unavailable" : "No current usage")
             })
         }
@@ -791,7 +806,7 @@ ShellRoot {
         if (demoMode || storageSetupRunning || storageReady())
             return false
         if (!blackshipInfo.compatible)
-            return storageConfirmation === "0.4.1"
+            return storageConfirmation === "0.4.2"
         return selectedStoragePool.length > 0 && storageConfirmation === selectedStoragePool
     }
 
@@ -800,7 +815,7 @@ ShellRoot {
             return
         storageSetupRunning = true
         storageSetupStage = "configuring"
-        storageSetupMessage = blackshipInfo.compatible ? "Configuring Blackship storage and private networking on " + selectedStoragePool + "…" : "Installing verified Blackship 0.4.1…"
+        storageSetupMessage = blackshipInfo.compatible ? "Configuring Blackship storage and private networking on " + selectedStoragePool + "…" : "Installing verified Blackship 0.4.2…"
         storageSetupDetails = ""
         storageStdoutText = ""
         storageStderrText = ""
@@ -1027,12 +1042,12 @@ ShellRoot {
         if (wizardStep === 0) {
             var storageLines = ["INSTALL + STORAGE", "", "New BSDRunner jails use one managed Blackship project. The first setup installs Blackship if needed, then places releases and jail roots under POOL/bsdrunner/blackship.", ""]
             if (storageReady()) {
-                storageLines.push("[ok] Blackship " + (blackshipInfo.version || "0.4.1+") + " is compatible.")
+                storageLines.push("[ok] Blackship " + (blackshipInfo.version || "0.4.2+") + " is compatible.")
                 storageLines.push("[ok] Managed manifest: /usr/local/etc/bsdrunner/blackship.toml")
                 storageLines.push("[ok] Dataset: " + storageTargetDataset())
             } else {
                 storageLines.push("SELECTED PLAN")
-                storageLines.push(blackshipInfo.compatible ? "[ok] Compatible Blackship installed" : "[ ] Install verified Blackship 0.4.1")
+                storageLines.push(blackshipInfo.compatible ? "[ok] Compatible Blackship installed" : "[ ] Install verified Blackship 0.4.2")
                 storageLines.push("Pool: " + (selectedStoragePool || "No ZFS pool detected"))
                 storageLines.push("Dataset: " + storageTargetDataset())
                 storageLines.push("Private network: bsdrunner on blackship0")
@@ -1218,7 +1233,7 @@ ShellRoot {
         outboundPolicies = payload.outbound_policies || []
         portForwards = payload.port_forwards || []
         simpleServices = payload.simple_services || []
-        blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.1"}
+        blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.2"}
         blackshipJails = normalizedBlackshipJails(blackshipInfo)
         if (!previewAddressCustomized && blackshipInfo.recommended_address)
             previewAddress = blackshipInfo.recommended_address
@@ -2649,7 +2664,7 @@ ShellRoot {
                                         {"id": "stop", "label": "Stop", "detail": "Shut the jail down"},
                                         {"id": "restart", "label": "Restart", "detail": "Stop, then start again"},
                                         {"id": "console", "label": "Console", "detail": "Open a root shell"},
-                                        {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Toggle the managed rc service"},
+                                        {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Reconcile tagged jails at boot"},
                                         {"id": "blackship-postgres-reset", "label": "Reset DB password", "detail": "Show a new app password once"}
                                     ]
 
@@ -2863,7 +2878,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.blackshipInfo.compatible ? (root.blackshipInfo.configured ? "Installed and configured for new BSDRunner service jails." : "Installed. Click to choose storage and create the private network.") : "Click to install the pinned, verified 0.4.1 FreeBSD amd64 binary. Existing Bastille/native jails remain operable."
+                                        text: root.blackshipInfo.compatible ? (root.blackshipInfo.configured ? "Installed and configured for new BSDRunner service jails." : "Installed. Click to choose storage and create the private network.") : "Click to install the pinned, verified 0.4.2 FreeBSD amd64 binary. Existing Bastille/native jails remain operable."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -3136,7 +3151,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.storageReady() ? "Blackship project ready" : root.blackshipInfo.compatible ? "Choose a ZFS pool" : "Install Blackship 0.4.1"
+                                                text: root.storageReady() ? "Blackship project ready" : root.blackshipInfo.compatible ? "Choose a ZFS pool" : "Install Blackship 0.4.2"
                                                 color: root.palette.primaryText
                                                 font.pixelSize: root.wizardHeadingFontSize
                                                 font.bold: true
@@ -3225,7 +3240,7 @@ ShellRoot {
                                             Text {
                                                 visible: !root.storageReady()
                                                 width: parent.width
-                                                text: "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.1") + "” to confirm"
+                                                text: "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.2") + "” to confirm"
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: root.wizardCaptionFontSize
                                                 font.bold: true
@@ -3239,7 +3254,7 @@ ShellRoot {
                                                 radius: 6
                                                 color: root.palette.panelBackground
                                                 border.width: 1
-                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.1") ? root.palette.success : root.palette.panelBorder
+                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.2") ? root.palette.success : root.palette.panelBorder
 
                                                 TextInput {
                                                     id: storageConfirmationInput
@@ -3288,7 +3303,7 @@ ShellRoot {
                                                             return
                                                         }
                                                         root.storageSetupStage = "failed"
-                                                        root.storageSetupMessage = "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.1") + "” exactly in the confirmation field first."
+                                                        root.storageSetupMessage = "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.2") + "” exactly in the confirmation field first."
                                                         storageConfirmationInput.forceActiveFocus()
                                                     }
                                                 }
@@ -4008,7 +4023,7 @@ ShellRoot {
                                     Text {
                                         visible: root.wizardStep !== 2
                                         width: parent.width
-                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.blackshipInfo.compatible ? "Install the verified Blackship 0.4.1 binary to create new service jails." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool to create the BSDRunner Blackship project and private network." : "Blackship is installed, but no ZFS pool was detected.") : "Blackship storage and private networking are ready" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
+                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.blackshipInfo.compatible ? "Install the verified Blackship 0.4.2 binary to create new service jails." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool to create the BSDRunner Blackship project and private network." : "Blackship is installed, but no ZFS pool was detected.") : "Blackship storage and private networking are ready" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
                                         color: !root.demoMode && root.tools.bastille && root.storageReady() && root.networkReady() ? root.palette.success : root.palette.warning
                                         font.pixelSize: root.wizardCaptionFontSize
                                         wrapMode: Text.WordWrap

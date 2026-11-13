@@ -8,12 +8,17 @@
 name="bsdrunner_blackship"
 rcvar="bsdrunner_blackship_enable"
 command="/usr/local/bin/blackship"
-command_args="--config /usr/local/etc/bsdrunner/blackship.toml --non-interactive up autostart"
+start_cmd="bsdrunner_blackship_start"
 stop_cmd="bsdrunner_blackship_stop"
+
+bsdrunner_blackship_start()
+{
+    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive autostart
+}
 
 bsdrunner_blackship_stop()
 {
-    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive down autostart
+    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive down --all
 }
 
 load_rc_config "$name"

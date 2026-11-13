@@ -18,9 +18,13 @@ case "$args" in
             printf '%s\n' '{not-json'
             exit 0
         fi
-        version="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.4.1}"
+        version="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.4.2}"
         schema="${BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA:-1}"
-        printf '{\n  "schema_version": %s,\n  "ok": true,\n  "data": {\n    "blackship_version": "%s",\n    "output_schema_version": %s\n  },\n  "blackship_version": "%s",\n  "output_schema_version": %s\n}\n' "$schema" "$version" "$schema" "$version" "$schema"
+        operations='[{"operation":"ps.host"},{"operation":"armada.up"},{"operation":"armada.up.dry_run"}]'
+        if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL:-0}" = 1 ]; then
+            operations='[{"operation":"ps.host"}]'
+        fi
+        printf '{\n  "schema_version": %s,\n  "ok": true,\n  "data": {\n    "blackship_version": "%s",\n    "output_schema_version": %s,\n    "cli": {"output_formats":["text","json"],"machine_output":%s}\n  },\n  "blackship_version": "%s",\n  "output_schema_version": %s\n}\n' "$schema" "$version" "$schema" "$operations" "$version" "$schema"
         ;;
     *" check "*)
         [ "${BSDRUNNER_BLACKSHIP_FIXTURE_REJECT:-0}" != 1 ]
@@ -30,7 +34,7 @@ case "$args" in
         printf '%s\n' 'Template is valid'
         ;;
     *" ps --host "*)
-        printf '%s\n' '{"schema_version":1,"ok":true,"data":{"project":"bsdrunner","config_path":"blackship.toml","jails":[{"service_name":"web","full_name":"bsdrunner-web","manager":"blackship","managed":true,"configured":true,"running":true,"state":"Running","jid":4,"release":"15.0-RELEASE","hostname":"web.local","ip":"10.44.0.20","ips":["10.44.0.20"],"path":"/var/db/bsdrunner/blackship/jails/bsdrunner-web","networks":["bsdrunner"],"depends_on":[]}]}}'
+        printf '%s\n' '{"schema_version":1,"ok":true,"data":{"project":"bsdrunner","config_path":"blackship.toml","jails":[{"service_name":"web","full_name":"bsdrunner-web","manager":"blackship","managed":true,"configured":true,"running":true,"state":"Running","jid":4,"release":"15.0-RELEASE","hostname":"web.local","ip":"10.44.0.20","ips":["10.44.0.20"],"path":"/var/db/bsdrunner/blackship/jails/bsdrunner-web","networks":["bsdrunner"],"depends_on":[],"tags":["bsdrunner","nginx","autostart"],"autostart":true,"health":{"configured":true,"status":"healthy","reason":null,"checked_at":1794560400,"checks_total":1,"checks_passing":1,"checks_failing":0,"checks_pending":0}}]}}'
         ;;
     *" network list "*)
         printf '%s\n' '{"schema_version":1,"ok":true,"data":[]}'

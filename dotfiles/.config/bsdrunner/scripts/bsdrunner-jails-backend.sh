@@ -34,10 +34,11 @@ else
 fi
 export PATH
 
-blackship_min_version="0.4.1"
-blackship_release_version="0.4.1"
-blackship_release_sha256="86fc256505b9faa8c26fca01f2018a8f1e5d1c48b902b95f84da9b432060516f"
-blackship_release_url="https://github.com/seuros/blackship/releases/download/blackship-v0.4.1/blackship-freebsd-amd64.tar.gz"
+blackship_min_version="0.4.2"
+blackship_release_version="0.4.2"
+blackship_release_sha256="912a6180938e0ed40a72ffa9bfda07a4dd221afa0aad94c5188fb930b1f50a5f"
+blackship_release_url="https://github.com/seuros/blackship/releases/download/blackship-v0.4.2/blackship-freebsd-amd64.tar.gz"
+blackship_required_operations="ps.host armada.up armada.up.dry_run"
 blackship_network_name="bsdrunner"
 blackship_bridge="blackship0"
 blackship_project="bsdrunner"
@@ -114,12 +115,35 @@ blackship_capabilities() {
     blackship --format json capabilities 2>/dev/null
 }
 
+blackship_operation_supported() {
+    capability_json="$1"
+    operation="$2"
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s\n' "$capability_json" | jq -e --arg operation "$operation" \
+            'any(.data.cli.machine_output[]?; .operation == $operation)' >/dev/null 2>&1
+    else
+        printf '%s\n' "$capability_json" | tr -d '[:space:]' | grep -F '"operation":"'"$operation"'"' >/dev/null 2>&1
+    fi
+}
+
+blackship_missing_operations_json() {
+    first=true
+    printf '['
+    for operation in $blackship_missing_operations; do
+        [ "$first" = true ] || printf ','
+        first=false
+        printf '"%s"' "$operation"
+    done
+    printf ']'
+}
+
 blackship_status_values() {
     blackship_available=false
     blackship_compatible=false
     blackship_version=""
     blackship_schema=""
     blackship_capabilities_output=""
+    blackship_missing_operations=""
 
     command -v blackship >/dev/null 2>&1 || return 0
     blackship_available=true
@@ -128,8 +152,14 @@ blackship_status_values() {
     blackship_version="$(printf '%s\n' "$blackship_capabilities_output" | blackship_json_field blackship_version)"
     blackship_schema="$(printf '%s\n' "$blackship_capabilities_output" | blackship_json_number output_schema_version)"
     if [ "$blackship_schema" = "1" ] && [ -n "$blackship_version" ] && version_at_least "$blackship_version" "$blackship_min_version"; then
-        blackship_compatible=true
+        for operation in $blackship_required_operations; do
+            if ! blackship_operation_supported "$blackship_capabilities_output" "$operation"; then
+                blackship_missing_operations="${blackship_missing_operations}${blackship_missing_operations:+ }${operation}"
+            fi
+        done
+        [ -z "$blackship_missing_operations" ] && blackship_compatible=true
     fi
+    return 0
 }
 
 valid_json_or_empty() {
@@ -164,11 +194,12 @@ blackship_snapshot_json() {
     [ -r "$blackship_manifest" ] && manifest_exists=true
 
     recommended_address="$(blackship_recommended_address 2>/dev/null || true)"
-    printf '{"available":%s,"compatible":%s,"minimum_version":"%s","version":"%s","output_schema_version":%s,"manifest":"%s","configured":%s,"recommended_address":"%s"' \
+    printf '{"available":%s,"compatible":%s,"minimum_version":"%s","version":"%s","output_schema_version":%s,"manifest":"%s","configured":%s,"recommended_address":"%s","missing_operations":' \
         "$blackship_available" "$blackship_compatible" "$blackship_min_version" \
         "$(printf '%s' "$blackship_version" | json_escape)" \
         "${blackship_schema:-null}" \
         "$(printf '%s' "$blackship_manifest" | json_escape)" "$manifest_exists" "$(printf '%s' "$recommended_address" | json_escape)"
+    blackship_missing_operations_json
 
     printf ',"capabilities":'
     if valid_json_or_empty "$blackship_capabilities_output"; then
@@ -202,7 +233,7 @@ blackship_snapshot_json() {
         printf '[]'
     fi
 
-    for probe in host inventory networks releases ports stats health; do
+    for probe in host inventory networks releases ports stats; do
         output=""
         if [ "$blackship_compatible" = true ] && [ "$manifest_exists" = true ]; then
             case "$probe" in
@@ -212,7 +243,6 @@ blackship_snapshot_json() {
                 releases) output="$(blackship_read_json releases list 2>/dev/null || true)" ;;
                 ports) output="$(blackship_read_json ports 2>/dev/null || true)" ;;
                 stats) output="$(blackship_read_json stats 2>/dev/null || true)" ;;
-                health) output="$(blackship_read_json_privileged --non-interactive health 2>/dev/null || true)" ;;
             esac
         fi
         printf ',"%s":' "$probe"
@@ -1358,7 +1388,7 @@ do_lifecycle() {
         blackship)
             blackship_status_values
             if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
-                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.1 or newer and configure the BSDRunner project."
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.2 or newer and configure the BSDRunner project."
                 exit 1
             fi
             blackship_manifest_has_name "$name" || {
@@ -1746,7 +1776,7 @@ do_console() {
         blackship)
             blackship_status_values
             if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
-                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.1 or newer and configure its project."
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.2 or newer and configure its project."
                 exit 1
             fi
             blackship_manifest_has_name "$name" || {
@@ -2601,8 +2631,14 @@ do_blackship_install() {
     capability_output="$("$install_tmp/blackship" --format json capabilities 2>/dev/null || true)"
     candidate_version="$(printf '%s\n' "$capability_output" | blackship_json_field blackship_version)"
     candidate_schema="$(printf '%s\n' "$capability_output" | blackship_json_number output_schema_version)"
-    [ "$candidate_schema" = "1" ] && version_at_least "$candidate_version" "$blackship_min_version" || {
-        emit_action_result false "The downloaded Blackship binary is incompatible." "Version ${candidate_version:-unknown}, schema ${candidate_schema:-unknown}."
+    candidate_missing=""
+    for operation in $blackship_required_operations; do
+        if ! blackship_operation_supported "$capability_output" "$operation"; then
+            candidate_missing="${candidate_missing}${candidate_missing:+, }${operation}"
+        fi
+    done
+    [ "$candidate_schema" = "1" ] && version_at_least "$candidate_version" "$blackship_min_version" && [ -z "$candidate_missing" ] || {
+        emit_action_result false "The downloaded Blackship binary is incompatible." "Version ${candidate_version:-unknown}, schema ${candidate_schema:-unknown}, missing operations: ${candidate_missing:-none}."
         exit 1
     }
     if ! run_privileged install -m 0755 "$install_tmp/blackship" /usr/local/bin/blackship; then
@@ -2656,7 +2692,7 @@ do_blackship_project_setup() {
     remainder="${network_values#*|}"
     gateway="${remainder%%|*}"
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship 0.4.1 or newer is required." "Install Blackship first."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship 0.4.2 or newer is required." "Install Blackship first."; exit 1; }
     if [ -r "$blackship_manifest" ] && grep -q '^\[\[jails\]\]' "$blackship_manifest"; then
         emit_action_result false "The BSDRunner Blackship project already contains jails." "Project setup will not replace a populated managed manifest."
         exit 1
@@ -2734,7 +2770,7 @@ do_blackship_preset_preview() {
         notes="Demo preview only; creation remains disabled."
     else
         blackship_status_values
-        [ "$blackship_compatible" = true ] || { ready=false; notes="Blackship 0.4.1 or newer is required."; }
+        [ "$blackship_compatible" = true ] || { ready=false; notes="Blackship 0.4.2 or newer is required."; }
         [ -r "$blackship_manifest" ] || { ready=false; notes="${notes}${notes:+ }Configure Blackship storage and networking first."; }
         if blackship_manifest_has_name "$name"; then ready=false; notes="${notes}${notes:+ }The jail name is already in use."; fi
         collect_jail_conflicts "$name" "$address"
@@ -2793,7 +2829,7 @@ do_blackship_preset_preview() {
             fi
         fi
         if [ "$preview_valid" = true ]; then
-            if ! preview_output="$(blackship --config "$preview_candidate" armada --file "$preview_candidate" up "$name" --dry-run 2>&1)"; then
+            if ! preview_output="$(blackship --config "$preview_candidate" --format json armada --file "$preview_candidate" up "$name" --dry-run 2>&1)"; then
                 preview_valid=false
                 preview_failure="Blackship dry-run failed: ${preview_output}"
             fi
@@ -2805,7 +2841,7 @@ do_blackship_preset_preview() {
             notes="${notes}${notes:+ }${preview_failure:-Blackship rejected the generated manifest, Jailfile, or dry-run plan.}"
         fi
     fi
-    printf '{"ok":true,"mutates":false,"backend":"blackship","ready":%s,"preset":"%s","label":"%s","description":"%s","inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","outbound_policy":"%s"},"packages":["%s"],"ports":["%s"],"private_by_default":true,"notes":["%s"],"commands":["blackship template validate %s/Jailfile","blackship --config %s check","blackship --config %s armada --file %s up %s --dry-run","blackship --config %s armada --file %s up %s","bsdrunner-pf-backend.sh jail-policy %s %s %s RESOLVER"]}\n' \
+    printf '{"ok":true,"mutates":false,"backend":"blackship","ready":%s,"preset":"%s","label":"%s","description":"%s","inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","outbound_policy":"%s"},"packages":["%s"],"ports":["%s"],"private_by_default":true,"notes":["%s"],"commands":["blackship template validate %s/Jailfile","blackship --config %s check","blackship --config %s --format json armada --file %s up %s --dry-run","blackship --config %s --format json armada --file %s up %s","bsdrunner-pf-backend.sh jail-policy %s %s %s RESOLVER"]}\n' \
         "$ready" "$preset" "$(printf '%s' "$label" | json_escape)" "$(printf '%s' "$description" | json_escape)" \
         "$(printf '%s' "$name" | json_escape)" "$release" "$address" "$autostart" "$outbound_policy" \
         "$(printf '%s' "$package" | json_escape)" "$port" "$(printf '%s' "$notes" | json_escape)" \
@@ -2971,7 +3007,7 @@ do_blackship_preset_create() {
     rm -f "$candidate"
     blackship_sync_autostart_service || true
 
-    if ! build_output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive armada --file "$blackship_manifest" up "$name" 2>&1)"; then
+    if ! build_output="$(run_privileged blackship --config "$blackship_manifest" --format json --non-interactive armada --file "$blackship_manifest" up "$name" 2>&1)"; then
         write_last_result warning "Added ${name}, but setup is incomplete."
         emit_action_result false "Setup incomplete for ${name}." "The manifest entry and completed work were retained. Retry creation or open a console after starting the jail.\n$build_output"
         exit 1
@@ -3065,7 +3101,7 @@ do_blackship_details() {
     valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
     blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not compatible." "Version 0.4.1 or newer with JSON schema 1 is required."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not compatible." "Version 0.4.2 or newer with JSON schema 1 is required."; exit 1; }
     stats="$(blackship_read_json stats "$name" 2>/dev/null || true)"
     health="$(blackship_read_json_privileged --non-interactive health "$name" 2>/dev/null || true)"
     ports="$(blackship_read_json ports "$name" 2>/dev/null || true)"

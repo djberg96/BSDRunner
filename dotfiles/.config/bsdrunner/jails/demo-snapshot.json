@@ -61,8 +61,8 @@
   "blackship": {
     "available": true,
     "compatible": true,
-    "minimum_version": "0.4.1",
-    "version": "0.4.1",
+    "minimum_version": "0.4.2",
+    "version": "0.4.2",
     "output_schema_version": 1,
     "configured": true,
     "manifest": "/usr/local/etc/bsdrunner/blackship.toml",
@@ -92,7 +92,19 @@
             "ips": ["10.0.1.20"],
             "path": "/var/db/bsdrunner/blackship/jails/bsdrunner-web",
             "networks": ["bsdrunner"],
-            "depends_on": []
+            "depends_on": [],
+            "tags": ["bsdrunner", "nginx", "autostart"],
+            "autostart": true,
+            "health": {
+              "configured": true,
+              "status": "healthy",
+              "reason": null,
+              "checked_at": 1794560400,
+              "checks_total": 1,
+              "checks_passing": 1,
+              "checks_failing": 0,
+              "checks_pending": 0
+            }
           },
           {
             "service_name": "postgres",
@@ -109,7 +121,19 @@
             "ips": ["10.0.1.21"],
             "path": "/var/db/bsdrunner/blackship/jails/bsdrunner-postgres",
             "networks": ["bsdrunner"],
-            "depends_on": []
+            "depends_on": [],
+            "tags": ["bsdrunner", "postgres"],
+            "autostart": false,
+            "health": {
+              "configured": true,
+              "status": "unknown",
+              "reason": "stopped",
+              "checked_at": null,
+              "checks_total": 1,
+              "checks_passing": null,
+              "checks_failing": null,
+              "checks_pending": null
+            }
           }
         ]
       }
@@ -123,14 +147,6 @@
       "ok": true,
       "data": [
         {"jid": "4", "name": "bsdrunner-web", "processes": 3, "cpu_percent": 0.2, "rss_mib": 24}
-      ]
-    },
-    "health": {
-      "schema_version": 1,
-      "ok": true,
-      "data": [
-        {"jail": "bsdrunner-web", "status": "Healthy", "checks": [{"name": "nginx", "passed": true, "output": "nginx is running", "duration_ms": 8, "age_ms": 0, "failures": 0}]},
-        {"jail": "bsdrunner-postgres", "status": "Unknown", "checks": []}
       ]
     }
   },
