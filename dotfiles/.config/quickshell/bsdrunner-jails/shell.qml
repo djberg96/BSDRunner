@@ -15,7 +15,7 @@ ShellRoot {
     property bool loading: false
     property bool runningAction: false
     property bool beginnerMapVisible: true
-    property bool createPreviewVisible: false
+    property string activeTab: "jails"
     property bool createPreviewLoading: false
     property int wizardStep: 0
     property bool demoMode: false
@@ -749,7 +749,7 @@ ShellRoot {
     }
 
     function openCreatePreview() {
-        createPreviewVisible = true
+        activeTab = "create"
         wizardStep = 0
         previewName = suggestedPresetName(selectedPreset)
         previewPayload = null
@@ -781,7 +781,7 @@ ShellRoot {
         if (wizardBusy)
             return
         releaseMenuOpen = false
-        createPreviewVisible = false
+        activeTab = "jails"
     }
 
     function invalidateCreatePlan() {
@@ -1543,6 +1543,7 @@ ShellRoot {
             color: root.palette.panelBackground
 
             Column {
+                visible: root.activeTab === "jails"
                 anchors.fill: parent
                 anchors.margins: 18
                 spacing: 14
@@ -1638,7 +1639,7 @@ ShellRoot {
                             }
 
                             Column {
-                                width: parent.width - 280
+                                width: parent.width - 352
                                 spacing: 6
 
                                 Text {
@@ -1662,10 +1663,28 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                width: 88
+                                height: 38
+                                radius: 7
+                                color: Qt.alpha(root.palette.accent, 0.18)
+                                border.width: 1
+                                border.color: root.palette.accent
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Jails"
+                                    color: root.palette.accent
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                }
+                            }
+
+                            Rectangle {
                                 id: headerCreatePreviewButton
                                 property bool tooltipVisible: false
 
-                                width: 140
+                                width: 116
                                 height: 38
                                 z: tooltipVisible ? 30 : 0
                                 radius: 7
@@ -1676,7 +1695,7 @@ ShellRoot {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Create a Service"
+                                    text: "Create"
                                     color: root.palette.primaryText
                                     font.pixelSize: 13
                                     font.bold: true
@@ -2973,27 +2992,18 @@ ShellRoot {
             }
 
             Rectangle {
-                visible: root.createPreviewVisible
+                visible: root.activeTab === "create"
                 anchors.fill: parent
                 z: 20
-                color: Qt.alpha(root.palette.panelBackground, 0.92)
-
-                MouseArea {
-                    anchors.fill: parent
-                }
+                color: root.palette.panelBackground
 
                 Rectangle {
-                    width: 960
-                    height: 680
-                    anchors.centerIn: parent
-                    radius: 10
-                    color: root.palette.cardBackground
-                    border.width: 1
-                    border.color: root.palette.accent
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    color: root.palette.panelBackground
 
                     Column {
                         anchors.fill: parent
-                        anchors.margins: 16
                         spacing: 12
 
                         Row {
@@ -3002,7 +3012,7 @@ ShellRoot {
                             spacing: 12
 
                             Column {
-                                width: parent.width - 54
+                                width: parent.width - 228
                                 spacing: 2
 
                                 Text {
@@ -3023,18 +3033,18 @@ ShellRoot {
                             }
 
                             Rectangle {
-                                width: 42
+                                width: 88
                                 height: 34
                                 radius: 7
-                                color: closePreviewMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                color: closePreviewMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
                                 border.width: 1
                                 border.color: root.palette.panelBorder
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "×"
+                                    text: "Jails"
                                     color: root.palette.primaryText
-                                    font.pixelSize: 22
+                                    font.pixelSize: 13
                                     font.bold: true
                                 }
 
@@ -3045,6 +3055,23 @@ ShellRoot {
                                     enabled: !root.wizardBusy
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: root.closeCreatePreview()
+                                }
+                            }
+
+                            Rectangle {
+                                width: 116
+                                height: 34
+                                radius: 7
+                                color: Qt.alpha(root.palette.accent, 0.18)
+                                border.width: 1
+                                border.color: root.palette.accent
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Create"
+                                    color: root.palette.accent
+                                    font.pixelSize: 13
+                                    font.bold: true
                                 }
                             }
                         }

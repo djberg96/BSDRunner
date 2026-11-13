@@ -78,6 +78,14 @@ grep -F 'candidate = presetId + "_" + suffix' "$jails_qml" >/dev/null || \
 grep -F 'if (presetId === "blank")' "$jails_qml" >/dev/null || \
     fail "blank starters should require the user to supply a name"
 pass "starter names are preset-aware and blank jails remain unnamed"
+grep -F 'property string activeTab: "jails"' "$jails_qml" >/dev/null || \
+    fail "the Jails UI should use extensible in-window tab state"
+grep -F 'visible: root.activeTab === "create"' "$jails_qml" >/dev/null || \
+    fail "the creation workflow should replace the inventory inside the same window"
+if grep -F 'createPreviewVisible' "$jails_qml" >/dev/null; then
+    fail "the creation workflow should not use the former modal visibility state"
+fi
+pass "service creation uses the in-window Create tab"
 
 demo_output="$test_root/demo.json"
 BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
