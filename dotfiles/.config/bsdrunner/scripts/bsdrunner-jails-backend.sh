@@ -188,17 +188,27 @@ blackship_read_json_privileged() {
     run_privileged blackship --config "$blackship_manifest" --format json "$@" 2>/dev/null
 }
 
+blackship_rctl_enabled() {
+    if [ "$test_mode" = 1 ]; then
+        [ "${BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED:-1}" = 1 ]
+        return
+    fi
+    [ "$(sysctl -n kern.racct.enable 2>/dev/null || printf '0')" = 1 ]
+}
+
 blackship_snapshot_json() {
     blackship_status_values
     manifest_exists=false
     [ -r "$blackship_manifest" ] && manifest_exists=true
 
     recommended_address="$(blackship_recommended_address 2>/dev/null || true)"
-    printf '{"available":%s,"compatible":%s,"minimum_version":"%s","version":"%s","output_schema_version":%s,"manifest":"%s","configured":%s,"recommended_address":"%s","missing_operations":' \
+    rctl_enabled=false
+    blackship_rctl_enabled && rctl_enabled=true
+    printf '{"available":%s,"compatible":%s,"minimum_version":"%s","version":"%s","output_schema_version":%s,"manifest":"%s","configured":%s,"recommended_address":"%s","rctl_enabled":%s,"missing_operations":' \
         "$blackship_available" "$blackship_compatible" "$blackship_min_version" \
         "$(printf '%s' "$blackship_version" | json_escape)" \
         "${blackship_schema:-null}" \
-        "$(printf '%s' "$blackship_manifest" | json_escape)" "$manifest_exists" "$(printf '%s' "$recommended_address" | json_escape)"
+        "$(printf '%s' "$blackship_manifest" | json_escape)" "$manifest_exists" "$(printf '%s' "$recommended_address" | json_escape)" "$rctl_enabled"
     blackship_missing_operations_json
 
     printf ',"capabilities":'
@@ -225,7 +235,7 @@ blackship_snapshot_json() {
             }
             BEGIN { printf "["; first = 1; name = ""; tags = "" }
             /^\[\[jails\]\]/ { flush(); name = ""; tags = ""; in_jail = 1; next }
-            in_jail && /^[[:space:]]*name[[:space:]]*=/ { name = $0; sub(/^[^=]*=[[:space:]]*"/, "", name); sub(/"[[:space:]]*$/, "", name) }
+            in_jail && name == "" && /^[[:space:]]*name[[:space:]]*=/ { name = $0; sub(/^[^=]*=[[:space:]]*"/, "", name); sub(/"[[:space:]]*$/, "", name) }
             in_jail && /^[[:space:]]*tags[[:space:]]*=/ { tags = $0 }
             END { flush(); printf "]" }
         ' "$blackship_manifest"
@@ -2489,6 +2499,84 @@ blackship_manifest_has_name() {
     ' "$blackship_manifest"
 }
 
+blackship_manifest_entry_values() {
+    requested="$1"
+    [ -r "$blackship_manifest" ] || return 1
+    awk -v requested="$requested" '
+        function value(line) {
+            sub(/^[^=]*=[[:space:]]*"/, "", line)
+            sub(/"[[:space:]]*$/, "", line)
+            return line
+        }
+        function emit() {
+            if (!emitted && name == requested) {
+                print release "|" address "|" build "|" tags
+                emitted = 1
+            }
+        }
+        /^\[\[jails\]\]/ {
+            emit()
+            in_jail = 1
+            name = release = address = build = tags = ""
+            next
+        }
+        in_jail && name == "" && /^[[:space:]]*name[[:space:]]*=/ { name = value($0); next }
+        in_jail && release == "" && /^[[:space:]]*release[[:space:]]*=/ { release = value($0); next }
+        in_jail && build == "" && /^[[:space:]]*build[[:space:]]*=/ { build = value($0); next }
+        in_jail && address == "" && /^[[:space:]]*ip_cidr[[:space:]]*=/ { address = value($0); next }
+        in_jail && tags == "" && /^[[:space:]]*tags[[:space:]]*=/ { tags = $0; next }
+        END { emit() }
+    ' "$blackship_manifest"
+}
+
+blackship_manifest_entry_matches() {
+    requested="$1"
+    preset="$2"
+    release="$3"
+    address="$4"
+    expected_context="$blackship_context_dir/$requested"
+    values="$(blackship_manifest_entry_values "$requested" 2>/dev/null || true)"
+    [ -n "$values" ] || return 1
+    old_ifs="$IFS"
+    IFS='|'
+    set -- $values
+    IFS="$old_ifs"
+    [ "${1:-}" = "$release" ] && [ "${2:-}" = "$address" ] && [ "${3:-}" = "$expected_context" ] || return 1
+    printf '%s\n' "${4:-}" | grep -F '"bsdrunner"' >/dev/null 2>&1 &&
+        printf '%s\n' "${4:-}" | grep -F '"'"$preset"'"' >/dev/null 2>&1
+}
+
+blackship_remove_optional_resources() {
+    requested="$1"
+    candidate="$2"
+    awk -v requested="$requested" '
+        function setting(line) {
+            sub(/^[^=]*=[[:space:]]*"/, "", line)
+            sub(/"[[:space:]]*$/, "", line)
+            return line
+        }
+        /^\[\[jails\]\]/ {
+            current_name = ""
+            target = 0
+            skipping = 0
+            print
+            next
+        }
+        current_name == "" && /^[[:space:]]*name[[:space:]]*=/ {
+            current_name = setting($0)
+            target = current_name == requested
+            print
+            next
+        }
+        target && /^\[jails\.resources\][[:space:]]*$/ {
+            skipping = 1
+            next
+        }
+        skipping && /^\[/ { skipping = 0 }
+        !skipping { print }
+    ' "$blackship_manifest" >"$candidate"
+}
+
 blackship_manifest_subnet() {
     [ -r "$blackship_manifest" ] || return 1
     awk -v requested="$blackship_network_name" '
@@ -2781,6 +2869,7 @@ do_blackship_preset_preview() {
         host_release="$(host_release_value | awk 'NF { print; exit }')"
         release_is_host_compatible "$host_release" "$release" || { ready=false; notes="${notes}${notes:+ }The selected release is newer than the host."; }
         if [ "$preset" = ollama ]; then
+            blackship_rctl_enabled || { ready=false; notes="${notes}${notes:+ }Ollama requires RCTL for its mandatory memory limit. Enable kern.racct.enable=1 in /boot/loader.conf and reboot before creating it."; }
             physical="$(host_physical_memory)"
             [ "$physical" -ge 8589934592 ] 2>/dev/null || { ready=false; notes="${notes}${notes:+ }Ollama requires at least 8 GiB of host RAM."; }
             [ "$(uname -m 2>/dev/null || true)" = amd64 ] || { ready=false; notes="${notes}${notes:+ }The Ollama starter supports amd64 only."; }
@@ -2841,10 +2930,14 @@ do_blackship_preset_preview() {
             notes="${notes}${notes:+ }${preview_failure:-Blackship rejected the generated manifest, Jailfile, or dry-run plan.}"
         fi
     fi
-    printf '{"ok":true,"mutates":false,"backend":"blackship","ready":%s,"preset":"%s","label":"%s","description":"%s","inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","outbound_policy":"%s"},"packages":["%s"],"ports":["%s"],"private_by_default":true,"notes":["%s"],"commands":["blackship template validate %s/Jailfile","blackship --config %s check","blackship --config %s --format json armada --file %s up %s --dry-run","blackship --config %s --format json armada --file %s up %s","bsdrunner-pf-backend.sh jail-policy %s %s %s RESOLVER"]}\n' \
+    requires_rctl=false
+    [ "$preset" = ollama ] && requires_rctl=true
+    rctl_enabled=false
+    blackship_rctl_enabled && rctl_enabled=true
+    printf '{"ok":true,"mutates":false,"backend":"blackship","ready":%s,"preset":"%s","label":"%s","description":"%s","inputs":{"name":"%s","release":"%s","address":"%s","autostart":"%s","outbound_policy":"%s"},"packages":["%s"],"ports":["%s"],"private_by_default":true,"requirements":{"rctl":%s,"rctl_enabled":%s},"notes":["%s"],"commands":["blackship template validate %s/Jailfile","blackship --config %s check","blackship --config %s --format json armada --file %s up %s --dry-run","blackship --config %s --format json armada --file %s up %s","bsdrunner-pf-backend.sh jail-policy %s %s %s RESOLVER"]}\n' \
         "$ready" "$preset" "$(printf '%s' "$label" | json_escape)" "$(printf '%s' "$description" | json_escape)" \
         "$(printf '%s' "$name" | json_escape)" "$release" "$address" "$autostart" "$outbound_policy" \
-        "$(printf '%s' "$package" | json_escape)" "$port" "$(printf '%s' "$notes" | json_escape)" \
+        "$(printf '%s' "$package" | json_escape)" "$port" "$requires_rctl" "$rctl_enabled" "$(printf '%s' "$notes" | json_escape)" \
         "$(printf '%s' "$blackship_context_dir/$name" | json_escape)" "$(printf '%s' "$blackship_manifest" | json_escape)" \
         "$(printf '%s' "$blackship_manifest" | json_escape)" "$(printf '%s' "$blackship_manifest" | json_escape)" "$name" \
         "$(printf '%s' "$blackship_manifest" | json_escape)" "$(printf '%s' "$blackship_manifest" | json_escape)" "$name" "$name" "${address%%/*}" "$outbound_policy"
@@ -2906,11 +2999,6 @@ EOF
         nginx)
             cat >>"$candidate" <<'EOF'
 
-[jails.resources]
-memory = "512m"
-cpu = "100"
-maxproc = 128
-
 [jails.healthcheck]
 enabled = true
 [[jails.healthcheck.checks]]
@@ -2921,11 +3009,6 @@ EOF
             ;;
         postgres)
             cat >>"$candidate" <<'EOF'
-
-[jails.resources]
-memory = "2g"
-cpu = "200"
-maxproc = 256
 
 [jails.healthcheck]
 enabled = true
@@ -2963,7 +3046,10 @@ EOF
 blackship_create_postgres_credentials() {
     name="$1"
     password="$(openssl rand -hex 18)"
-    sql="CREATE ROLE app LOGIN PASSWORD '${password}'; CREATE DATABASE appdb OWNER app;"
+    sql="SELECT 'CREATE ROLE app LOGIN' WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'app') \\gexec
+ALTER ROLE app WITH LOGIN PASSWORD '${password}';
+SELECT 'CREATE DATABASE appdb OWNER app' WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_database WHERE datname = 'appdb') \\gexec
+ALTER DATABASE appdb OWNER TO app;"
     if printf '%s\n' "$sql" | run_privileged blackship --config "$blackship_manifest" --non-interactive exec "$name" -- /usr/bin/su -l postgres -c '/usr/local/bin/psql postgres' >/dev/null 2>&1; then
         printf '%s\n' "$password"
         return 0
@@ -2971,9 +3057,68 @@ blackship_create_postgres_credentials() {
     return 1
 }
 
+blackship_finish_preset_setup() {
+    name="$1"
+    preset="$2"
+    address="$3"
+    outbound_policy="$4"
+    build_output="$5"
+    success_message="$6"
+    policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" 2>&1 || true)"
+    credentials=""
+    credential_note=""
+    if [ "$preset" = postgres ]; then
+        credentials="$(blackship_create_postgres_credentials "$name" 2>/dev/null || true)"
+        if [ -n "$credentials" ]; then
+            credential_note="\nDatabase: appdb\nUser: app\nPassword (shown once): $credentials"
+        else
+            credential_note="\nPostgreSQL is running, but appdb credentials need attention. Use Reset database password."
+        fi
+    fi
+    write_last_result success "$success_message"
+    emit_action_result true "$success_message" "$build_output\n$policy_output$credential_note"
+}
+
+do_blackship_preset_retry() {
+    preset="$1" name="$2" release="$3" address="$4" outbound_policy="$5"
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.4.2 or newer first."; exit 1; }
+    blackship_manifest_entry_matches "$name" "$preset" "$release" "$address" || {
+        emit_action_result false "The existing jail cannot be safely retried." "Its release, address, starter tag, or managed context differs from this creation plan."
+        exit 1
+    }
+    if [ "$preset" = ollama ] && ! blackship_rctl_enabled; then
+        emit_action_result false "Ollama requires RCTL before creation." "Set kern.racct.enable=1 in /boot/loader.conf, reboot, then retry. No jail was started."
+        exit 1
+    fi
+    if [ "$preset" = nginx ] || [ "$preset" = postgres ]; then
+        candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-retry.XXXXXX")"
+        blackship_remove_optional_resources "$name" "$candidate"
+        if ! cmp -s "$candidate" "$blackship_manifest"; then
+            blackship_check_candidate "$candidate" || { rm -f "$candidate"; emit_action_result false "Blackship rejected the repaired manifest." "The existing manifest was left unchanged."; exit 1; }
+            if ! install_managed_file "$candidate" "$blackship_manifest"; then
+                rm -f "$candidate"
+                emit_action_result false "Unable to repair the incomplete jail." "Privilege escalation was denied; the existing manifest was left unchanged."
+                exit 1
+            fi
+        fi
+        rm -f "$candidate"
+    fi
+    if ! build_output="$(run_privileged blackship --config "$blackship_manifest" --format json --non-interactive armada --file "$blackship_manifest" up "$name" 2>&1)"; then
+        write_last_result warning "Setup remains incomplete for ${name}."
+        emit_action_result false "Setup remains incomplete for ${name}." "$build_output"
+        exit 1
+    fi
+    blackship_finish_preset_setup "$name" "$preset" "$address" "$outbound_policy" "$build_output" "Completed setup for ${name}."
+}
+
 do_blackship_preset_create() {
     preset="${1:-}" name="${2:-}" release="${3:-}" address="${4:-}" autostart="${5:-no}" confirmation="${6:-}" outbound_policy="${7:-internet-only}"
     [ "$confirmation" = "$name" ] || { emit_action_result false "Jail confirmation did not match." "Type the jail name exactly."; exit 1; }
+    if blackship_manifest_has_name "$name"; then
+        do_blackship_preset_retry "$preset" "$name" "$release" "$address" "$outbound_policy"
+        return
+    fi
     preview="$(do_blackship_preset_preview "$preset" "$name" "$release" "$address" "$autostart" "$outbound_policy")"
     printf '%s\n' "$preview" | grep -q '"ready":true' || { emit_action_result false "The Blackship starter is not ready." "$preview"; exit 1; }
     network_values="$(blackship_network_values "$address")"; subnet="${network_values%%|*}"
@@ -3012,19 +3157,7 @@ do_blackship_preset_create() {
         emit_action_result false "Setup incomplete for ${name}." "The manifest entry and completed work were retained. Retry creation or open a console after starting the jail.\n$build_output"
         exit 1
     fi
-    policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" 2>&1 || true)"
-    credentials=""
-    credential_note=""
-    if [ "$preset" = postgres ]; then
-        credentials="$(blackship_create_postgres_credentials "$name" 2>/dev/null || true)"
-        if [ -n "$credentials" ]; then
-            credential_note="\nDatabase: appdb\nUser: app\nPassword (shown once): $credentials"
-        else
-            credential_note="\nPostgreSQL is running, but appdb credentials need attention. Use Reset database password."
-        fi
-    fi
-    write_last_result success "Created ${name} with Blackship."
-    emit_action_result true "Created ${name} with Blackship." "$build_output\n$policy_output$credential_note"
+    blackship_finish_preset_setup "$name" "$preset" "$address" "$outbound_policy" "$build_output" "Created ${name} with Blackship."
 }
 
 do_blackship_postgres_reset() {
@@ -3032,9 +3165,7 @@ do_blackship_postgres_reset() {
     valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
     [ "$confirmation" = "$name" ] || { emit_action_result false "Database confirmation did not match." "Type the jail name exactly."; exit 1; }
     blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
-    password="$(openssl rand -hex 18)"
-    sql="ALTER ROLE app WITH PASSWORD '${password}';"
-    if printf '%s\n' "$sql" | run_privileged blackship --config "$blackship_manifest" --non-interactive exec "$name" -- /usr/bin/su -l postgres -c '/usr/local/bin/psql postgres' >/dev/null 2>&1; then
+    if password="$(blackship_create_postgres_credentials "$name")"; then
         emit_action_result true "Reset the app database password." "Database: appdb\nUser: app\nPassword (shown once): $password"
     else
         emit_action_result false "Unable to reset the app database password." "Confirm that this is a running PostgreSQL starter jail."

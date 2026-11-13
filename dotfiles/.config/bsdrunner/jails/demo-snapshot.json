@@ -18,6 +18,7 @@
   "bastille_setup": true,
   "storage": {
     "configured": true,
+    "rctl_enabled": true,
     "initialized": true,
     "prefix": "/usr/local/bastille",
     "zfs_pool": "zroot",

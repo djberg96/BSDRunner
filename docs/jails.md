@@ -55,6 +55,8 @@ The snapshot action returns JSON with:
   `network list`, `releases`, `ports`, and `stats`; `ps --host` supplies passive
   health and effective autostart summaries without launching checks
 - compatibility status requiring Blackship `>= 0.4.2` and output schema v1
+- host RCTL readiness, used only by starters whose safety requirements need an
+  enforceable resource cap
 
 - tool detection for `jls`, `jail`, `service`, `bastille`, and `mdo`
 - `jail_enable` and `bastille_enable` service settings when `sysrc` exists
@@ -103,13 +105,21 @@ The starter choices are:
   It requires at least 8 GiB RAM and 20 GiB free storage, downloads no models,
   and does not support GPU passthrough.
 
+RCTL is optional for Blackship and for the Blank, nginx, and PostgreSQL
+starters. Those starters do not emit `[jails.resources]` blocks. Ollama's
+required 75%-of-host-RAM cap does require RCTL; when `kern.racct.enable=0`, its
+review is blocked before creation and explains that the boot tunable and a
+reboot are required.
+
 Autostart defaults off. Opting in adds an `autostart` manifest tag. The small
 `bsdrunner_blackship` rc service is enabled only while at least one managed jail
 has that tag and runs Blackship's native `autostart` reconciliation at boot.
 Tagged jails and their dependencies start in order; other project jails remain
 stopped. If provisioning fails after the manifest entry is installed,
 BSDRunner retains the completed work and reports **Setup incomplete** so the user
-can retry or open a console.
+can retry or open a console. Retrying the same confirmed creation plan resumes
+the retained managed entry. It also removes obsolete nginx/PostgreSQL resource
+blocks created by earlier BSDRunner builds before asking Blackship to continue.
 
 The remainder of this document describes the retained Bastille/native compatibility
 path for existing jails.

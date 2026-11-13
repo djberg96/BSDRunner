@@ -144,7 +144,7 @@ ShellRoot {
         {"id": "blank", "label": "Blank FreeBSD", "detail": "Learn or build your own service"},
         {"id": "nginx", "label": "nginx web", "detail": "Small private welcome site"},
         {"id": "postgres", "label": "PostgreSQL", "detail": "Private app database"},
-        {"id": "ollama", "label": "Ollama • Experimental", "detail": "CPU-only local AI API"}
+        {"id": "ollama", "label": "Ollama • Experimental", "detail": blackshipInfo.rctl_enabled === false ? "Requires RCTL + reboot" : "CPU-only local AI API"}
     ]
     readonly property int wizardCaptionFontSize: 12
     readonly property int wizardBodyFontSize: 13
@@ -4065,7 +4065,7 @@ ShellRoot {
 
                                         Text {
                                             anchors.centerIn: parent
-                                            text: root.demoMode ? "Creation Disabled in Demo" : root.creationStage === "complete" ? "Jail Created" : root.creationRunning ? (root.creationStage === "bootstrapping" ? "Bootstrapping Release…" : "Creating Jail…") : "Create Jail"
+                                            text: root.demoMode ? "Creation Disabled in Demo" : root.creationStage === "complete" ? "Jail Created" : root.creationRunning ? (root.creationStage === "bootstrapping" ? "Bootstrapping Release…" : "Creating Jail…") : root.creationStage === "failed" ? "Retry Setup" : "Create Jail"
                                             color: createJailMouse.enabled ? root.palette.success : root.palette.mutedText
                                             font.pixelSize: root.wizardControlFontSize
                                             font.bold: true

@@ -53,6 +53,8 @@ run_backend() {
     BSDRUNNER_BLACKSHIP_FIXTURE_VERSION="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.4.2}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA="${BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA:-1}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL="${BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL:-0}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED="${BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED:-1}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL="${BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_REJECT="${BSDRUNNER_BLACKSHIP_FIXTURE_REJECT:-0}" \
     BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="${BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE:-}" \
     BSDRUNNER_UNAME_SYSTEM="${BSDRUNNER_UNAME_SYSTEM:-FreeBSD}" \
@@ -648,14 +650,22 @@ pass "Blackship project setup validates and installs the managed project"
 blackship_preview="$test_root/blackship-preset-preview.json"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-preset-preview nginx web 15.0-RELEASE 10.44.0.20/24 no internet-only >"$blackship_preview"
 assert_json "$blackship_preview" \
-    '.ok == true and .backend == "blackship" and .ready == true and .preset == "nginx" and .packages == ["nginx-lite"] and .ports == ["80/tcp"] and .private_by_default == true and .inputs.autostart == "no"' \
+    '.ok == true and .backend == "blackship" and .ready == true and .preset == "nginx" and .packages == ["nginx-lite"] and .ports == ["80/tcp"] and .private_by_default == true and .inputs.autostart == "no" and .requirements.rctl == false' \
     "nginx starter preview should be private and autostart-off by default"
 grep -F ' --format json armada --file ' "$command_log" | grep -F ' up web --dry-run' >/dev/null || fail "starter previews should ask Blackship for a structured dry-run plan"
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-preset-preview ollama ai 15.0-RELEASE 10.44.0.22/24 no internet-only >"$test_root/blackship-ollama.json"
 assert_json "$test_root/blackship-ollama.json" \
-    '.ok == true and .ready == true and .preset == "ollama" and .packages == ["ollama"] and .ports == ["11434/tcp"]' \
+    '.ok == true and .ready == true and .preset == "ollama" and .packages == ["ollama"] and .ports == ["11434/tcp"] and .requirements == {"rctl":true,"rctl_enabled":true}' \
     "Ollama starter should be available on qualifying amd64 hosts"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED=0 run_backend blackship-preset-preview postgres no-rctl-db 15.0-RELEASE 10.44.0.24/24 no internet-only >"$test_root/blackship-postgres-no-rctl.json"
+assert_json "$test_root/blackship-postgres-no-rctl.json" \
+    '.ok == true and .ready == true and .preset == "postgres" and .requirements == {"rctl":false,"rctl_enabled":false}' \
+    "PostgreSQL should remain available when optional RCTL is disabled"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED=0 run_backend blackship-preset-preview ollama no-rctl-ai 15.0-RELEASE 10.44.0.25/24 no internet-only >"$test_root/blackship-ollama-no-rctl.json"
+assert_json "$test_root/blackship-ollama-no-rctl.json" \
+    '.ok == true and .ready == false and .requirements == {"rctl":true,"rctl_enabled":false} and any(.notes[]; contains("requires RCTL"))' \
+    "Ollama should be blocked before creation when its required RCTL cap cannot be enforced"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_JAILS_TEST_PHYSMEM=4294967296 run_backend blackship-preset-preview ollama small-ai 15.0-RELEASE 10.44.0.23/24 no internet-only >"$test_root/blackship-ollama-small.json"
 assert_json "$test_root/blackship-ollama-small.json" \
     '.ok == true and .ready == false and any(.notes[]; contains("8 GiB"))' \
@@ -678,6 +688,38 @@ assert_json "$blackship_create" \
 grep -F 'blackship template validate ' "$command_log" >/dev/null || fail "generated Jailfiles should be validated by Blackship"
 grep -F 'blackship --config ' "$command_log" | grep -F ' --format json --non-interactive armada --file ' | grep -F ' up web' >/dev/null || fail "starter creation should use Blackship Armada JSON"
 grep -F 'tags = ["bsdrunner", "nginx"]' "$state_dir/blackship.toml" >/dev/null || fail "autostart should remain off unless selected"
+if grep -F '[jails.resources]' "$state_dir/blackship.toml" >/dev/null; then fail "nginx should not make optional RCTL a host requirement"; fi
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$blackship_snapshot"
+assert_json "$blackship_snapshot" \
+    '.blackship.rctl_enabled == true and .blackship.managed[0].name == "web" and .blackship.managed[0].preset == "nginx"' \
+    "managed metadata should retain the jail name instead of a nested health-check name"
+
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL=1 run_backend blackship-preset-create postgres retrydb 15.0-RELEASE 10.44.0.24/24 no retrydb internet-only >"$test_root/blackship-retry-failed.json"; then
+    fail "the simulated Armada failure should retain an incomplete PostgreSQL jail"
+fi
+assert_json "$test_root/blackship-retry-failed.json" \
+    '.ok == false and .message == "Setup incomplete for retrydb."' \
+    "partial starter failures should remain explicit"
+awk '
+    /^\[\[jails\]\]/ { target = 0 }
+    target && /^\[jails.healthcheck\]$/ {
+        print "[jails.resources]"
+        print "memory = \"2g\""
+        print "cpu = \"200\""
+        print "maxproc = 256"
+        print ""
+    }
+    /^[[:space:]]*name[[:space:]]*=[[:space:]]*"retrydb"[[:space:]]*$/ { target = 1 }
+    { print }
+' "$state_dir/blackship.toml" >"$state_dir/blackship-retry.toml"
+mv "$state_dir/blackship-retry.toml" "$state_dir/blackship.toml"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-preset-create postgres retrydb 15.0-RELEASE 10.44.0.24/24 no retrydb internet-only >"$test_root/blackship-retry.json"
+assert_json "$test_root/blackship-retry.json" \
+    '.ok == true and .message == "Completed setup for retrydb." and (.details | contains("Password (shown once):"))' \
+    "retry should resume an incomplete managed starter"
+if grep -A18 'name = "retrydb"' "$state_dir/blackship.toml" | grep -F '[jails.resources]' >/dev/null; then
+    fail "retry should remove the obsolete optional RCTL block"
+fi
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-autostart web yes web >"$test_root/blackship-autostart.json"
 assert_json "$test_root/blackship-autostart.json" \
@@ -696,6 +738,10 @@ assert_json "$test_root/blackship-postgres.json" \
 generated_password="$(jq -r '.details | split("Password (shown once): ")[1] | split("\\n")[0]' "$test_root/blackship-postgres.json")"
 [ -n "$generated_password" ] && [ "$generated_password" != null ] || fail "PostgreSQL starter should generate a password"
 if grep -R -F "$generated_password" "$state_dir" >/dev/null 2>&1; then fail "generated database passwords must not persist in BSDRunner state"; fi
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-postgres-reset database database >"$test_root/blackship-postgres-reset.json"
+assert_json "$test_root/blackship-postgres-reset.json" \
+    '.ok == true and .message == "Reset the app database password." and (.details | contains("Database: appdb")) and (.details | contains("Password (shown once):"))' \
+    "PostgreSQL recovery should ensure missing app credentials before resetting them"
 
 : >"$command_log"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend restart web blackship >"$test_root/blackship-lifecycle.json"
