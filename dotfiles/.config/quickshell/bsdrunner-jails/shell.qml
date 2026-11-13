@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import QtQuick.Controls
 
 ShellRoot {
     id: root
@@ -387,6 +388,18 @@ ShellRoot {
         if (jail.backend === "bastille")
             return "Managed by Bastille"
         return "External jail"
+    }
+
+    function managerLabel(jail) {
+        if (!jail)
+            return "None"
+        if (jail.backend === "blackship")
+            return "Blackship"
+        if (jail.backend === "bastille")
+            return "Bastille"
+        if (jail.backend === "native")
+            return "Native"
+        return "External"
     }
 
     function stateTone(jail) {
@@ -2014,7 +2027,7 @@ ShellRoot {
 
                                 Repeater {
                                     model: [
-                                        {"label": "Manager", "value": root.selectedJail ? root.backendLabel(root.selectedJail) : "None"},
+                                        {"label": "Manager", "value": root.managerLabel(root.selectedJail)},
                                         {"label": "JID", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.jid) : "None"},
                                         {"label": "Runtime name", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.full_name || root.selectedJail.name) : "None"},
                                         {"label": "Hostname", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.hostname) : "None"},
@@ -2034,6 +2047,10 @@ ShellRoot {
                                         color: root.palette.panelBackground
                                         border.width: 1
                                         border.color: root.palette.frameBorder
+                                        ToolTip.visible: detailValueMouse.containsMouse
+                                        ToolTip.text: String(detailCell.modelData.value)
+                                        ToolTip.delay: 350
+                                        ToolTip.timeout: 10000
 
                                         Column {
                                             anchors.fill: parent
@@ -2056,6 +2073,13 @@ ShellRoot {
                                                 font.pixelSize: 13
                                                 elide: Text.ElideRight
                                             }
+                                        }
+
+                                        MouseArea {
+                                            id: detailValueMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            acceptedButtons: Qt.NoButton
                                         }
                                     }
                                 }
@@ -3202,7 +3226,7 @@ ShellRoot {
 
                                     Repeater {
                                         model: [
-                                            {"label": "Manager", "value": root.selectedJail ? root.backendLabel(root.selectedJail) : "None"},
+                                            {"label": "Manager", "value": root.managerLabel(root.selectedJail)},
                                             {"label": "JID", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.jid) : "None"},
                                             {"label": "Runtime name", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.full_name || root.selectedJail.name) : "None"},
                                             {"label": "Hostname", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.hostname) : "None"},
@@ -3222,6 +3246,10 @@ ShellRoot {
                                             color: root.palette.panelBackground
                                             border.width: 1
                                             border.color: root.palette.frameBorder
+                                            ToolTip.visible: compactDetailValueMouse.containsMouse
+                                            ToolTip.text: String(compactDetailCell.modelData.value)
+                                            ToolTip.delay: 350
+                                            ToolTip.timeout: 10000
 
                                             Column {
                                                 anchors.fill: parent
@@ -3244,6 +3272,13 @@ ShellRoot {
                                                     font.pixelSize: 13
                                                     elide: Text.ElideRight
                                                 }
+                                            }
+
+                                            MouseArea {
+                                                id: compactDetailValueMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                acceptedButtons: Qt.NoButton
                                             }
                                         }
                                     }

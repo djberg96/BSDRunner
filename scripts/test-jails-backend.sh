@@ -97,6 +97,11 @@ grep -F 'id: compactTechnicalMouse' "$jails_qml" >/dev/null || \
 grep -F 'id: compactTechnicalDetails' "$jails_qml" >/dev/null || \
     fail "the collapsed beginner map area should hold expanded technical details"
 pass "hiding the beginner map replaces it with jail controls"
+grep -F 'function managerLabel(jail)' "$jails_qml" >/dev/null || \
+    fail "technical details should use concise manager names"
+[ "$(grep -Fc 'ToolTip.text: String(' "$jails_qml")" -ge 2 ] || \
+    fail "technical detail values should expose their full text on hover"
+pass "technical details remain readable in both layouts"
 [ "$(grep -Fc 'visible: root.selectedJail && root.selectedJail.backend === "bastille"' "$jails_qml")" -ge 2 ] || \
     fail "legacy simple-service controls should be hidden for Blackship jails"
 pass "legacy simple-service controls stay out of Blackship jail details"
