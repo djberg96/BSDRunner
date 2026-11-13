@@ -2392,6 +2392,7 @@ ShellRoot {
 
                             Text {
                                 width: parent.width
+                                visible: root.selectedJail && root.selectedJail.backend === "bastille"
                                 text: "Simple services"
                                 color: root.palette.accent
                                 font.pixelSize: 14
@@ -2402,6 +2403,7 @@ ShellRoot {
                                 id: simpleServiceCard
 
                                 width: parent.width
+                                visible: root.selectedJail && root.selectedJail.backend === "bastille"
                                 height: !root.selectedSimpleService ? 92 : !root.selectedSimpleService.status_known ? 122 : root.selectedSimpleService.installed ? 202 : 154
                                 radius: 8
                                 color: root.palette.panelBackground

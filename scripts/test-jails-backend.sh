@@ -88,6 +88,9 @@ if grep -F 'createPreviewVisible' "$jails_qml" >/dev/null; then
     fail "the creation workflow should not use the former modal visibility state"
 fi
 pass "service creation uses the in-window Create tab"
+[ "$(grep -Fc 'visible: root.selectedJail && root.selectedJail.backend === "bastille"' "$jails_qml")" -ge 2 ] || \
+    fail "legacy simple-service controls should be hidden for Blackship jails"
+pass "legacy simple-service controls stay out of Blackship jail details"
 
 demo_output="$test_root/demo.json"
 BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
