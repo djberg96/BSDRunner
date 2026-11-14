@@ -7,4 +7,5 @@ set -eu
     printf ' %s' "$@"
     printf '\n'
 } >>"$BSDRUNNER_JAILS_TEST_LOG"
+[ "${BSDRUNNER_JAILS_TEST_MDO_DENY:-0}" != 1 ] || exit 1
 exec "$@"

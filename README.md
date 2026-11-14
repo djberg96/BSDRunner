@@ -201,25 +201,22 @@ See `docs/zfs.md` for the backend commands and scope.
 
 ## Jails
 
-BSDRunner includes a beginner-focused FreeBSD jails surface. It lists native
-jails, detects Bastille when installed, explains the storage/userland/network/
-config model, and exposes guarded lifecycle actions for existing jails.
+BSDRunner includes a beginner-focused FreeBSD jails surface. New jails are
+Blackship 0.4.2+ managed services; existing Bastille and native jails remain
+listed and keep their guarded lifecycle actions.
 
 ```sh
 sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
 ```
 
-Use `--demo` to explore representative native and Bastille jail states without a
-configured FreeBSD jail host. The UI also includes a host-aware, read-only
-Bastille plan plus a guarded **Create Basic Jail** wizard that follows Storage,
-Userland, Network, Config, and Lifecycle. The Storage step can select an
-existing ZFS pool and configure Bastille's conventional `POOL/bastille`
-hierarchy. Userland offers the host-matched and bootstrapped FreeBSD releases,
-plus guarded Thick and Thin jail choices. The separate Network step recommends
-a route-safe jail address and,
-after typed confirmation, can create Bastille's loopback interface and add its
-NAT and anchors to BSDRunner's managed PF profile. See `docs/jails.md` for
-backend commands, fixture-backed tests, current scope, and the creation model.
+Use `--demo` to explore a healthy nginx service, stopped PostgreSQL service,
+experimental Ollama starter, and an external Bastille jail. The guarded
+**Create a Service Jail** wizard can install the pinned/verified Blackship
+binary, select `POOL/bsdrunner/blackship`, create a route-safe private network,
+and review Blank FreeBSD, nginx, PostgreSQL, or CPU-only Ollama starters. No
+inbound port is exposed automatically and autostart defaults off. See
+`docs/jails.md` for backend commands, fixture-backed tests, and the retained
+legacy compatibility path.
 
 ## Scope
 

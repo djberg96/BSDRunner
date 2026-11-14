@@ -8,7 +8,7 @@ set -eu
     printf '\n'
 } >>"$BSDRUNNER_JAILS_TEST_LOG"
 
-if [ "${1:-}" = "jail-network" ]; then
+if [ "${1:-}" = "jail-network" ] || [ "${1:-}" = "blackship-network" ]; then
     if [ -n "${BSDRUNNER_JAILS_TEST_PF_STATE:-}" ]; then
         : >"$BSDRUNNER_JAILS_TEST_PF_STATE"
     fi

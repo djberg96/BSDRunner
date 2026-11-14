@@ -1,0 +1,6 @@
+#!/bin/sh
+
+case "${1:-}" in
+    wlan0|bastille0|blackship0) exit 0 ;;
+    *) exit 1 ;;
+esac

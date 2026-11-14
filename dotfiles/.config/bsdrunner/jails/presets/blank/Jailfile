@@ -1,0 +1,2 @@
+FROM %%RELEASE%%
+LABEL name=bsdrunner-blank version=1 purpose=blank

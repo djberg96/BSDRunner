@@ -1,0 +1,9 @@
+FROM %%RELEASE%%
+LABEL name=bsdrunner-postgres version=1 purpose=database
+RUN pkg install -y %%POSTGRES_PACKAGE%%
+RUN sysrc postgresql_enable=YES
+RUN sysrc postgresql_data=/var/db/postgres/data%%POSTGRES_MAJOR%%
+RUN service postgresql oneinitdb
+RUN sed -i '' -e "s/^#listen_addresses = 'localhost'/listen_addresses = '*'/" /var/db/postgres/data%%POSTGRES_MAJOR%%/postgresql.conf
+RUN printf 'host all all %%NETWORK_CIDR%% scram-sha-256\n' >> /var/db/postgres/data%%POSTGRES_MAJOR%%/pg_hba.conf
+EXPOSE 5432/tcp

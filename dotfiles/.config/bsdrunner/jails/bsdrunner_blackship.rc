@@ -1,0 +1,26 @@
+#!/bin/sh
+# PROVIDE: bsdrunner_blackship
+# REQUIRE: LOGIN zfs pf
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="bsdrunner_blackship"
+rcvar="bsdrunner_blackship_enable"
+command="/usr/local/bin/blackship"
+start_cmd="bsdrunner_blackship_start"
+stop_cmd="bsdrunner_blackship_stop"
+
+bsdrunner_blackship_start()
+{
+    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive autostart
+}
+
+bsdrunner_blackship_stop()
+{
+    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive down --all
+}
+
+load_rc_config "$name"
+: ${bsdrunner_blackship_enable:="NO"}
+run_rc_command "$1"
