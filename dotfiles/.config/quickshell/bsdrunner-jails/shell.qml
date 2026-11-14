@@ -295,11 +295,25 @@ ShellRoot {
     function addJails(target, seen, source) {
         for (var i = 0; i < source.length; i += 1) {
             var jail = source[i]
-            var identity = jail.name || jail.hostname || jail.path || jail.jid
-            var key = identity ? "jail:" + identity : ""
-            if (!key || seen[key])
+            var identities = []
+            if (jail.name)
+                identities.push(jail.name)
+            if (jail.full_name && jail.full_name !== jail.name)
+                identities.push(jail.full_name)
+            if (identities.length === 0)
+                identities.push(jail.hostname || jail.path || jail.jid)
+            var duplicate = false
+            for (var keyIndex = 0; keyIndex < identities.length; keyIndex += 1) {
+                var candidateKey = identities[keyIndex] ? "jail:" + identities[keyIndex] : ""
+                if (candidateKey && seen[candidateKey]) {
+                    duplicate = true
+                    break
+                }
+            }
+            if (duplicate || identities.length === 0 || !identities[0])
                 continue
-            seen[key] = true
+            for (var aliasIndex = 0; aliasIndex < identities.length; aliasIndex += 1)
+                seen["jail:" + identities[aliasIndex]] = true
             target.push(jail)
         }
     }

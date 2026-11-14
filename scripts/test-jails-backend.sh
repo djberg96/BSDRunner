@@ -53,6 +53,7 @@ run_backend() {
     BSDRUNNER_BLACKSHIP_FIXTURE_VERSION="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.4.2}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA="${BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA:-1}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL="${BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL:-0}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE="${BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED="${BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED:-1}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL="${BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_REJECT="${BSDRUNNER_BLACKSHIP_FIXTURE_REJECT:-0}" \
@@ -109,6 +110,9 @@ grep -F '"blackship-manifest-view", root.selectedJailName' "$jails_qml" >/dev/nu
 grep -F 'readOnly: true' "$jails_qml" >/dev/null || \
     fail "the managed manifest viewer should be read-only"
 pass "the managed manifest opens in a read-only viewer"
+grep -F 'if (jail.full_name && jail.full_name !== jail.name)' "$jails_qml" >/dev/null || \
+    fail "the jail inventory should treat Blackship runtime names as aliases"
+pass "the jail inventory recognizes Blackship runtime-name aliases"
 grep -F "blackship --config '\$blackship_manifest' exec '\$name' -- /bin/sh" "$backend" >/dev/null || \
     fail "Blackship consoles should use an interactive shell instead of 0.4.2's broken console command"
 if grep -F "blackship --config '\$blackship_manifest' console '\$name'" "$backend" >/dev/null; then
@@ -674,7 +678,7 @@ if grep -F ' health' "$command_log" >/dev/null; then
 fi
 grep -F 'blackship --config ' "$command_log" | grep -F ' --format json ps --host' >/dev/null || fail "Blackship inventory should obtain passive health and autostart summaries from ps --host"
 grep -F -- '--non-interactive autostart' "$state_dir/bsdrunner_blackship" >/dev/null || fail "the managed boot service should use Blackship native autostart reconciliation"
-pass "Blackship project setup validates and installs the managed project"
+pass "Blackship project setup validates, installs, and deduplicates the managed project"
 
 : >"$command_log"
 blackship_preview="$test_root/blackship-preset-preview.json"
@@ -719,10 +723,16 @@ grep -F 'blackship template validate ' "$command_log" >/dev/null || fail "genera
 grep -F 'blackship --config ' "$command_log" | grep -F ' --format json --non-interactive armada --file ' | grep -F ' up web' >/dev/null || fail "starter creation should use Blackship Armada JSON"
 grep -F 'tags = ["bsdrunner", "nginx"]' "$state_dir/blackship.toml" >/dev/null || fail "autostart should remain off unless selected"
 if grep -F '[jails.resources]' "$state_dir/blackship.toml" >/dev/null; then fail "nginx should not make optional RCTL a host requirement"; fi
-BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$blackship_snapshot"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE=1 run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
     '.blackship.rctl_enabled == true and .blackship.managed[0].name == "web" and .blackship.managed[0].preset == "nginx"' \
     "managed metadata should retain the jail name instead of a nested health-check name"
+assert_json "$blackship_snapshot" \
+    '([.blackship.inventory.data.jails[].full_name] | index("bsdrunner-web")) != null' \
+    "fixture should report the managed Blackship runtime name"
+assert_json "$blackship_snapshot" \
+    '([.running[].name] | index("bsdrunner-web")) == null' \
+    "Blackship runtime jails should not also appear as native external jails"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view web >"$test_root/blackship-manifest.json"
 assert_json "$test_root/blackship-manifest.json" \
     '.ok == true and .schema_version == 2 and (.path | endswith("/blackship.toml")) and (.content | contains("name = \"web\""))' \

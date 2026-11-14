@@ -767,13 +767,46 @@ emit_action_result() {
 }
 
 running_jails_json() {
+    blackship_snapshot="${1:-}"
     if ! command -v jls >/dev/null 2>&1; then
         printf '[]'
         return
     fi
 
+    managed_runtime_names=""
+    if command -v jq >/dev/null 2>&1 && valid_json_or_empty "$blackship_snapshot"; then
+        managed_runtime_names="$(printf '%s\n' "$blackship_snapshot" | jq -r '
+            .inventory.data.jails[]?
+            | select(.managed == true)
+            | .full_name // empty
+            | select(type == "string" and length > 0)
+        ' 2>/dev/null || true)"
+    fi
+    if [ -r "$blackship_manifest" ]; then
+        manifest_runtime_names="$(awk -v project="$blackship_project" '
+            /^\[\[jails\]\]/ { in_jail = 1; found_name = 0; next }
+            in_jail && !found_name && /^[[:space:]]*name[[:space:]]*=/ {
+                name = $0
+                sub(/^[^=]*=[[:space:]]*"/, "", name)
+                sub(/"[[:space:]]*$/, "", name)
+                if (name != "") print project "-" name
+                found_name = 1
+            }
+        ' "$blackship_manifest")"
+        if [ -n "$manifest_runtime_names" ]; then
+            managed_runtime_names="${managed_runtime_names}${managed_runtime_names:+
+}${manifest_runtime_names}"
+        fi
+    fi
+    managed_runtime_names="$(printf '%s\n' "$managed_runtime_names" | awk '
+        NF > 0 && !seen[$0]++ {
+            printf "%s%s", separator, $0
+            separator = "|"
+        }
+    ')"
+
     jls -n jid name host.hostname path ip4.addr ip6.addr 2>/dev/null |
-    awk '
+    awk -v managed_runtime_names="$managed_runtime_names" '
         function esc(value) {
             gsub(/\\/, "\\\\", value)
             gsub(/"/, "\\\"", value)
@@ -790,7 +823,13 @@ running_jails_json() {
             }
             return ""
         }
-        BEGIN { printf "["; first = 1 }
+        BEGIN {
+            printf "["
+            first = 1
+            count = split(managed_runtime_names, names, "|")
+            for (i = 1; i <= count; i += 1)
+                if (names[i] != "") managed[names[i]] = 1
+        }
         NF > 0 {
             name = field("name")
             host = field("host.hostname")
@@ -798,6 +837,8 @@ running_jails_json() {
                 name = host
             if (name == "")
                 name = "jid-" field("jid")
+            if (name in managed)
+                next
             if (!first) printf ","
             first = 0
             printf "{\"name\":\"%s\",\"jid\":\"%s\",\"hostname\":\"%s\",\"path\":\"%s\",\"ipv4\":\"%s\",\"ipv6\":\"%s\",\"state\":\"running\",\"backend\":\"native\",\"autostart\":\"unknown\",\"release\":\"unknown\"}", esc(name), esc(field("jid")), esc(host), esc(field("path")), esc(field("ip4.addr")), esc(field("ip6.addr"))
@@ -1329,6 +1370,7 @@ emit_snapshot() {
             bastille_setup=true
         fi
     fi
+    blackship_snapshot="$(blackship_snapshot_json)"
 
     printf '{'
     printf '"schema_version":2,'
@@ -1355,7 +1397,7 @@ emit_snapshot() {
     emit_network_snapshot
     printf ','
     printf '"running":'
-    running_jails_json
+    running_jails_json "$blackship_snapshot"
     printf ',"configured":'
     configured_jails_json
     printf ',"bastille":'
@@ -1367,7 +1409,7 @@ emit_snapshot() {
     printf ',"simple_services":'
     simple_services_json
     printf ',"blackship":'
-    blackship_snapshot_json
+    printf '%s' "$blackship_snapshot"
     printf ',"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
         "$(printf '%s' "$last_tone" | json_escape)" \
         "$(printf '%s' "$last_message" | json_escape)" \

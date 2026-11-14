@@ -2,3 +2,6 @@
 
 set -eu
 cat "$BSDRUNNER_JAILS_TEST_FIXTURES/jls.txt"
+if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE:-0}" = 1 ]; then
+    printf '%s\n' 'jid=4 name=bsdrunner-web host.hostname=web.local path=/var/db/bsdrunner/blackship/jails/bsdrunner-web ip4.addr=10.44.0.20 ip6.addr=none'
+fi
