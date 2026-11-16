@@ -69,6 +69,7 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF="${BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF:-$fixtures/etc/resolv.conf}" \
     BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$fixtures/etc/resolvconf/interfaces}" \
     BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL="${BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL:-0}" \
+    BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER="${BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER:-}" \
     BSDRUNNER_JAILS_TEST_NETWORK_READY="${BSDRUNNER_JAILS_TEST_NETWORK_READY:-1}" \
     BSDRUNNER_JAILS_TEST_PF_STATE="${BSDRUNNER_JAILS_TEST_PF_STATE:-}" \
     BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="${BSDRUNNER_JAILS_TEST_LOOPBACK_STATE:-}" \
@@ -768,6 +769,19 @@ assert_json "$test_root/blackship-manifest.json" \
 if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view unmanaged >"$test_root/blackship-manifest-unmanaged.json"; then
     fail "the manifest viewer should reject unmanaged jail names"
 fi
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
+BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER=10.44.0.1 \
+run_backend policy-set web 10.44.0.20 internet-only web >"$test_root/blackship-policy.json"
+assert_json "$test_root/blackship-policy.json" \
+    '.ok == true and .message == "Applied outbound policy to web."' \
+    "managed Blackship policy changes should ignore nested health-check names"
+grep -F 'pf-backend jail-policy web 10.44.0.20 internet-only 10.44.0.1' "$command_log" >/dev/null || \
+    fail "verified Blackship policy changes should use the jail-facing resolver"
+grep -F 'nameservers = ["10.44.0.1"]' "$state_dir/blackship.toml" >/dev/null || \
+    fail "Blackship policy changes should reconcile the manifest resolver"
+grep -F "exec web -- /bin/sh -c printf 'nameserver %s\\n' '10.44.0.1' > /etc/resolv.conf" "$command_log" >/dev/null || \
+    fail "Blackship policy changes should reconcile the live jail resolver"
+pass "Blackship policy verification and DNS reconciliation use the service name"
 
 : >"$command_log"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-resource-limits web recommended 0 0 0 web >"$test_root/blackship-resources-recommended.json"
