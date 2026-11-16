@@ -1,0 +1,22 @@
+FROM 15.1-RELEASE
+LABEL name=blackship-ai version=1 purpose=local-private-ai experimental=true
+
+ARG AI_UID=1001
+ARG AI_GID=1001
+
+RUN pkg install -y ollama npm-node22
+RUN npm install -g @earendil-works/pi-coding-agent@1.5.2
+RUN pw groupadd ai -g ${AI_GID}
+RUN pw useradd ai -u ${AI_UID} -g ai -m -s /bin/sh
+RUN install -d -o nobody -g nobody /var/lib/ollama
+RUN install -d -o ai -g ai /home/ai/.pi/agent
+
+COPY pi-models.json /home/ai/.pi/agent/models.json
+COPY pi-settings.json /home/ai/.pi/agent/settings.json
+RUN chown -R ai:ai /home/ai/.pi
+RUN chmod 0600 /home/ai/.pi/agent/models.json /home/ai/.pi/agent/settings.json
+
+RUN sysrc ollama_enable=YES
+RUN sysrc ollama_use_vulkan=0
+RUN sysrc ollama_context_length=32768
+RUN sysrc 'ollama_env=HOME=/var/lib/ollama OLLAMA_HOST=127.0.0.1:11434 OLLAMA_NO_CLOUD=1'

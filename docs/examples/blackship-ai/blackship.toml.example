@@ -1,0 +1,47 @@
+[config]
+project = "blackship-ai"
+data_dir = "/var/db/blackship-ai"
+releases_dir = "/var/db/blackship-ai/releases"
+cache_dir = "/var/db/blackship-ai/cache"
+zfs_enabled = true
+zpool = "zroot"
+dataset = "blackship-ai"
+
+[[networks]]
+name = "ai-private"
+subnet = "10.77.42.0/24"
+gateway = "10.77.42.1"
+
+[[jails]]
+name = "ollama"
+release = "15.1-RELEASE"
+build = "/usr/local/etc/blackship-ai/ollama"
+hostname = "ollama.local"
+tags = ["local-ai", "experimental"]
+
+[jails.mount]
+volumes = ["/home/example/src/project:/workspace/project:ro"]
+
+[jails.resources]
+memory = "24g"
+cpu = "400"
+maxproc = 512
+
+[jails.network]
+vnet = true
+networks = ["ai-private"]
+bridge = "blackship-ai0"
+ip_cidr = "10.77.42.10/24"
+
+[jails.network.dns]
+nameservers = ["1.1.1.1"]
+mode = "custom"
+
+[jails.healthcheck]
+enabled = true
+
+[[jails.healthcheck.checks]]
+name = "ollama-api"
+command = "fetch -qo /dev/null http://127.0.0.1:11434/api/tags"
+target = "jail"
+start_period = 120
