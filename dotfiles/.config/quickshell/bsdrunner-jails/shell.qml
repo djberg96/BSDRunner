@@ -2551,6 +2551,95 @@ ShellRoot {
                                 }
                             }
 
+                            Rectangle {
+                                visible: root.pendingActionId.indexOf("policy-set|") === 0
+                                width: parent.width
+                                height: visible ? 108 : 0
+                                radius: 8
+                                color: root.palette.panelBackground
+                                border.width: 1
+                                border.color: root.palette.warning
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 8
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.pendingActionLabel
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.pendingActionDescription
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Row {
+                                        width: parent.width
+                                        height: 28
+                                        spacing: 8
+
+                                        Rectangle {
+                                            width: 92
+                                            height: parent.height
+                                            radius: 6
+                                            color: policyConfirmMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.warning, 0.18)
+                                            border.width: 1
+                                            border.color: root.palette.warning
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Confirm"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: policyConfirmMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: root.confirmPendingAction()
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 80
+                                            height: parent.height
+                                            radius: 6
+                                            color: policyCancelMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                            border.width: 1
+                                            border.color: root.palette.panelBorder
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Cancel"
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: policyCancelMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                onClicked: root.clearPendingAction()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             Text {
                                 width: parent.width
                                 text: "Port forwarding"
@@ -3027,8 +3116,8 @@ ShellRoot {
 
                             Rectangle {
                                 width: parent.width
-                                height: root.beginnerMapVisible && root.pendingActionId ? 108 : 0
-                                visible: root.beginnerMapVisible && root.pendingActionId.length > 0
+                                height: root.beginnerMapVisible && root.pendingActionId.length > 0 && root.pendingActionId.indexOf("policy-set|") !== 0 ? 108 : 0
+                                visible: root.beginnerMapVisible && root.pendingActionId.length > 0 && root.pendingActionId.indexOf("policy-set|") !== 0
                                 radius: 8
                                 color: root.palette.panelBackground
                                 border.width: 1
@@ -3504,8 +3593,8 @@ ShellRoot {
 
                                 Rectangle {
                                     width: parent.width
-                                    height: root.pendingActionId ? 108 : 0
-                                    visible: root.pendingActionId.length > 0
+                                    height: root.pendingActionId.length > 0 && root.pendingActionId.indexOf("policy-set|") !== 0 ? 108 : 0
+                                    visible: root.pendingActionId.length > 0 && root.pendingActionId.indexOf("policy-set|") !== 0
                                     radius: 8
                                     color: root.palette.panelBackground
                                     border.width: 1

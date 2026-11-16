@@ -335,6 +335,7 @@ emit_settings() {
 
 profile_checksum() {
     {
+        printf 'renderer-revision=2\n'
         emit_settings
         emit_jail_policies
         emit_jail_forwards

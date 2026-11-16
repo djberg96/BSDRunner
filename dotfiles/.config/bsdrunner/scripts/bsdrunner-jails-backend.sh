@@ -518,6 +518,33 @@ jail_resolver_address_value() {
     ' "$resolver_source"
 }
 
+blackship_resolver_address_value() {
+    if [ -n "${BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER:-}" ]; then
+        printf '%s\n' "$BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER"
+        return 0
+    fi
+
+    if [ "$test_mode" != "1" ] && command -v sockstat >/dev/null 2>&1; then
+        local_resolver="$(sockstat -4 -l 2>/dev/null | awk '
+            {
+                endpoint = $6
+                if (endpoint !~ /:53$/) next
+                sub(/:53$/, "", endpoint)
+                if (endpoint ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && endpoint !~ /^127\./ && endpoint != "0.0.0.0") {
+                    print endpoint
+                    exit
+                }
+            }
+        ')"
+        if [ -n "$local_resolver" ]; then
+            printf '%s\n' "$local_resolver"
+            return 0
+        fi
+    fi
+
+    jail_resolver_address_value "$(jail_resolver_source_value 2>/dev/null || true)"
+}
+
 network_interface_exists() {
     network_interface_name="$1"
     command -v ifconfig >/dev/null 2>&1 || return 1
@@ -1604,8 +1631,12 @@ blackship_jail_matches() {
             sub(/"[[:space:]]*$/, "", result)
             return result
         }
-        /^\[\[jails\]\]/ { if (selected && matched) found = 1; selected = 0; matched = 0 }
-        /^[[:space:]]*name[[:space:]]*=/ { selected = value($0) == requested }
+        /^\[\[jails\]\]/ { if (selected && matched) found = 1; in_jail = 1; have_name = 0; selected = 0; matched = 0; next }
+        in_jail && !have_name && /^[[:space:]]*name[[:space:]]*=/ {
+            have_name = 1
+            selected = value($0) == requested
+            next
+        }
         selected && /^[[:space:]]*ip_cidr[[:space:]]*=/ {
             candidate = value($0); sub(/\/.*/, "", candidate); matched = candidate == address
         }
@@ -1613,12 +1644,68 @@ blackship_jail_matches() {
     ' "$blackship_manifest"
 }
 
+blackship_write_dns_candidate() {
+    requested="$1"
+    resolver="$2"
+    destination="$3"
+    awk -v requested="$requested" -v resolver="$resolver" '
+        function value(line, result) {
+            result = line
+            sub(/^[^=]*=[[:space:]]*"/, "", result)
+            sub(/"[[:space:]]*$/, "", result)
+            return result
+        }
+        /^\[\[jails\]\][[:space:]]*$/ {
+            in_jail = 1
+            have_name = selected = in_dns = 0
+            print
+            next
+        }
+        in_jail && !have_name && /^[[:space:]]*name[[:space:]]*=/ {
+            have_name = 1
+            selected = value($0) == requested
+            print
+            next
+        }
+        selected && /^\[jails\.network\.dns\][[:space:]]*$/ {
+            in_dns = 1
+            print
+            next
+        }
+        in_dns && /^\[/ { in_dns = 0 }
+        in_dns && /^[[:space:]]*nameservers[[:space:]]*=/ {
+            print "nameservers = [\"" resolver "\"]"
+            next
+        }
+        { print }
+    ' "$blackship_manifest" >"$destination"
+}
+
+blackship_reconcile_dns() {
+    requested="$1"
+    resolver="$2"
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-dns.XXXXXX")"
+    blackship_write_dns_candidate "$requested" "$resolver" "$candidate"
+
+    if ! cmp -s "$candidate" "$blackship_manifest"; then
+        blackship_check_candidate "$candidate" || { rm -f "$candidate"; return 1; }
+        install_managed_file "$candidate" "$blackship_manifest" || { rm -f "$candidate"; return 1; }
+    fi
+    rm -f "$candidate"
+
+    run_jail_privileged blackship --config "$blackship_manifest" --non-interactive exec "$requested" -- \
+        /bin/sh -c "printf 'nameserver %s\\n' '$resolver' > /etc/resolv.conf" >/dev/null 2>&1 || true
+}
+
 apply_outbound_policy() {
     policy_name="$1"
     policy_address="$(address_ipv4_value "$2")"
     policy_mode="$3"
-    policy_resolver_source="$(jail_resolver_source_value 2>/dev/null || true)"
-    policy_resolver="$(jail_resolver_address_value "$policy_resolver_source" 2>/dev/null || true)"
+    policy_resolver="${4:-}"
+    if [ -z "$policy_resolver" ]; then
+        policy_resolver_source="$(jail_resolver_source_value 2>/dev/null || true)"
+        policy_resolver="$(jail_resolver_address_value "$policy_resolver_source" 2>/dev/null || true)"
+    fi
 
     [ -r "$pf_backend" ] || return 1
     [ -n "$policy_resolver" ] || return 1
@@ -1650,12 +1737,24 @@ do_policy_set() {
         emit_action_result false "Outbound policy confirmation did not match." "Return to the selected jail and confirm again."
         exit 1
     }
-    if ! bastille_jail_matches "$name" "$policy_address" && ! blackship_jail_matches "$name" "$policy_address"; then
+    blackship_managed=false
+    if blackship_jail_matches "$name" "$policy_address"; then
+        blackship_managed=true
+    elif ! bastille_jail_matches "$name" "$policy_address"; then
         emit_action_result false "The selected managed jail could not be verified." "Refresh the inventory before changing its outbound policy."
         exit 1
     fi
 
-    if output="$(apply_outbound_policy "$name" "$policy_address" "$policy" 2>&1)"; then
+    policy_resolver=""
+    if [ "$blackship_managed" = true ]; then
+        policy_resolver="$(blackship_resolver_address_value 2>/dev/null || true)"
+        if [ -z "$policy_resolver" ] || ! blackship_reconcile_dns "$name" "$policy_resolver"; then
+            emit_action_result false "Unable to configure DNS for ${name}." "The outbound policy was not changed."
+            exit 1
+        fi
+    fi
+
+    if output="$(apply_outbound_policy "$name" "$policy_address" "$policy" "$policy_resolver" 2>&1)"; then
         write_last_result "success" "Applied outbound policy to ${name}."
         emit_action_result true "Applied outbound policy to ${name}." "$output"
     else
@@ -3076,7 +3175,7 @@ bridge = "$blackship_bridge"
 ip_cidr = "$address"
 
 [jails.network.dns]
-nameservers = ["$(jail_resolver_address_value "$(jail_resolver_source_value 2>/dev/null || true)" 2>/dev/null || printf '1.1.1.1')"]
+nameservers = ["$(blackship_resolver_address_value 2>/dev/null || printf '1.1.1.1')"]
 mode = "custom"
 EOF
     case "$preset" in
@@ -3148,7 +3247,7 @@ blackship_finish_preset_setup() {
     outbound_policy="$4"
     build_output="$5"
     success_message="$6"
-    policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" 2>&1 || true)"
+    policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" "$(blackship_resolver_address_value 2>/dev/null || true)" 2>&1 || true)"
     credentials=""
     credential_note=""
     if [ "$preset" = postgres ]; then
