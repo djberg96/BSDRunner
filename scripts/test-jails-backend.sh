@@ -50,7 +50,7 @@ run_backend() {
     BSDRUNNER_BLACKSHIP_RC_SOURCE="$repo_root/dotfiles/.config/bsdrunner/jails/bsdrunner_blackship.rc" \
     BSDRUNNER_BLACKSHIP_RC_TARGET="$state_dir/bsdrunner_blackship" \
     BSDRUNNER_BLACKSHIP_FIXTURE_MODE="${BSDRUNNER_BLACKSHIP_FIXTURE_MODE:-missing}" \
-    BSDRUNNER_BLACKSHIP_FIXTURE_VERSION="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.4.2}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_VERSION="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.5.0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA="${BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA:-1}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL="${BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE="${BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE:-0}" \
@@ -73,7 +73,7 @@ run_backend() {
 }
 
 command -v jq >/dev/null 2>&1 || fail "jq is required to run the Jails backend tests"
-grep -F 'return storageConfirmation === "0.4.2"' "$jails_qml" >/dev/null || \
+grep -F 'return storageConfirmation === "0.5.0"' "$jails_qml" >/dev/null || \
     fail "the Blackship installer confirmation gate should match the pinned release"
 pass "Blackship installer confirmation matches the pinned release"
 grep -F 'candidate = presetId + "_" + suffix' "$jails_qml" >/dev/null || \
@@ -113,12 +113,16 @@ pass "the managed manifest opens in a read-only viewer"
 grep -F 'if (jail.full_name && jail.full_name !== jail.name)' "$jails_qml" >/dev/null || \
     fail "the jail inventory should treat Blackship runtime names as aliases"
 pass "the jail inventory recognizes Blackship runtime-name aliases"
-grep -F "blackship --config '\$blackship_manifest' exec '\$name' -- /bin/sh" "$backend" >/dev/null || \
-    fail "Blackship consoles should use an interactive shell instead of 0.4.2's broken console command"
-if grep -F "blackship --config '\$blackship_manifest' console '\$name'" "$backend" >/dev/null; then
-    fail "Blackship 0.4.2's console command should not be used"
-fi
-pass "Blackship consoles avoid the 0.4.2 jexec dash bug"
+grep -F 'RUN install -d -o nobody -g nobody /var/lib/ollama' "$repo_root/dotfiles/.config/bsdrunner/jails/presets/ollama/Jailfile" >/dev/null || \
+    fail "the Ollama preset should provide its unprivileged service user with a writable home"
+grep -F 'HOME=/var/lib/ollama' "$repo_root/dotfiles/.config/bsdrunner/jails/presets/ollama/Jailfile" >/dev/null || \
+    fail "the Ollama rc service should use its writable data directory as HOME"
+grep -F 'OLLAMA_NO_CLOUD=1' "$repo_root/dotfiles/.config/bsdrunner/jails/presets/ollama/Jailfile" >/dev/null || \
+    fail "the isolated Ollama preset should disable cloud features in the application"
+pass "the Ollama service stays unprivileged with cloud features disabled"
+grep -F "blackship --config '\$blackship_manifest' console '\$name'" "$backend" >/dev/null || \
+    fail "Blackship consoles should delegate to the fixed 0.5.0 console command"
+pass "Blackship consoles delegate to Blackship 0.5.0"
 [ "$(grep -Fc 'visible: root.selectedJail && root.selectedJail.backend === "bastille"' "$jails_qml")" -ge 2 ] || \
     fail "legacy simple-service controls should be hidden for Blackship jails"
 pass "legacy simple-service controls stay out of Blackship jail details"
@@ -615,13 +619,13 @@ pass "successful actions persist status for the next snapshot"
 blackship_snapshot="$test_root/blackship-snapshot.json"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
-    '.schema_version == 2 and .blackship.available == true and .blackship.compatible == true and .blackship.version == "0.4.2" and .blackship.output_schema_version == 1' \
+    '.schema_version == 2 and .blackship.available == true and .blackship.compatible == true and .blackship.version == "0.5.0" and .blackship.output_schema_version == 1' \
     "schema-v2 snapshot should recognize compatible Blackship output schema 1"
 
-BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_VERSION=0.4.1 run_backend snapshot >"$blackship_snapshot"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_VERSION=0.4.2 run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
-    '.blackship.available == true and .blackship.compatible == false and .blackship.version == "0.4.1"' \
-    "Blackship versions older than 0.4.2 should remain visible but incompatible"
+    '.blackship.available == true and .blackship.compatible == false and .blackship.version == "0.4.2"' \
+    "Blackship versions older than 0.5.0 should remain visible but incompatible"
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA=2 run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
@@ -633,9 +637,9 @@ assert_json "$blackship_snapshot" \
     '.blackship.available == true and .blackship.compatible == false and .blackship.missing_operations == ["armada.up", "armada.up.dry_run"]' \
     "missing required command capabilities should disable the Blackship integration"
 
-BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_VERSION=0.5.0 run_backend snapshot >"$blackship_snapshot"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_VERSION=0.6.0 run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
-    '.blackship.compatible == true and .blackship.version == "0.5.0"' \
+    '.blackship.compatible == true and .blackship.version == "0.6.0"' \
     "compatible newer Blackship versions should be accepted without downgrade"
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=malformed run_backend snapshot >"$blackship_snapshot"
@@ -764,6 +768,8 @@ BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-preset-create 
 assert_json "$test_root/blackship-retry.json" \
     '.ok == true and .message == "Completed setup for retrydb." and (.details | contains("Password (shown once):"))' \
     "retry should resume an incomplete managed starter"
+grep -F 'blackship --config ' "$command_log" | grep -F ' armada --file ' | grep -F ' up retrydb --build' >/dev/null || \
+    fail "retry should force the shared ZFS-aware Armada build path"
 if grep -A18 'name = "retrydb"' "$state_dir/blackship.toml" | grep -F '[jails.resources]' >/dev/null; then
     fail "retry should remove the obsolete optional RCTL block"
 fi
@@ -777,6 +783,7 @@ grep -Fx 'mdo sysrc bsdrunner_blackship_enable=YES' "$command_log" >/dev/null ||
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-autostart web no web >"$test_root/blackship-autostart-off.json"
 if grep -F '"autostart"' "$state_dir/blackship.toml" >/dev/null; then fail "disabling autostart should remove its tag"; fi
 grep -Fx 'mdo sysrc bsdrunner_blackship_enable=NO' "$command_log" >/dev/null || fail "the rc service should disable when no jail opts in"
+grep -F -- '--non-interactive setup' "$state_dir/bsdrunner_blackship" >/dev/null || fail "the managed boot service should restore Blackship networking before autostart"
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-preset-create postgres database 15.0-RELEASE 10.44.0.21/24 no database internet-only >"$test_root/blackship-postgres.json"
 assert_json "$test_root/blackship-postgres.json" \
@@ -791,6 +798,12 @@ assert_json "$test_root/blackship-postgres-reset.json" \
     "PostgreSQL recovery should ensure missing app credentials before resetting them"
 
 : >"$command_log"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend start web blackship >"$test_root/blackship-start.json"
+assert_json "$test_root/blackship-start.json" \
+    '.ok == true and .message == "start web."' \
+    "managed Blackship starts should return structured success"
+grep -F 'mdo blackship --config ' "$command_log" | grep -F ' --non-interactive setup' >/dev/null || fail "Blackship starts should restore host networking first"
+grep -F 'mdo blackship --config ' "$command_log" | grep -F ' --non-interactive up web' >/dev/null || fail "Blackship starts should use the guarded non-interactive path"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend restart web blackship >"$test_root/blackship-lifecycle.json"
 assert_json "$test_root/blackship-lifecycle.json" \
     '.ok == true and .message == "restart web."' \
@@ -800,13 +813,13 @@ pass "Blackship starters and lifecycle use validated guarded operations"
 
 bad_archive="$test_root/not-blackship.tar.gz"
 printf '%s\n' 'not a release archive' >"$bad_archive"
-if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_UNAME_MACHINE=arm64 BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.4.2 >"$test_root/blackship-arch.json"; then
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_UNAME_MACHINE=arm64 BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.5.0 >"$test_root/blackship-arch.json"; then
     fail "Blackship installer should reject the wrong architecture"
 fi
 assert_json "$test_root/blackship-arch.json" \
     '.ok == false and .message == "This Blackship build requires FreeBSD amd64."' \
     "wrong-architecture failures should happen before download or installation"
-if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.4.2 >"$test_root/blackship-checksum.json"; then
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.5.0 >"$test_root/blackship-checksum.json"; then
     fail "Blackship installer should reject a checksum mismatch"
 fi
 assert_json "$test_root/blackship-checksum.json" \

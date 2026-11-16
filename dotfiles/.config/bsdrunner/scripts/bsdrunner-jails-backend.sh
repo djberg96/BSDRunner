@@ -34,10 +34,10 @@ else
 fi
 export PATH
 
-blackship_min_version="0.4.2"
-blackship_release_version="0.4.2"
-blackship_release_sha256="912a6180938e0ed40a72ffa9bfda07a4dd221afa0aad94c5188fb930b1f50a5f"
-blackship_release_url="https://github.com/seuros/blackship/releases/download/blackship-v0.4.2/blackship-freebsd-amd64.tar.gz"
+blackship_min_version="0.5.0"
+blackship_release_version="0.5.0"
+blackship_release_sha256="02742fe641896fb1d6586eef352a6049bc8c56fee85fc5d190022e625d60ff0c"
+blackship_release_url="https://github.com/seuros/blackship/releases/download/blackship-v0.5.0/blackship-freebsd-amd64.tar.gz"
 blackship_required_operations="ps.host armada.up armada.up.dry_run"
 blackship_network_name="bsdrunner"
 blackship_bridge="blackship0"
@@ -1440,7 +1440,7 @@ do_lifecycle() {
         blackship)
             blackship_status_values
             if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
-                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.2 or newer and configure the BSDRunner project."
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.5.0 or newer and configure the BSDRunner project."
                 exit 1
             fi
             blackship_manifest_has_name "$name" || {
@@ -1468,9 +1468,21 @@ do_lifecycle() {
             stop) blackship_verb=down ;;
             restart) blackship_verb=restart ;;
         esac
+        setup_output=""
+        if [ "$verb" = start ]; then
+            if ! setup_output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive setup 2>&1)"; then
+                write_last_result "error" "Unable to prepare Blackship networking."
+                emit_action_result false "Unable to prepare Blackship networking." "$setup_output"
+                exit 1
+            fi
+        fi
         if output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive "$blackship_verb" "$name" 2>&1)"; then
+            details="$output"
+            if [ -n "$setup_output" ]; then
+                details="$(printf '%s\n%s' "$setup_output" "$output")"
+            fi
             write_last_result "success" "$(printf '%s %s.' "$verb" "$name")"
-            emit_action_result true "$(printf '%s %s.' "$verb" "$name")" "$output"
+            emit_action_result true "$(printf '%s %s.' "$verb" "$name")" "$details"
         else
             write_last_result "error" "Unable to ${verb} ${name}."
             emit_action_result false "Unable to ${verb} ${name}." "$output"
@@ -1828,7 +1840,7 @@ do_console() {
         blackship)
             blackship_status_values
             if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
-                emit_action_result false "Blackship is not ready." "Install Blackship 0.4.2 or newer and configure its project."
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.5.0 or newer and configure its project."
                 exit 1
             fi
             blackship_manifest_has_name "$name" || {
@@ -1870,11 +1882,7 @@ do_console() {
     fi
 
     if [ "$backend" = "blackship" ]; then
-        # Blackship 0.4.2's console command passes a literal "-" to jexec,
-        # which jexec treats as the executable name. Its exec path is otherwise
-        # equivalent and opens a reliable interactive shell when no script is
-        # supplied.
-        console_command="${privilege_prefix}blackship --config '$blackship_manifest' exec '$name' -- /bin/sh"
+        console_command="${privilege_prefix}blackship --config '$blackship_manifest' console '$name'"
     elif [ "$backend" = "bastille" ]; then
         console_command="${privilege_prefix}bastille console '$name'"
     else
@@ -2826,7 +2834,7 @@ do_blackship_project_setup() {
     remainder="${network_values#*|}"
     gateway="${remainder%%|*}"
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship 0.4.2 or newer is required." "Install Blackship first."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship 0.5.0 or newer is required." "Install Blackship first."; exit 1; }
     if [ -r "$blackship_manifest" ] && grep -q '^\[\[jails\]\]' "$blackship_manifest"; then
         emit_action_result false "The BSDRunner Blackship project already contains jails." "Project setup will not replace a populated managed manifest."
         exit 1
@@ -2904,7 +2912,7 @@ do_blackship_preset_preview() {
         notes="Demo preview only; creation remains disabled."
     else
         blackship_status_values
-        [ "$blackship_compatible" = true ] || { ready=false; notes="Blackship 0.4.2 or newer is required."; }
+        [ "$blackship_compatible" = true ] || { ready=false; notes="Blackship 0.5.0 or newer is required."; }
         [ -r "$blackship_manifest" ] || { ready=false; notes="${notes}${notes:+ }Configure Blackship storage and networking first."; }
         if blackship_manifest_has_name "$name"; then ready=false; notes="${notes}${notes:+ }The jail name is already in use."; fi
         collect_jail_conflicts "$name" "$address"
@@ -3128,7 +3136,7 @@ blackship_finish_preset_setup() {
 do_blackship_preset_retry() {
     preset="$1" name="$2" release="$3" address="$4" outbound_policy="$5"
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.4.2 or newer first."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.5.0 or newer first."; exit 1; }
     blackship_manifest_entry_matches "$name" "$preset" "$release" "$address" || {
         emit_action_result false "The existing jail cannot be safely retried." "Its release, address, starter tag, or managed context differs from this creation plan."
         exit 1
@@ -3150,7 +3158,7 @@ do_blackship_preset_retry() {
         fi
         rm -f "$candidate"
     fi
-    if ! build_output="$(run_privileged blackship --config "$blackship_manifest" --format json --non-interactive armada --file "$blackship_manifest" up "$name" 2>&1)"; then
+    if ! build_output="$(run_privileged blackship --config "$blackship_manifest" --format json --non-interactive armada --file "$blackship_manifest" up "$name" --build 2>&1)"; then
         write_last_result warning "Setup remains incomplete for ${name}."
         emit_action_result false "Setup remains incomplete for ${name}." "$build_output"
         exit 1
@@ -3278,7 +3286,7 @@ do_blackship_details() {
     valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
     blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not compatible." "Version 0.4.2 or newer with JSON schema 1 is required."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not compatible." "Version 0.5.0 or newer with JSON schema 1 is required."; exit 1; }
     stats="$(blackship_read_json stats "$name" 2>/dev/null || true)"
     health="$(blackship_read_json_privileged --non-interactive health "$name" 2>/dev/null || true)"
     ports="$(blackship_read_json ports "$name" 2>/dev/null || true)"

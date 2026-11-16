@@ -1,8 +1,9 @@
 FROM %%RELEASE%%
 LABEL name=bsdrunner-ollama version=1 purpose=local-ai experimental=true
 RUN pkg install -y ollama
+RUN install -d -o nobody -g nobody /var/lib/ollama
 RUN sysrc ollama_enable=YES
 RUN sysrc ollama_use_vulkan=0
 RUN sysrc ollama_context_length=4096
-RUN sysrc 'ollama_env=OLLAMA_HOST=0.0.0.0:11434'
+RUN sysrc 'ollama_env=HOME=/var/lib/ollama OLLAMA_HOST=0.0.0.0:11434 OLLAMA_NO_CLOUD=1'
 EXPOSE 11434/tcp

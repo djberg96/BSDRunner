@@ -90,7 +90,7 @@ ShellRoot {
     property string selectedBeginnerTopic: "storage"
     property string selectedPreset: "blank"
     property bool technicalDetailsVisible: false
-    property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.2"})
+    property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"})
     property var blackshipJails: []
     property var runningJails: []
     property var configuredJails: []
@@ -920,7 +920,7 @@ ShellRoot {
         if (demoMode || storageSetupRunning || storageReady())
             return false
         if (!blackshipInfo.compatible)
-            return storageConfirmation === "0.4.2"
+            return storageConfirmation === "0.5.0"
         return selectedStoragePool.length > 0 && storageConfirmation === selectedStoragePool
     }
 
@@ -929,7 +929,7 @@ ShellRoot {
             return
         storageSetupRunning = true
         storageSetupStage = "configuring"
-        storageSetupMessage = blackshipInfo.compatible ? "Configuring Blackship storage and private networking on " + selectedStoragePool + "…" : "Installing verified Blackship 0.4.2…"
+        storageSetupMessage = blackshipInfo.compatible ? "Configuring Blackship storage and private networking on " + selectedStoragePool + "…" : "Installing verified Blackship 0.5.0…"
         storageSetupDetails = ""
         storageStdoutText = ""
         storageStderrText = ""
@@ -1156,12 +1156,12 @@ ShellRoot {
         if (wizardStep === 0) {
             var storageLines = ["INSTALL + STORAGE", "", "New BSDRunner jails use one managed Blackship project. The first setup installs Blackship if needed, then places releases and jail roots under POOL/bsdrunner/blackship.", ""]
             if (storageReady()) {
-                storageLines.push("[ok] Blackship " + (blackshipInfo.version || "0.4.2+") + " is compatible.")
+                storageLines.push("[ok] Blackship " + (blackshipInfo.version || "0.5.0+") + " is compatible.")
                 storageLines.push("[ok] Managed manifest: /usr/local/etc/bsdrunner/blackship.toml")
                 storageLines.push("[ok] Dataset: " + storageTargetDataset())
             } else {
                 storageLines.push("SELECTED PLAN")
-                storageLines.push(blackshipInfo.compatible ? "[ok] Compatible Blackship installed" : "[ ] Install verified Blackship 0.4.2")
+                storageLines.push(blackshipInfo.compatible ? "[ok] Compatible Blackship installed" : "[ ] Install verified Blackship 0.5.0")
                 storageLines.push("Pool: " + (selectedStoragePool || "No ZFS pool detected"))
                 storageLines.push("Dataset: " + storageTargetDataset())
                 storageLines.push("Private network: bsdrunner on blackship0")
@@ -1347,7 +1347,7 @@ ShellRoot {
         outboundPolicies = payload.outbound_policies || []
         portForwards = payload.port_forwards || []
         simpleServices = payload.simple_services || []
-        blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.4.2"}
+        blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"}
         blackshipJails = normalizedBlackshipJails(blackshipInfo)
         if (!previewAddressCustomized && blackshipInfo.recommended_address)
             previewAddress = blackshipInfo.recommended_address
@@ -3060,7 +3060,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.blackshipInfo.compatible ? (root.blackshipInfo.configured ? "Installed and configured for new BSDRunner service jails." : "Installed. Click to choose storage and create the private network.") : "Click to install the pinned, verified 0.4.2 FreeBSD amd64 binary. Existing Bastille/native jails remain operable."
+                                        text: root.blackshipInfo.compatible ? (root.blackshipInfo.configured ? "Installed and configured for new BSDRunner service jails." : "Installed. Click to choose storage and create the private network.") : "Click to install the pinned, verified 0.5.0 FreeBSD amd64 binary. Existing Bastille/native jails remain operable."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -3750,7 +3750,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.storageReady() ? "Blackship project ready" : root.blackshipInfo.compatible ? "Choose a ZFS pool" : "Install Blackship 0.4.2"
+                                                text: root.storageReady() ? "Blackship project ready" : root.blackshipInfo.compatible ? "Choose a ZFS pool" : "Install Blackship 0.5.0"
                                                 color: root.palette.primaryText
                                                 font.pixelSize: root.wizardHeadingFontSize
                                                 font.bold: true
@@ -3839,7 +3839,7 @@ ShellRoot {
                                             Text {
                                                 visible: !root.storageReady()
                                                 width: parent.width
-                                                text: "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.2") + "” to confirm"
+                                                text: "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.5.0") + "” to confirm"
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: root.wizardCaptionFontSize
                                                 font.bold: true
@@ -3853,7 +3853,7 @@ ShellRoot {
                                                 radius: 6
                                                 color: root.palette.panelBackground
                                                 border.width: 1
-                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.2") ? root.palette.success : root.palette.panelBorder
+                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.5.0") ? root.palette.success : root.palette.panelBorder
 
                                                 TextInput {
                                                     id: storageConfirmationInput
@@ -3902,7 +3902,7 @@ ShellRoot {
                                                             return
                                                         }
                                                         root.storageSetupStage = "failed"
-                                                        root.storageSetupMessage = "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.4.2") + "” exactly in the confirmation field first."
+                                                        root.storageSetupMessage = "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.5.0") + "” exactly in the confirmation field first."
                                                         storageConfirmationInput.forceActiveFocus()
                                                     }
                                                 }
@@ -4622,7 +4622,7 @@ ShellRoot {
                                     Text {
                                         visible: root.wizardStep !== 2
                                         width: parent.width
-                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.blackshipInfo.compatible ? "Install the verified Blackship 0.4.2 binary to create new service jails." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool to create the BSDRunner Blackship project and private network." : "Blackship is installed, but no ZFS pool was detected.") : "Blackship storage and private networking are ready" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
+                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.blackshipInfo.compatible ? "Install the verified Blackship 0.5.0 binary to create new service jails." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool to create the BSDRunner Blackship project and private network." : "Blackship is installed, but no ZFS pool was detected.") : "Blackship storage and private networking are ready" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
                                         color: !root.demoMode && root.tools.bastille && root.storageReady() && root.networkReady() ? root.palette.success : root.palette.warning
                                         font.pixelSize: root.wizardCaptionFontSize
                                         wrapMode: Text.WordWrap
