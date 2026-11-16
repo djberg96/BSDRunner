@@ -57,6 +57,8 @@ run_backend() {
     BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED="${BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED:-1}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL="${BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL="${BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL:-0}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_RUNNING="${BSDRUNNER_BLACKSHIP_FIXTURE_RUNNING:-true}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_RM_FAIL="${BSDRUNNER_BLACKSHIP_FIXTURE_RM_FAIL:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_REJECT="${BSDRUNNER_BLACKSHIP_FIXTURE_REJECT:-0}" \
     BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="${BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE:-}" \
     BSDRUNNER_UNAME_SYSTEM="${BSDRUNNER_UNAME_SYSTEM:-FreeBSD}" \
@@ -121,6 +123,17 @@ grep -F '"blackship-resource-limits", root.activeActionName' "$jails_qml" >/dev/
 grep -F 'These are maximums, not reservations.' "$jails_qml" >/dev/null || \
     fail "the resource editor should explain ceilings in beginner language"
 pass "Blackship resource limits use a guarded beginner-oriented in-window editor"
+grep -F 'visible: root.activeTab === "delete"' "$jails_qml" >/dev/null || \
+    fail "jail deletion should open in a dedicated in-window tab"
+grep -F 'text: "Danger zone"' "$jails_qml" >/dev/null || \
+    fail "permanent deletion should live in a separately labeled danger zone"
+grep -F 'deleteConfirmation !== selectedJail.name' "$jails_qml" >/dev/null || \
+    fail "permanent deletion should require the exact selected jail name"
+grep -F 'BSDRunner will not force-delete a running jail.' "$jails_qml" >/dev/null || \
+    fail "the delete review should explain the stop-first rule"
+grep -F '"blackship-delete", root.activeActionName, root.activeActionName' "$jails_qml" >/dev/null || \
+    fail "confirmed deletion should use the guarded backend action"
+pass "Blackship deletion uses a stop-first, typed-name beginner review"
 grep -F 'if (jail.full_name && jail.full_name !== jail.name)' "$jails_qml" >/dev/null || \
     fail "the jail inventory should treat Blackship runtime names as aliases"
 pass "the jail inventory recognizes Blackship runtime-name aliases"
@@ -893,6 +906,40 @@ assert_json "$test_root/blackship-lifecycle.json" \
     "managed Blackship lifecycle should return structured success"
 grep -F 'mdo blackship --config ' "$command_log" | grep -F ' --non-interactive restart web' >/dev/null || fail "Blackship lifecycle should use the guarded non-interactive path"
 pass "Blackship starters and lifecycle use validated guarded operations"
+
+delete_before="$(cksum "$state_dir/blackship.toml")"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RUNNING=false run_backend blackship-delete web wrong-name >"$test_root/blackship-delete-unconfirmed.json"; then
+    fail "Blackship jail deletion should require the exact jail name"
+fi
+assert_json "$test_root/blackship-delete-unconfirmed.json" \
+    '.ok == false and .message == "Jail deletion confirmation did not match." and (.details | contains("Nothing was deleted"))' \
+    "mismatched deletion confirmation should fail before mutation"
+[ "$(cksum "$state_dir/blackship.toml")" = "$delete_before" ] || fail "an unconfirmed deletion should not change the manifest"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-delete web web >"$test_root/blackship-delete-running.json"; then
+    fail "a running Blackship jail should require a clean stop before deletion"
+fi
+assert_json "$test_root/blackship-delete-running.json" \
+    '.ok == false and .message == "Stop web before deleting it."' \
+    "running jail deletion should explain the stop-first safety rule"
+[ "$(cksum "$state_dir/blackship.toml")" = "$delete_before" ] || fail "a refused running-jail deletion should not change the manifest"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RUNNING=false BSDRUNNER_BLACKSHIP_FIXTURE_RM_FAIL=1 run_backend blackship-delete web web >"$test_root/blackship-delete-rm-failed.json"; then
+    fail "a Blackship removal failure should keep BSDRunner configuration intact"
+fi
+assert_json "$test_root/blackship-delete-rm-failed.json" \
+    '.ok == false and .message == "Unable to delete web." and (.details | contains("left the jail definition"))' \
+    "Blackship removal failures should be explicit"
+[ "$(cksum "$state_dir/blackship.toml")" = "$delete_before" ] || fail "a failed Blackship removal should retain the manifest entry"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RUNNING=false run_backend blackship-delete web web >"$test_root/blackship-delete.json"
+assert_json "$test_root/blackship-delete.json" \
+    '.ok == true and .message == "Permanently deleted web." and (.details | contains("filesystem and associated ZFS storage"))' \
+    "stopped managed jail deletion should return a plain-language summary"
+if grep -Fq 'name = "web"' "$state_dir/blackship.toml"; then fail "successful deletion should remove the canonical manifest entry"; fi
+grep -Fq 'name = "retrydb"' "$state_dir/blackship.toml" || fail "successful deletion should preserve other managed jail entries"
+grep -Fq 'name = "database"' "$state_dir/blackship.toml" || fail "successful deletion should preserve later managed jail entries"
+[ ! -e "$state_dir/blackship-contexts/web" ] || fail "successful deletion should remove the generated build context"
+grep -F 'mdo blackship --config ' "$command_log" | grep -F ' --non-interactive rm web --volumes' >/dev/null || fail "deletion should ask Blackship to destroy the jail and associated ZFS storage"
+grep -Fx 'pf-backend jail-cleanup web 10.44.0.20' "$command_log" >/dev/null || fail "deletion should remove BSDRunner firewall records"
+pass "Blackship jail deletion is stop-first, confirmed, and cleans every BSDRunner-owned layer"
 
 bad_archive="$test_root/not-blackship.tar.gz"
 printf '%s\n' 'not a release archive' >"$bad_archive"

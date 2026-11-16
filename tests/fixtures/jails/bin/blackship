@@ -46,7 +46,11 @@ case "$args" in
         printf '%s\n' '{"schema_version":1,"ok":true,"data":{"status":"started"}}'
         ;;
     *" ps --host "*)
-        printf '%s\n' '{"schema_version":1,"ok":true,"data":{"project":"bsdrunner","config_path":"blackship.toml","jails":[{"service_name":"web","full_name":"bsdrunner-web","manager":"blackship","managed":true,"configured":true,"running":true,"state":"Running","jid":4,"release":"15.0-RELEASE","hostname":"web.local","ip":"10.44.0.20","ips":["10.44.0.20"],"path":"/var/db/bsdrunner/blackship/jails/bsdrunner-web","networks":["bsdrunner"],"depends_on":[],"tags":["bsdrunner","nginx","autostart"],"autostart":true,"health":{"configured":true,"status":"healthy","reason":null,"checked_at":1794560400,"checks_total":1,"checks_passing":1,"checks_failing":0,"checks_pending":0}}]}}'
+        running="${BSDRUNNER_BLACKSHIP_FIXTURE_RUNNING:-true}"
+        state="Running"
+        jid=4
+        [ "$running" = true ] || { state="Stopped"; jid=null; }
+        printf '{"schema_version":1,"ok":true,"data":{"project":"bsdrunner","config_path":"blackship.toml","jails":[{"service_name":"web","full_name":"bsdrunner-web","manager":"blackship","managed":true,"configured":true,"running":%s,"state":"%s","jid":%s,"release":"15.0-RELEASE","hostname":"web.local","ip":"10.44.0.20","ips":["10.44.0.20"],"path":"/var/db/bsdrunner/blackship/jails/bsdrunner-web","networks":["bsdrunner"],"depends_on":[],"tags":["bsdrunner","nginx","autostart"],"autostart":true,"health":{"configured":true,"status":"healthy","reason":null,"checked_at":1794560400,"checks_total":1,"checks_passing":1,"checks_failing":0,"checks_pending":0}}]}}\n' "$running" "$state" "$jid"
         ;;
     *" network list "*)
         printf '%s\n' '{"schema_version":1,"ok":true,"data":[]}'
@@ -67,6 +71,13 @@ case "$args" in
             exit 1
         fi
         printf '%s\n' '{"schema_version":1,"ok":true,"data":{"operation":"eva","applied":true}}'
+        ;;
+    *" rm "*)
+        if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_RM_FAIL:-0}" = 1 ]; then
+            printf '%s\n' 'simulated Blackship removal failure' >&2
+            exit 1
+        fi
+        printf '%s\n' "Jail 'bsdrunner-web' removed."
         ;;
     *)
         printf '%s\n' '{"schema_version":1,"ok":true,"data":{}}'

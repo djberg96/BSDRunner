@@ -215,8 +215,9 @@ experimental Ollama starter, and an external Bastille jail. The guarded
 binary, select `POOL/bsdrunner/blackship`, create a route-safe private network,
 and review Blank FreeBSD, nginx, PostgreSQL, or CPU-only Ollama starters. No
 inbound port is exposed automatically and autostart defaults off. See
-`docs/jails.md` for the guarded per-jail resource-limit editor, backend commands,
-fixture-backed tests, and the retained legacy compatibility path.
+`docs/jails.md` for the guarded per-jail resource-limit editor, stop-first
+typed-name deletion flow, backend commands, fixture-backed tests, and the
+retained legacy compatibility path.
 
 ## Scope
 

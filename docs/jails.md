@@ -125,6 +125,18 @@ tables containing QoS profiles, cpusets, swap, open-file, thread, or raw custom
 rules remain read-only in BSDRunner so the simplified editor cannot erase
 advanced settings.
 
+Permanent removal is intentionally separate from normal lifecycle actions.
+For a BSDRunner-managed Blackship jail, expand **Technical details**, open the
+**Danger zone**, and choose **Delete jail…**. The review names service-specific
+data at risk, shows the jail root, explains what remains untouched, and requires
+the exact jail name. BSDRunner refuses to force-delete a running jail and offers
+to stop it cleanly first. A confirmed deletion asks Blackship to remove the jail
+filesystem and associated ZFS storage, then removes the BSDRunner manifest
+entry, generated build context, autostart tag, outbound policy, and port
+forwards. Blackship, the host FreeBSD installation, shared releases, and other
+jails are not removed. Any partial cleanup is reported explicitly; there is no
+undo or backup workflow in this first version.
+
 Autostart defaults off. Opting in adds an `autostart` manifest tag. The small
 `bsdrunner_blackship` rc service is enabled only while at least one managed jail
 has that tag. It restores Blackship networking and anchors before running the

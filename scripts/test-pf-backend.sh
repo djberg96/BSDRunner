@@ -126,6 +126,29 @@ fi
 grep -Fx 'pfctl -k 10.0.0.20' "$command_log" >/dev/null || fail "port-forward removal should clear existing jail states"
 pass "PF backend removes a jail port forward and clears states"
 
+printf '%s\n' \
+    'web|10.0.0.20|internet-only|192.168.1.254' \
+    'build|10.0.0.10|none|192.168.1.254' >"$profile_dir/jail-policies.conf"
+printf '%s\n' \
+    'web|10.0.0.20|tcp|8080|80' \
+    'build|10.0.0.10|udp|5353|5353' >"$profile_dir/jail-port-forwards.conf"
+cleanup_policies_before="$(cat "$profile_dir/jail-policies.conf")"
+cleanup_forwards_before="$(cat "$profile_dir/jail-port-forwards.conf")"
+if BSDRUNNER_PF_TEST_VALIDATE_FAIL=1 run_backend jail-cleanup web 10.0.0.20 >"$test_root/jail-cleanup-failed.json"; then
+    fail "failed PF validation should reject jail-record cleanup"
+fi
+[ "$(cat "$profile_dir/jail-policies.conf")" = "$cleanup_policies_before" ] || fail "failed jail cleanup should restore all policies"
+[ "$(cat "$profile_dir/jail-port-forwards.conf")" = "$cleanup_forwards_before" ] || fail "failed jail cleanup should restore all port forwards"
+cleanup_output="$test_root/jail-cleanup.json"
+run_backend jail-cleanup web 10.0.0.20 >"$cleanup_output"
+jq -e '.ok == true and .message == "Removed firewall records for web."' "$cleanup_output" >/dev/null || fail "jail cleanup should return structured success"
+if grep -Fq 'web|10.0.0.20|' "$profile_dir/jail-policies.conf" "$profile_dir/jail-port-forwards.conf"; then
+    fail "jail cleanup should remove every policy and forward for the deleted jail"
+fi
+grep -Fx 'build|10.0.0.10|none|192.168.1.254' "$profile_dir/jail-policies.conf" >/dev/null || fail "jail cleanup should preserve unrelated policies"
+grep -Fx 'build|10.0.0.10|udp|5353|5353' "$profile_dir/jail-port-forwards.conf" >/dev/null || fail "jail cleanup should preserve unrelated forwards"
+pass "PF backend atomically removes all records for one deleted jail"
+
 blackship_output="$test_root/blackship-network.json"
 run_backend blackship-network 10.44.0.0/24 wlan0 >"$blackship_output"
 jq -e '.ok == true and .message == "BSDRunner firewall profile applied."' "$blackship_output" >/dev/null || fail "Blackship network setup should apply the managed PF profile"
