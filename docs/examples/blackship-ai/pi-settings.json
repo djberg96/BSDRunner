@@ -1,0 +1,4 @@
+{
+  "defaultModel": "gemma4:latest",
+  "defaultProvider": "ollama"
+}
