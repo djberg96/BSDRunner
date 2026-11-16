@@ -56,12 +56,14 @@ run_backend() {
     BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE="${BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED="${BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED:-1}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL="${BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL:-0}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL="${BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_REJECT="${BSDRUNNER_BLACKSHIP_FIXTURE_REJECT:-0}" \
     BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="${BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE:-}" \
     BSDRUNNER_UNAME_SYSTEM="${BSDRUNNER_UNAME_SYSTEM:-FreeBSD}" \
     BSDRUNNER_UNAME_MACHINE="${BSDRUNNER_UNAME_MACHINE:-amd64}" \
     BSDRUNNER_JAILS_TEST_MDO_DENY="${BSDRUNNER_JAILS_TEST_MDO_DENY:-0}" \
     BSDRUNNER_JAILS_TEST_PHYSMEM="${BSDRUNNER_JAILS_TEST_PHYSMEM:-17179869184}" \
+    BSDRUNNER_JAILS_TEST_NCPU="${BSDRUNNER_JAILS_TEST_NCPU:-8}" \
     BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF="${BSDRUNNER_JAILS_TEST_HOST_RESOLV_CONF:-$fixtures/etc/resolv.conf}" \
     BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$fixtures/etc/resolvconf/interfaces}" \
     BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL="${BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL:-0}" \
@@ -110,6 +112,15 @@ grep -F '"blackship-manifest-view", root.selectedJailName' "$jails_qml" >/dev/nu
 grep -F 'readOnly: true' "$jails_qml" >/dev/null || \
     fail "the managed manifest viewer should be read-only"
 pass "the managed manifest opens in a read-only viewer"
+grep -F 'visible: root.activeTab === "resources"' "$jails_qml" >/dev/null || \
+    fail "resource limits should open in a dedicated in-window tab"
+grep -F 'function recommendedResourceLimits(jail)' "$jails_qml" >/dev/null || \
+    fail "the resource editor should provide preset-aware recommendations"
+grep -F '"blackship-resource-limits", root.activeActionName' "$jails_qml" >/dev/null || \
+    fail "resource changes should use the guarded backend action"
+grep -F 'These are maximums, not reservations.' "$jails_qml" >/dev/null || \
+    fail "the resource editor should explain ceilings in beginner language"
+pass "Blackship resource limits use a guarded beginner-oriented in-window editor"
 grep -F 'if (jail.full_name && jail.full_name !== jail.name)' "$jails_qml" >/dev/null || \
     fail "the jail inventory should treat Blackship runtime names as aliases"
 pass "the jail inventory recognizes Blackship runtime-name aliases"
@@ -132,7 +143,7 @@ BSDRUNNER_JAILS_FIXTURE="$demo_fixture"
 export BSDRUNNER_JAILS_FIXTURE
 run_backend snapshot >"$demo_output"
 assert_json "$demo_output" \
-    '.ok == true and .schema_version == 2 and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 0 and (.configured | length) == 0 and (.bastille | length) == 1 and .blackship.compatible == true and (.blackship.inventory.data.jails | length) == 2 and .outbound_policies[0].policy == "internet-only" and .port_forwards == [{"name":"legacy-build","ipv4":"10.0.0.22","protocol":"tcp","host_port":8080,"jail_port":80}] and .simple_services[0].service == "nginx"' \
+    '.ok == true and .schema_version == 2 and .demo == true and .message == "Loaded Jails demo data." and (.running | length) == 0 and (.configured | length) == 0 and (.bastille | length) == 1 and .blackship.compatible == true and .blackship.rctl_enabled == true and .blackship.managed[0].limits.enabled == true and (.blackship.inventory.data.jails | length) == 2 and .outbound_policies[0].policy == "internet-only" and .port_forwards == [{"name":"legacy-build","ipv4":"10.0.0.22","protocol":"tcp","host_port":8080,"jail_port":80}] and .simple_services[0].service == "nginx"' \
     "demo fixture should satisfy the snapshot contract"
 pass "demo fixture satisfies the snapshot contract"
 
@@ -744,6 +755,78 @@ assert_json "$test_root/blackship-manifest.json" \
 if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view unmanaged >"$test_root/blackship-manifest-unmanaged.json"; then
     fail "the manifest viewer should reject unmanaged jail names"
 fi
+
+: >"$command_log"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-resource-limits web recommended 0 0 0 web >"$test_root/blackship-resources-recommended.json"
+assert_json "$test_root/blackship-resources-recommended.json" \
+    '.ok == true and .message == "Updated resource limits for web." and (.details | contains("Memory: 512 MiB")) and (.details | contains("CPU: 1 core(s)"))' \
+    "recommended resource limits should return a plain-language summary"
+grep -A4 '^\[jails.resources\]$' "$state_dir/blackship.toml" | grep -F 'memory = "512m"' >/dev/null || fail "recommended nginx limits should cap memory"
+grep -A4 '^\[jails.resources\]$' "$state_dir/blackship.toml" | grep -F 'cpu = "100"' >/dev/null || fail "recommended nginx limits should express one core as pcpu 100"
+grep -A4 '^\[jails.resources\]$' "$state_dir/blackship.toml" | grep -F 'maxproc = 128' >/dev/null || fail "recommended nginx limits should cap processes"
+grep -F 'mdo blackship --config ' "$command_log" | grep -F ' --format json --non-interactive eva web' >/dev/null || fail "running jails should receive resource changes through Blackship Eva"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$blackship_snapshot"
+assert_json "$blackship_snapshot" \
+    '.blackship.managed[0].limits == {"enabled":true,"memory":"512m","cpu":"100","maxproc":"128","advanced":false}' \
+    "managed inventory should expose configured resource ceilings"
+
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-resource-limits web custom 1536 2 300 web >"$test_root/blackship-resources-custom.json"
+assert_json "$test_root/blackship-resources-custom.json" \
+    '.ok == true and (.details | contains("Memory: 1536 MiB")) and (.details | contains("CPU: 2 core(s) (200%)")) and (.details | contains("Processes: 300"))' \
+    "custom resource limits should preserve the reviewed values"
+grep -A4 '^\[jails.resources\]$' "$state_dir/blackship.toml" | grep -F 'memory = "1536m"' >/dev/null || fail "custom memory limits should be written to the manifest"
+resources_before="$(cksum "$state_dir/blackship.toml")"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL=1 run_backend blackship-resource-limits web recommended 0 0 0 web >"$test_root/blackship-resources-eva-failed.json"; then
+    fail "a failed live resource update should not report success"
+fi
+assert_json "$test_root/blackship-resources-eva-failed.json" \
+    '.ok == false and .message == "Blackship could not apply the resource limits." and (.details | contains("rolled back"))' \
+    "failed Eva updates should report the manifest rollback"
+[ "$(cksum "$state_dir/blackship.toml")" = "$resources_before" ] || fail "failed live resource updates should restore the previous manifest"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-resource-limits web custom 64 99 2 web >"$test_root/blackship-resources-invalid.json"; then
+    fail "unsafe custom resource limits should be rejected"
+fi
+[ "$(cksum "$state_dir/blackship.toml")" = "$resources_before" ] || fail "rejected resource limits should leave the manifest unchanged"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RCTL_ENABLED=0 run_backend blackship-resource-limits web recommended 0 0 0 web >"$test_root/blackship-resources-no-rctl.json"; then
+    fail "enforceable limits should require RCTL"
+fi
+assert_json "$test_root/blackship-resources-no-rctl.json" \
+    '.ok == false and .message == "RCTL is not enabled."' \
+    "missing RCTL should produce actionable resource-limit guidance"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-resource-limits web none 0 0 0 web >"$test_root/blackship-resources-none.json"
+assert_json "$test_root/blackship-resources-none.json" \
+    '.ok == true and (.details | contains("No RCTL ceilings"))' \
+    "optional limits should be removable from non-Ollama jails"
+if grep -A18 'name = "web"' "$state_dir/blackship.toml" | grep -F '[jails.resources]' >/dev/null; then
+    fail "the no-limits profile should remove the managed resource block"
+fi
+awk '
+    /^\[\[jails\]\]/ { target = 0 }
+    target && /^\[jails.healthcheck\]$/ {
+        print "[jails.resources]"
+        print "memory = \"512m\""
+        print "cpu = \"100\""
+        print "maxproc = 128"
+        print "openfiles = 2048"
+        print ""
+    }
+    /^[[:space:]]*name[[:space:]]*=[[:space:]]*"web"[[:space:]]*$/ { target = 1 }
+    { print }
+' "$state_dir/blackship.toml" >"$state_dir/blackship-advanced.toml"
+mv "$state_dir/blackship-advanced.toml" "$state_dir/blackship.toml"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$blackship_snapshot"
+assert_json "$blackship_snapshot" \
+    '.blackship.managed[0].limits.advanced == true and .blackship.managed[0].limits.memory == "512m"' \
+    "managed inventory should identify resource settings outside the simplified editor"
+advanced_before="$(cksum "$state_dir/blackship.toml")"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-resource-limits web recommended 0 0 0 web >"$test_root/blackship-resources-advanced.json"; then
+    fail "the simplified resource editor should not overwrite advanced settings"
+fi
+assert_json "$test_root/blackship-resources-advanced.json" \
+    '.ok == false and .message == "This jail has advanced resource settings."' \
+    "advanced settings should produce a safe read-only response"
+[ "$(cksum "$state_dir/blackship.toml")" = "$advanced_before" ] || fail "advanced resource settings should remain unchanged"
+pass "Blackship resource limits are validated, visible, live-applied, and removable"
 
 if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_ARMADA_FAIL=1 run_backend blackship-preset-create postgres retrydb 15.0-RELEASE 10.44.0.24/24 no retrydb internet-only >"$test_root/blackship-retry-failed.json"; then
     fail "the simulated Armada failure should retain an incomplete PostgreSQL jail"
