@@ -98,6 +98,7 @@ ShellRoot {
     property string resourceMemoryGiB: "1"
     property string resourceCpuCores: "1"
     property string resourceMaxProcesses: "256"
+    property string deleteConfirmation: ""
     property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"})
     property var blackshipJails: []
     property var runningJails: []
@@ -429,6 +430,55 @@ ShellRoot {
             return
         clearPendingAction()
         activeTab = "jails"
+    }
+
+    function openDeleteJail() {
+        if (!selectedJail || selectedJail.backend !== "blackship" || runningAction)
+            return
+        deleteConfirmation = ""
+        actionDetails = ""
+        clearPendingAction()
+        activeTab = "delete"
+    }
+
+    function closeDeleteJail() {
+        if (runningAction)
+            return
+        deleteConfirmation = ""
+        activeTab = "jails"
+    }
+
+    function deleteDataDescription(jail) {
+        if (!jail)
+            return "all data stored inside it"
+        if (jail.preset === "postgres")
+            return "the PostgreSQL databases, users, configuration, and all other data stored inside it"
+        if (jail.preset === "nginx")
+            return "the nginx website, configuration, installed packages, and all other data stored inside it"
+        if (jail.preset === "ollama")
+            return "downloaded models, Ollama data, configuration, and all other data stored inside it"
+        return "its FreeBSD userland, installed packages, configuration, and all data stored inside it"
+    }
+
+    function stopJailBeforeDelete() {
+        if (!selectedJail || !canStop(selectedJail) || runningAction)
+            return
+        activeActionId = "stop"
+        activeActionName = selectedJail.name
+        activeActionBackend = selectedJail.backend
+        activeActionLabel = "Stopping " + selectedJail.name
+        runActionProcess()
+    }
+
+    function permanentlyDeleteJail() {
+        if (!selectedJail || selectedJail.backend !== "blackship" || (selectedJail.state || "").toLowerCase() === "running"
+                || deleteConfirmation !== selectedJail.name || demoMode || runningAction)
+            return
+        activeActionId = "blackship-delete"
+        activeActionName = selectedJail.name
+        activeActionBackend = selectedJail.backend
+        activeActionLabel = "Permanently deleting " + selectedJail.name
+        runActionProcess()
     }
 
     function resourceProfileAllowed(profile) {
@@ -836,6 +886,8 @@ ShellRoot {
         if (actionId.indexOf("blackship-autostart|") === 0)
             return selectedJail.backend === "blackship"
         if (actionId === "open-resource-limits")
+            return selectedJail.backend === "blackship"
+        if (actionId === "open-delete-jail")
             return selectedJail.backend === "blackship"
         if (actionId.indexOf("blackship-resources|") === 0)
             return selectedJail.backend === "blackship" && resourceInputsValid()
@@ -1524,6 +1576,7 @@ ShellRoot {
 
     function applyActionResult(text, exitCode, stderrText) {
         runningAction = false
+        var completedDelete = activeActionId === "blackship-delete"
         var payload = null
 
         try {
@@ -1560,6 +1613,10 @@ ShellRoot {
         activeActionCpuCores = "0"
         activeActionMaxProcesses = "0"
         activeActionLabel = ""
+        if (completedDelete) {
+            deleteConfirmation = ""
+            activeTab = "jails"
+        }
         refreshSnapshot()
     }
 
@@ -1609,6 +1666,8 @@ ShellRoot {
                     ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-autostart", root.activeActionName, root.activeActionPolicy, root.activeActionName]
                 : root.activeActionId === "blackship-resource-limits"
                     ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-resource-limits", root.activeActionName, root.activeActionResourceProfile, root.activeActionMemoryMiB, root.activeActionCpuCores, root.activeActionMaxProcesses, root.activeActionName]
+                : root.activeActionId === "blackship-delete"
+                    ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-delete", root.activeActionName, root.activeActionName]
                 : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
         stdout: StdioCollector {
             waitForEnd: true
@@ -2345,6 +2404,71 @@ ShellRoot {
                                                 if (detailCell.modelData.label === "Manifest" && root.selectedJail && root.selectedJail.backend === "blackship")
                                                     root.openManifestViewer()
                                             }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                visible: root.beginnerMapVisible && root.technicalDetailsVisible && root.selectedJail && root.selectedJail.backend === "blackship"
+                                width: parent.width
+                                height: visible ? 78 : 0
+                                radius: 7
+                                color: Qt.alpha(root.palette.danger, 0.08)
+                                border.width: 1
+                                border.color: root.palette.danger
+
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 10
+
+                                    Column {
+                                        width: parent.width - 132
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 4
+
+                                        Text {
+                                            width: parent.width
+                                            text: "Danger zone"
+                                            color: root.palette.danger
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: "Permanently remove this jail and its internal data."
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            wrapMode: Text.WordWrap
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 122
+                                        height: 34
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        radius: 6
+                                        color: dangerDeleteMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.danger, 0.16)
+                                        border.width: 1
+                                        border.color: root.palette.danger
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Delete jail…"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: dangerDeleteMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: !root.demoMode && !root.runningAction
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.openDeleteJail()
                                         }
                                     }
                                 }
@@ -3566,7 +3690,416 @@ ShellRoot {
                                         }
                                     }
                                 }
+
+                                Rectangle {
+                                    visible: root.technicalDetailsVisible && root.selectedJail && root.selectedJail.backend === "blackship"
+                                    width: parent.width
+                                    height: visible ? 78 : 0
+                                    radius: 7
+                                    color: Qt.alpha(root.palette.danger, 0.08)
+                                    border.width: 1
+                                    border.color: root.palette.danger
+
+                                    Row {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 10
+
+                                        Column {
+                                            width: parent.width - 132
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 4
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Danger zone"
+                                                color: root.palette.danger
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Permanently remove this jail and its internal data."
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 122
+                                            height: 34
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            radius: 6
+                                            color: compactDangerDeleteMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.danger, 0.16)
+                                            border.width: 1
+                                            border.color: root.palette.danger
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Delete jail…"
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                id: compactDangerDeleteMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                enabled: !root.demoMode && !root.runningAction
+                                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.openDeleteJail()
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.activeTab === "delete"
+                anchors.fill: parent
+                z: 20
+                color: root.palette.panelBackground
+
+                Flickable {
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    contentWidth: width
+                    contentHeight: deleteContent.height
+                    clip: true
+
+                    Column {
+                        id: deleteContent
+                        width: parent.width
+                        spacing: 12
+
+                        Row {
+                            width: parent.width
+                            height: 38
+                            spacing: 12
+
+                            Rectangle {
+                                width: 82
+                                height: parent.height
+                                radius: 6
+                                color: deleteBackMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "← Back"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: deleteBackMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !root.runningAction
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.closeDeleteJail()
+                                }
+                            }
+
+                            Text {
+                                width: parent.width - 94
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Delete " + (root.selectedJail ? root.selectedJail.name : "jail")
+                                color: root.palette.primaryText
+                                font.pixelSize: 22
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 112
+                            radius: 8
+                            color: Qt.alpha(root.palette.danger, 0.10)
+                            border.width: 1
+                            border.color: root.palette.danger
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 7
+
+                                Text {
+                                    width: parent.width
+                                    text: "This is permanent"
+                                    color: root.palette.danger
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: root.selectedJail
+                                        ? "Deleting “" + root.selectedJail.name + "” removes " + root.deleteDataDescription(root.selectedJail) + "."
+                                        : "Select a managed Blackship jail before deleting."
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 13
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "It does not remove FreeBSD itself, Blackship, BSDRunner, shared releases, or any other jail."
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 122
+                            radius: 8
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 6
+
+                                Text {
+                                    text: "BSDRunner will remove"
+                                    color: root.palette.accent
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "• The jail's FreeBSD filesystem and associated ZFS storage\n• Its Blackship manifest entry and generated build context\n• Its starts-at-boot tag, outbound policy, and port forwards"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    lineHeight: 1.25
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 72
+                            radius: 8
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+                            ToolTip.visible: deleteStorageMouse.containsMouse
+                            ToolTip.text: root.selectedJail ? String(root.selectedJail.path || "Storage path unavailable") : "Storage path unavailable"
+                            ToolTip.delay: 350
+                            ToolTip.timeout: 10000
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 4
+
+                                Text {
+                                    text: "Storage being deleted"
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: root.selectedJail ? root.valueOrUnknown(root.selectedJail.path) : "Unknown"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 13
+                                    elide: Text.ElideMiddle
+                                }
+                            }
+
+                            MouseArea {
+                                id: deleteStorageMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.NoButton
+                            }
+                        }
+
+                        Rectangle {
+                            id: deleteStateCard
+                            readonly property bool jailRunning: root.selectedJail && (root.selectedJail.state || "").toLowerCase() === "running"
+                            width: parent.width
+                            height: 82
+                            radius: 8
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: jailRunning ? root.palette.warning : root.palette.success
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 12
+
+                                Column {
+                                    width: parent.width - (deleteStateCard.jailRunning ? 170 : 0)
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 5
+
+                                    Text {
+                                        text: deleteStateCard.jailRunning ? "Stop the jail first" : "Jail is stopped"
+                                        color: deleteStateCard.jailRunning ? root.palette.warning : root.palette.success
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: deleteStateCard.jailRunning
+                                            ? "BSDRunner will not force-delete a running jail. Stop it cleanly before continuing."
+                                            : "Its processes are off. You can now confirm permanent deletion."
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: deleteStateCard.jailRunning
+                                    width: visible ? 158 : 0
+                                    height: 38
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    radius: 6
+                                    color: deleteStopMouse.enabled ? (deleteStopMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.warning, 0.16)) : root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.warning
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.runningAction ? "Stopping…" : "Stop jail first"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: deleteStopMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: !root.demoMode && !root.runningAction
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: root.stopJailBeforeDelete()
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            readonly property bool jailStopped: root.selectedJail && (root.selectedJail.state || "").toLowerCase() !== "running"
+                            visible: jailStopped
+                            width: parent.width
+                            height: visible ? 142 : 0
+                            radius: 8
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: deleteConfirmationInput.activeFocus ? root.palette.danger : root.palette.frameBorder
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 7
+
+                                Text {
+                                    width: parent.width
+                                    text: "Type “" + (root.selectedJail ? root.selectedJail.name : "") + "” to confirm"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                Row {
+                                    width: parent.width
+                                    height: 40
+                                    spacing: 8
+
+                                    Rectangle {
+                                        width: parent.width - 254
+                                        height: parent.height
+                                        radius: 6
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.deleteConfirmation === (root.selectedJail ? root.selectedJail.name : "") ? root.palette.danger : root.palette.panelBorder
+
+                                        TextInput {
+                                            id: deleteConfirmationInput
+                                            anchors.fill: parent
+                                            anchors.margins: 10
+                                            text: root.deleteConfirmation
+                                            enabled: !root.runningAction
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.danger
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.pixelSize: 13
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            onTextEdited: root.deleteConfirmation = text
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        readonly property bool ready: !root.demoMode && !root.runningAction && root.selectedJail && root.deleteConfirmation === root.selectedJail.name
+                                        width: 246
+                                        height: parent.height
+                                        radius: 6
+                                        opacity: ready ? 1.0 : 0.45
+                                        color: ready ? (permanentDeleteMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.danger, 0.18)) : root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.danger
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: root.selectedJail ? "Permanently delete " + root.selectedJail.name : "Permanently delete jail"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: permanentDeleteMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: parent.ready
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.permanentlyDeleteJail()
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "There is no undo. A future backup-and-restore workflow can add a safer archive option."
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 11
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: root.runningAction || root.actionDetails.length > 0
+                            width: parent.width
+                            text: root.runningAction ? root.statusMessage : root.statusMessage + (root.actionDetails.length > 0 ? "\n" + root.actionDetails : "")
+                            color: root.runningAction ? root.palette.accent : root.toneColor(root.statusTone)
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
                         }
                     }
                 }

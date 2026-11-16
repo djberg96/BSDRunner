@@ -3411,6 +3411,140 @@ blackship_write_resources_candidate() {
     ' "$blackship_manifest" >"$destination"
 }
 
+blackship_write_without_jail() {
+    requested="$1"
+    destination="$2"
+    awk -v requested="$requested" '
+        function setting(line, value) {
+            value = line
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            return value
+        }
+        function flush(i) {
+            if (!in_jail) return
+            if (jail_name != requested)
+                for (i = 1; i <= buffered; i++) print buffer[i]
+            delete buffer
+            buffered = 0
+            jail_name = ""
+        }
+        /^\[\[jails\]\][[:space:]]*$/ {
+            flush()
+            in_jail = 1
+            buffer[++buffered] = $0
+            next
+        }
+        in_jail && /^\[/ && $0 !~ /^\[jails\./ && $0 !~ /^\[\[jails\./ {
+            flush()
+            in_jail = 0
+        }
+        in_jail {
+            buffer[++buffered] = $0
+            if (jail_name == "" && /^[[:space:]]*name[[:space:]]*=/)
+                jail_name = setting($0)
+            next
+        }
+        { print }
+        END { flush() }
+    ' "$blackship_manifest" >"$destination"
+}
+
+append_blackship_delete_failure() {
+    failure="$1"
+    if [ -n "$cleanup_failures" ]; then
+        cleanup_failures="$(printf '%s\n%s' "$cleanup_failures" "$failure")"
+    else
+        cleanup_failures="$failure"
+    fi
+}
+
+do_blackship_delete() {
+    name="${1:-}"
+    confirmation="${2:-}"
+
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Jail deletion confirmation did not match." "Type the jail name exactly. Nothing was deleted."; exit 1; }
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.5.0 or newer first."; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+
+    values="$(blackship_manifest_entry_values "$name" 2>/dev/null || true)"
+    [ -n "$values" ] || { emit_action_result false "Unable to read the managed jail definition." "$name"; exit 1; }
+    old_ifs="$IFS"
+    IFS='|'
+    set -- $values
+    IFS="$old_ifs"
+    address="${2:-}"
+    context="${3:-}"
+    tags="${4:-}"
+    expected_context="$blackship_context_dir/$name"
+    if [ "$context" != "$expected_context" ] || ! printf '%s\n' "$tags" | grep -F '"bsdrunner"' >/dev/null 2>&1; then
+        emit_action_result false "BSDRunner refused to delete an unverified Blackship jail." "The manifest build context or ownership tag does not match BSDRunner's managed project."
+        exit 1
+    fi
+    valid_jail_ipv4 "$address" || { emit_action_result false "BSDRunner refused an invalid managed jail address." "$address"; exit 1; }
+    if blackship_jail_running "$name"; then
+        emit_action_result false "Stop ${name} before deleting it." "BSDRunner never force-deletes a running jail. Stop it cleanly, then return to Delete jail."
+        exit 1
+    fi
+
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-delete.XXXXXX")"
+    blackship_write_without_jail "$name" "$candidate"
+    blackship_check_candidate "$candidate" || { rm -f "$candidate"; emit_action_result false "Blackship rejected the manifest cleanup." "Nothing was deleted and the installed manifest was not changed."; exit 1; }
+
+    if ! remove_output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive rm "$name" --volumes 2>&1)"; then
+        rm -f "$candidate"
+        write_last_result "error" "Unable to delete ${name}."
+        emit_action_result false "Unable to delete ${name}." "Blackship left the jail definition and BSDRunner settings intact.\n${remove_output}"
+        exit 1
+    fi
+
+    cleanup_failures=""
+    case "$remove_output" in
+        *"Retained datasets"*) append_blackship_delete_failure "Blackship retained one or more ZFS datasets; review its output below." ;;
+    esac
+    manifest_updated=false
+    if ! install_managed_file "$candidate" "$blackship_manifest"; then
+        append_blackship_delete_failure "Manifest entry could not be removed; the generated build context was retained for recovery."
+    else
+        manifest_updated=true
+    fi
+    rm -f "$candidate"
+
+    if [ "$manifest_updated" = true ] && [ -e "$expected_context" ] && ! run_privileged rm -rf -- "$expected_context"; then
+        append_blackship_delete_failure "Generated build context could not be removed: ${expected_context}"
+    fi
+    address_ipv4="${address%%/*}"
+    if [ -r "$pf_backend" ]; then
+        if ! pf_output="$(sh "$pf_backend" jail-cleanup "$name" "$address_ipv4" 2>&1)" || ! printf '%s\n' "$pf_output" | grep -q '"ok":true'; then
+            append_blackship_delete_failure "Firewall policy or port-forward cleanup failed."
+        fi
+    else
+        append_blackship_delete_failure "BSDRunner's firewall backend was unavailable."
+    fi
+    if [ "$manifest_updated" = true ]; then
+        if ! blackship_sync_autostart_service; then
+            append_blackship_delete_failure "The starts-at-boot service could not be reconciled."
+        fi
+    else
+        append_blackship_delete_failure "Starts-at-boot could not be reconciled while the stale manifest entry remains."
+    fi
+
+    details="$(printf '%s\n%s\n%s' \
+        "Blackship removed the jail filesystem and associated ZFS storage." \
+        "Removed BSDRunner manifest, generated context, autostart tag, outbound policy, and port forwards." \
+        "$remove_output")"
+    if [ -n "$cleanup_failures" ]; then
+        write_last_result "warning" "Deleted ${name}, but cleanup is incomplete."
+        failure_details="$(printf '%s\n%s\n\n%s' "The jail data is gone, but these records need attention:" "$cleanup_failures" "$remove_output")"
+        emit_action_result false "Deleted ${name}, but cleanup is incomplete." "$failure_details"
+        exit 1
+    fi
+    write_last_result "success" "Permanently deleted ${name}."
+    emit_action_result true "Permanently deleted ${name}." "$details"
+}
+
 do_blackship_resource_limits() {
     name="${1:-}"
     profile="${2:-}"
@@ -3684,6 +3818,9 @@ case "$action" in
         ;;
     blackship-resource-limits)
         do_blackship_resource_limits "${2:-}" "${3:-}" "${4:-0}" "${5:-0}" "${6:-0}" "${7:-}"
+        ;;
+    blackship-delete)
+        do_blackship_delete "${2:-}" "${3:-}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"
