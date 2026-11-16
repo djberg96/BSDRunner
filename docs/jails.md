@@ -112,6 +112,19 @@ required 75%-of-host-RAM cap does require RCTL; when `kern.racct.enable=0`, its
 review is blocked before creation and explains that the boot tunable and a
 reboot are required.
 
+Every BSDRunner-managed Blackship jail has a **Resource limits** action. It
+opens an in-window editor with No limits, a preset-aware Recommended profile,
+and Custom memory, CPU-core, and process ceilings. The UI always describes
+these values as maximums rather than reservations. Custom values are checked
+against physical RAM and online CPUs; non-Ollama jails may remove their limits,
+while Ollama must retain an enforceable memory ceiling. Candidate manifests are
+validated before replacement. A running jail is updated without a restart via
+`blackship eva`; if that live update fails, BSDRunner restores the previous
+manifest. Stopped jails receive the new limits on their next start. Resource
+tables containing QoS profiles, cpusets, swap, open-file, thread, or raw custom
+rules remain read-only in BSDRunner so the simplified editor cannot erase
+advanced settings.
+
 Autostart defaults off. Opting in adds an `autostart` manifest tag. The small
 `bsdrunner_blackship` rc service is enabled only while at least one managed jail
 has that tag. It restores Blackship networking and anchors before running the

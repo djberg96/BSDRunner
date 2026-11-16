@@ -81,6 +81,10 @@ ShellRoot {
     property string activeActionJailPort: ""
     property string activeActionService: ""
     property string activeActionServiceVerb: ""
+    property string activeActionResourceProfile: ""
+    property string activeActionMemoryMiB: "0"
+    property string activeActionCpuCores: "0"
+    property string activeActionMaxProcesses: "0"
     property string activeActionLabel: ""
     property string pendingActionId: ""
     property string pendingActionLabel: ""
@@ -90,6 +94,10 @@ ShellRoot {
     property string selectedBeginnerTopic: "storage"
     property string selectedPreset: "blank"
     property bool technicalDetailsVisible: false
+    property string resourceProfile: "recommended"
+    property string resourceMemoryGiB: "1"
+    property string resourceCpuCores: "1"
+    property string resourceMaxProcesses: "256"
     property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"})
     property var blackshipJails: []
     property var runningJails: []
@@ -286,6 +294,7 @@ ShellRoot {
                 "preset": preset,
                 "purpose": purpose,
                 "health": healthLabel,
+                "limits": managed && managed.limits ? managed.limits : {"enabled": false, "memory": "", "cpu": "", "maxproc": "", "advanced": false},
                 "resources": stats ? stats.cpu_percent + "% CPU • " + stats.rss_mib + " MiB RAM • " + stats.processes + " processes" : (row.running ? "Usage unavailable" : "No current usage")
             })
         }
@@ -339,6 +348,139 @@ ShellRoot {
         selectedJailName = jail ? jail.name || "" : ""
         selectedJailBackend = jail ? jail.backend || "native" : ""
         clearPendingAction()
+    }
+
+    function resourceMemoryMiB(value) {
+        var match = String(value || "").trim().toLowerCase().match(/^([0-9]+)([kmgt]?)$/)
+        if (!match)
+            return 0
+        var amount = parseInt(match[1], 10)
+        if (match[2] === "k")
+            return Math.round(amount / 1024)
+        if (match[2] === "g")
+            return amount * 1024
+        if (match[2] === "t")
+            return amount * 1024 * 1024
+        return amount
+    }
+
+    function formatMemoryMiB(value) {
+        var memory = Number(value || 0)
+        if (memory >= 1024) {
+            var gib = memory / 1024
+            return gib.toFixed(memory % 1024 === 0 ? 0 : 1) + " GiB"
+        }
+        return memory + " MiB"
+    }
+
+    function hostMemoryMiB() {
+        var host = blackshipInfo && blackshipInfo.host && blackshipInfo.host.data ? blackshipInfo.host.data : null
+        return host && host.memory && host.memory.physical_bytes ? Math.floor(host.memory.physical_bytes / 1024 / 1024) : 0
+    }
+
+    function hostCpuCount() {
+        var host = blackshipInfo && blackshipInfo.host && blackshipInfo.host.data ? blackshipInfo.host.data : null
+        return host && host.cpu && host.cpu.online ? Number(host.cpu.online) : 1
+    }
+
+    function recommendedResourceLimits(jail) {
+        var preset = jail ? jail.preset || "blank" : "blank"
+        var memory = preset === "nginx" ? 512 : preset === "postgres" ? 2048 : preset === "ollama" ? Math.max(4096, Math.floor((hostMemoryMiB() || 8192) * 0.75)) : 1024
+        var cores = preset === "postgres" ? 2 : preset === "ollama" ? 4 : 1
+        cores = Math.max(1, Math.min(cores, hostCpuCount()))
+        var processes = preset === "nginx" ? 128 : preset === "ollama" ? 512 : 256
+        return {"memory_mib": memory, "cpu_cores": cores, "maxproc": processes}
+    }
+
+    function currentLimitsMatchRecommendation(jail) {
+        if (!jail || !jail.limits || !jail.limits.enabled || jail.limits.advanced)
+            return false
+        var recommended = recommendedResourceLimits(jail)
+        return resourceMemoryMiB(jail.limits.memory) === recommended.memory_mib
+            && Number(jail.limits.cpu || 0) === recommended.cpu_cores * 100
+            && Number(jail.limits.maxproc || 0) === recommended.maxproc
+    }
+
+    function resourceLimitsSummary(jail) {
+        if (!jail || !jail.limits || !jail.limits.enabled)
+            return "No RCTL ceilings configured"
+        var memory = resourceMemoryMiB(jail.limits.memory)
+        var cores = Number(jail.limits.cpu || 0) / 100
+        var summary = formatMemoryMiB(memory) + " memory • " + cores + " CPU core" + (cores === 1 ? "" : "s") + " • " + (jail.limits.maxproc || "?") + " processes"
+        return jail.limits.advanced ? summary + " • Advanced settings present" : summary
+    }
+
+    function openResourceLimits() {
+        if (!selectedJail || selectedJail.backend !== "blackship")
+            return
+        var recommended = recommendedResourceLimits(selectedJail)
+        var limits = selectedJail.limits || {"enabled": false}
+        resourceProfile = !limits.enabled ? "none" : currentLimitsMatchRecommendation(selectedJail) ? "recommended" : "custom"
+        var currentMemory = resourceMemoryMiB(limits.memory)
+        resourceMemoryGiB = ((currentMemory || recommended.memory_mib) / 1024).toFixed(1).replace(/\.0$/, "")
+        resourceCpuCores = String(limits.cpu ? Number(limits.cpu) / 100 : recommended.cpu_cores)
+        resourceMaxProcesses = String(limits.maxproc || recommended.maxproc)
+        clearPendingAction()
+        activeTab = "resources"
+    }
+
+    function closeResourceLimits() {
+        if (runningAction)
+            return
+        clearPendingAction()
+        activeTab = "jails"
+    }
+
+    function resourceProfileAllowed(profile) {
+        if (!selectedJail || selectedJail.backend !== "blackship" || (selectedJail.limits && selectedJail.limits.advanced))
+            return false
+        if (profile === "none")
+            return selectedJail.preset !== "ollama"
+        return blackshipInfo.rctl_enabled === true
+    }
+
+    function resourceInputsValid() {
+        if (!resourceProfileAllowed(resourceProfile))
+            return false
+        if (resourceProfile !== "custom")
+            return true
+        var memoryMiB = Math.round(Number(resourceMemoryGiB) * 1024)
+        var cores = Number(resourceCpuCores)
+        var processes = Number(resourceMaxProcesses)
+        var minimumMemory = selectedJail && selectedJail.preset === "ollama" ? 4096 : 128
+        var maximumPercent = selectedJail && selectedJail.preset === "ollama" ? 0.75 : 0.90
+        var maximumMemory = hostMemoryMiB() > 0 ? Math.floor(hostMemoryMiB() * maximumPercent) : 9007199254740991
+        return memoryMiB >= minimumMemory && memoryMiB <= maximumMemory
+            && Number.isInteger(cores) && cores >= 1 && cores <= hostCpuCount()
+            && Number.isInteger(processes) && processes >= 32 && processes <= 4096
+    }
+
+    function proposedResourceLimits() {
+        if (resourceProfile === "none")
+            return {"memory_mib": 0, "cpu_cores": 0, "maxproc": 0}
+        if (resourceProfile === "recommended")
+            return recommendedResourceLimits(selectedJail)
+        return {
+            "memory_mib": Math.round(Number(resourceMemoryGiB) * 1024),
+            "cpu_cores": Number(resourceCpuCores),
+            "maxproc": Number(resourceMaxProcesses)
+        }
+    }
+
+    function resourceReviewText() {
+        if (resourceProfile === "none")
+            return "Remove the memory, CPU, and process ceilings. The jail will share host resources without BSDRunner-managed RCTL limits."
+        var proposal = proposedResourceLimits()
+        return formatMemoryMiB(proposal.memory_mib) + " memory • " + proposal.cpu_cores + " CPU core" + (proposal.cpu_cores === 1 ? "" : "s") + " • " + proposal.maxproc + " processes. These are maximums, not reservations."
+    }
+
+    function prepareResourceAction() {
+        if (demoMode || !resourceInputsValid())
+            return
+        var proposal = proposedResourceLimits()
+        requestAction("blackship-resources|" + resourceProfile + "|" + proposal.memory_mib + "|" + proposal.cpu_cores + "|" + proposal.maxproc,
+                      "Apply resource limits",
+                      resourceReviewText() + ((selectedJail.state || "").toLowerCase() === "running" ? " Blackship will apply this live without restarting the jail." : " The limits will apply the next time the jail starts."))
     }
 
     function jailNameInUse(candidate) {
@@ -693,6 +835,10 @@ ShellRoot {
             return selectedJail.backend === "blackship" && selectedJail.preset === "postgres"
         if (actionId.indexOf("blackship-autostart|") === 0)
             return selectedJail.backend === "blackship"
+        if (actionId === "open-resource-limits")
+            return selectedJail.backend === "blackship"
+        if (actionId.indexOf("blackship-resources|") === 0)
+            return selectedJail.backend === "blackship" && resourceInputsValid()
         if (actionId === "start")
             return canStart(selectedJail)
         if (actionId === "stop")
@@ -750,6 +896,19 @@ ShellRoot {
         } else if (pendingActionId.indexOf("blackship-autostart|") === 0) {
             activeActionId = "blackship-autostart"
             activeActionPolicy = pendingActionId.split("|")[1]
+            activeActionProtocol = ""
+            activeActionHostPort = ""
+            activeActionJailPort = ""
+            activeActionService = ""
+            activeActionServiceVerb = ""
+        } else if (pendingActionId.indexOf("blackship-resources|") === 0) {
+            var resourceParts = pendingActionId.split("|")
+            activeActionId = "blackship-resource-limits"
+            activeActionResourceProfile = resourceParts[1]
+            activeActionMemoryMiB = resourceParts[2]
+            activeActionCpuCores = resourceParts[3]
+            activeActionMaxProcesses = resourceParts[4]
+            activeActionPolicy = ""
             activeActionProtocol = ""
             activeActionHostPort = ""
             activeActionJailPort = ""
@@ -1396,6 +1555,10 @@ ShellRoot {
         activeActionJailPort = ""
         activeActionService = ""
         activeActionServiceVerb = ""
+        activeActionResourceProfile = ""
+        activeActionMemoryMiB = "0"
+        activeActionCpuCores = "0"
+        activeActionMaxProcesses = "0"
         activeActionLabel = ""
         refreshSnapshot()
     }
@@ -1444,6 +1607,8 @@ ShellRoot {
                     ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-postgres-reset", root.activeActionName, root.activeActionName]
                 : root.activeActionId === "blackship-autostart"
                     ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-autostart", root.activeActionName, root.activeActionPolicy, root.activeActionName]
+                : root.activeActionId === "blackship-resource-limits"
+                    ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-resource-limits", root.activeActionName, root.activeActionResourceProfile, root.activeActionMemoryMiB, root.activeActionCpuCores, root.activeActionMaxProcesses, root.activeActionName]
                 : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
         stdout: StdioCollector {
             waitForEnd: true
@@ -2128,7 +2293,8 @@ ShellRoot {
                                         {"label": "Release", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.release) : "None"},
                                         {"label": "Dataset / root", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.path) : "None"},
                                         {"label": "Manifest", "value": root.selectedJail && root.selectedJail.backend === "blackship" ? "/usr/local/etc/bsdrunner/blackship.toml" : "External"},
-                                        {"label": "Dependencies", "value": root.selectedJail && root.selectedJail.dependencies && root.selectedJail.dependencies.length > 0 ? root.selectedJail.dependencies.join(", ") : "None"}
+                                        {"label": "Dependencies", "value": root.selectedJail && root.selectedJail.dependencies && root.selectedJail.dependencies.length > 0 ? root.selectedJail.dependencies.join(", ") : "None"},
+                                        {"label": "Resource ceilings", "value": root.selectedJail && root.selectedJail.backend === "blackship" ? root.resourceLimitsSummary(root.selectedJail) : "External"}
                                     ]
 
                                     Rectangle {
@@ -2846,6 +3012,7 @@ ShellRoot {
                                         {"id": "stop", "label": "Stop", "detail": "Shut the jail down"},
                                         {"id": "restart", "label": "Restart", "detail": "Stop, then start again"},
                                         {"id": "console", "label": "Console", "detail": "Open a root shell"},
+                                        {"id": "open-resource-limits", "label": "Resource limits", "detail": "Cap memory, CPU, and processes"},
                                         {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Reconcile tagged jails at boot"},
                                         {"id": "blackship-postgres-reset", "label": "Reset DB password", "detail": "Show a new app password once"}
                                     ]
@@ -2890,7 +3057,12 @@ ShellRoot {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             enabled: root.actionAvailable(actionCell.modelData.id)
-                                            onClicked: root.requestAction(actionCell.modelData.id, actionCell.modelData.label, actionCell.modelData.label + " " + root.selectedJail.name + "?")
+                                            onClicked: {
+                                                if (actionCell.modelData.id === "open-resource-limits")
+                                                    root.openResourceLimits()
+                                                else
+                                                    root.requestAction(actionCell.modelData.id, actionCell.modelData.label, actionCell.modelData.label + " " + root.selectedJail.name + "?")
+                                            }
                                         }
                                     }
                                 }
@@ -3150,6 +3322,7 @@ ShellRoot {
                                             {"id": "stop", "label": "Stop", "detail": "Shut the jail down"},
                                             {"id": "restart", "label": "Restart", "detail": "Stop, then start again"},
                                             {"id": "console", "label": "Console", "detail": "Open a root shell"},
+                                            {"id": "open-resource-limits", "label": "Resource limits", "detail": "Cap memory, CPU, and processes"},
                                             {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Reconcile tagged jails at boot"},
                                             {"id": "blackship-postgres-reset", "label": "Reset DB password", "detail": "Show a new app password once"}
                                         ]
@@ -3194,7 +3367,12 @@ ShellRoot {
                                                 anchors.fill: parent
                                                 hoverEnabled: true
                                                 enabled: root.actionAvailable(compactActionCell.modelData.id)
-                                                onClicked: root.requestAction(compactActionCell.modelData.id, compactActionCell.modelData.label, compactActionCell.modelData.label + " " + root.selectedJail.name + "?")
+                                                onClicked: {
+                                                    if (compactActionCell.modelData.id === "open-resource-limits")
+                                                        root.openResourceLimits()
+                                                    else
+                                                        root.requestAction(compactActionCell.modelData.id, compactActionCell.modelData.label, compactActionCell.modelData.label + " " + root.selectedJail.name + "?")
+                                                }
                                             }
                                         }
                                     }
@@ -3332,7 +3510,8 @@ ShellRoot {
                                             {"label": "Release", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.release) : "None"},
                                             {"label": "Dataset / root", "value": root.selectedJail ? root.valueOrUnknown(root.selectedJail.path) : "None"},
                                             {"label": "Manifest", "value": root.selectedJail && root.selectedJail.backend === "blackship" ? "/usr/local/etc/bsdrunner/blackship.toml" : "External"},
-                                            {"label": "Dependencies", "value": root.selectedJail && root.selectedJail.dependencies && root.selectedJail.dependencies.length > 0 ? root.selectedJail.dependencies.join(", ") : "None"}
+                                            {"label": "Dependencies", "value": root.selectedJail && root.selectedJail.dependencies && root.selectedJail.dependencies.length > 0 ? root.selectedJail.dependencies.join(", ") : "None"},
+                                            {"label": "Resource ceilings", "value": root.selectedJail && root.selectedJail.backend === "blackship" ? root.resourceLimitsSummary(root.selectedJail) : "External"}
                                         ]
 
                                         Rectangle {
@@ -3384,6 +3563,615 @@ ShellRoot {
                                                         root.openManifestViewer()
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.activeTab === "resources"
+                anchors.fill: parent
+                z: 20
+                color: root.palette.panelBackground
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    color: root.palette.panelBackground
+
+                    Column {
+                        anchors.fill: parent
+                        spacing: 12
+
+                        Row {
+                            width: parent.width
+                            height: 48
+                            spacing: 12
+
+                            Column {
+                                width: parent.width - 110
+                                spacing: 3
+
+                                Text {
+                                    width: parent.width
+                                    text: "Resource limits for " + (root.selectedJail ? root.selectedJail.name : "jail")
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "Set ceilings that protect the host. Unused memory and CPU remain available to everything else."
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                width: 98
+                                height: 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 7
+                                color: resourceBackMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                opacity: root.runningAction ? 0.45 : 1.0
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Back to Jails"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: resourceBackMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !root.runningAction
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.closeResourceLimits()
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            height: parent.height - 60
+                            spacing: 12
+
+                            Rectangle {
+                                width: 300
+                                height: parent.height
+                                radius: 8
+                                color: root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 14
+                                    spacing: 12
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Currently configured"
+                                        color: root.palette.accent
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.resourceLimitsSummary(root.selectedJail)
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 15
+                                        font.bold: true
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.selectedJail ? root.selectedJail.resources : "No current usage"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 1
+                                        color: root.palette.panelBorder
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "How limits work"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: "Memory is the jail's maximum resident memory. CPU 100% means one full core, so the UI asks for cores. The process ceiling limits how many processes the jail can create."
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 74
+                                        radius: 7
+                                        color: Qt.alpha(root.blackshipInfo.rctl_enabled ? root.palette.success : root.palette.warning, 0.12)
+                                        border.width: 1
+                                        border.color: root.blackshipInfo.rctl_enabled ? root.palette.success : root.palette.warning
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 9
+                                            spacing: 4
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.blackshipInfo.rctl_enabled ? "RCTL ready" : "RCTL is not enabled"
+                                                color: root.blackshipInfo.rctl_enabled ? root.palette.success : root.palette.warning
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: root.blackshipInfo.rctl_enabled ? "FreeBSD can enforce these ceilings." : "Enable kern.racct.enable=1 and reboot before adding limits."
+                                                color: root.palette.secondaryText
+                                                font.pixelSize: 11
+                                                wrapMode: Text.WordWrap
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: root.selectedJail && root.selectedJail.limits && root.selectedJail.limits.advanced
+                                        width: parent.width
+                                        text: "Advanced resource settings are present in the manifest. BSDRunner leaves them untouched; use the read-only manifest viewer to inspect them."
+                                        color: root.palette.warning
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width - 312
+                                height: parent.height
+                                radius: 8
+                                color: root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Flickable {
+                                    anchors.fill: parent
+                                    anchors.margins: 14
+                                    contentWidth: width
+                                    contentHeight: resourceEditorContent.height
+                                    clip: true
+
+                                    Column {
+                                        id: resourceEditorContent
+                                        width: parent.width
+                                        spacing: 12
+
+                                        Text {
+                                            width: parent.width
+                                            text: "Choose a profile"
+                                            color: root.palette.accent
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                        }
+
+                                        Row {
+                                            width: parent.width
+                                            height: 92
+                                            spacing: 8
+
+                                            Repeater {
+                                                model: [
+                                                    {"id": "none", "label": "No limits", "detail": "Share host resources without managed ceilings"},
+                                                    {"id": "recommended", "label": "Recommended", "detail": "A practical starting point for this service"},
+                                                    {"id": "custom", "label": "Custom", "detail": "Choose memory, CPU, and process ceilings"}
+                                                ]
+
+                                                Rectangle {
+                                                    id: resourceProfileCard
+                                                    required property var modelData
+                                                    readonly property bool allowed: root.resourceProfileAllowed(modelData.id)
+                                                    readonly property bool selected: root.resourceProfile === modelData.id
+
+                                                    width: (parent.width - 16) / 3
+                                                    height: parent.height
+                                                    radius: 8
+                                                    color: selected ? Qt.alpha(root.palette.accent, 0.16) : resourceProfileMouse.containsMouse && allowed ? root.palette.cardHover : root.palette.panelBackground
+                                                    opacity: allowed ? 1.0 : 0.45
+                                                    border.width: selected ? 2 : 1
+                                                    border.color: selected ? root.palette.accent : root.palette.panelBorder
+
+                                                    Column {
+                                                        anchors.fill: parent
+                                                        anchors.margins: 10
+                                                        spacing: 5
+
+                                                        Text {
+                                                            width: parent.width
+                                                            text: resourceProfileCard.modelData.label
+                                                            color: root.palette.primaryText
+                                                            font.pixelSize: 13
+                                                            font.bold: true
+                                                            elide: Text.ElideRight
+                                                        }
+
+                                                        Text {
+                                                            width: parent.width
+                                                            text: resourceProfileCard.modelData.detail
+                                                            color: root.palette.secondaryText
+                                                            font.pixelSize: 11
+                                                            wrapMode: Text.WordWrap
+                                                            maximumLineCount: 3
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+
+                                                    MouseArea {
+                                                        id: resourceProfileMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        enabled: resourceProfileCard.allowed && !root.runningAction
+                                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        onClicked: {
+                                                            root.resourceProfile = resourceProfileCard.modelData.id
+                                                            root.clearPendingAction()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            visible: root.selectedJail && root.selectedJail.preset === "ollama"
+                                            width: parent.width
+                                            text: "Ollama must keep a memory ceiling, so No limits is unavailable. Custom Ollama memory is capped at 75% of host RAM."
+                                            color: root.palette.warning
+                                            font.pixelSize: 11
+                                            wrapMode: Text.WordWrap
+                                        }
+
+                                        Rectangle {
+                                            visible: root.resourceProfile === "custom"
+                                            width: parent.width
+                                            height: 112
+                                            radius: 8
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.resourceInputsValid() ? root.palette.panelBorder : root.palette.warning
+
+                                            Row {
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                spacing: 8
+
+                                                Column {
+                                                    width: (parent.width - 16) / 3
+                                                    spacing: 6
+
+                                                    Text {
+                                                        text: "Memory cap (GiB)"
+                                                        color: root.palette.secondaryText
+                                                        font.pixelSize: 11
+                                                        font.bold: true
+                                                    }
+
+                                                    Rectangle {
+                                                        width: parent.width
+                                                        height: 38
+                                                        radius: 6
+                                                        color: root.palette.cardBackground
+                                                        border.width: 1
+                                                        border.color: resourceMemoryInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                                        TextInput {
+                                                            id: resourceMemoryInput
+                                                            anchors.fill: parent
+                                                            anchors.margins: 9
+                                                            text: root.resourceMemoryGiB
+                                                            color: root.palette.primaryText
+                                                            font.pixelSize: 14
+                                                            selectByMouse: true
+                                                            validator: DoubleValidator { bottom: 0.1; top: 1024; decimals: 1 }
+                                                            onTextEdited: {
+                                                                root.resourceMemoryGiB = text
+                                                                root.clearPendingAction()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        text: root.selectedJail && root.selectedJail.preset === "ollama" ? "Minimum 4 GiB" : "Minimum 0.125 GiB"
+                                                        color: root.palette.mutedText
+                                                        font.pixelSize: 10
+                                                    }
+                                                }
+
+                                                Column {
+                                                    width: (parent.width - 16) / 3
+                                                    spacing: 6
+
+                                                    Text {
+                                                        text: "CPU cores"
+                                                        color: root.palette.secondaryText
+                                                        font.pixelSize: 11
+                                                        font.bold: true
+                                                    }
+
+                                                    Rectangle {
+                                                        width: parent.width
+                                                        height: 38
+                                                        radius: 6
+                                                        color: root.palette.cardBackground
+                                                        border.width: 1
+                                                        border.color: resourceCpuInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                                        TextInput {
+                                                            id: resourceCpuInput
+                                                            anchors.fill: parent
+                                                            anchors.margins: 9
+                                                            text: root.resourceCpuCores
+                                                            color: root.palette.primaryText
+                                                            font.pixelSize: 14
+                                                            selectByMouse: true
+                                                            validator: IntValidator { bottom: 1; top: Math.max(1, root.hostCpuCount()) }
+                                                            onTextEdited: {
+                                                                root.resourceCpuCores = text
+                                                                root.clearPendingAction()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        text: "Host has " + root.hostCpuCount() + " logical CPUs"
+                                                        color: root.palette.mutedText
+                                                        font.pixelSize: 10
+                                                    }
+                                                }
+
+                                                Column {
+                                                    width: (parent.width - 16) / 3
+                                                    spacing: 6
+
+                                                    Text {
+                                                        text: "Maximum processes"
+                                                        color: root.palette.secondaryText
+                                                        font.pixelSize: 11
+                                                        font.bold: true
+                                                    }
+
+                                                    Rectangle {
+                                                        width: parent.width
+                                                        height: 38
+                                                        radius: 6
+                                                        color: root.palette.cardBackground
+                                                        border.width: 1
+                                                        border.color: resourceProcessInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                                        TextInput {
+                                                            id: resourceProcessInput
+                                                            anchors.fill: parent
+                                                            anchors.margins: 9
+                                                            text: root.resourceMaxProcesses
+                                                            color: root.palette.primaryText
+                                                            font.pixelSize: 14
+                                                            selectByMouse: true
+                                                            validator: IntValidator { bottom: 32; top: 4096 }
+                                                            onTextEdited: {
+                                                                root.resourceMaxProcesses = text
+                                                                root.clearPendingAction()
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        text: "32–4096"
+                                                        color: root.palette.mutedText
+                                                        font.pixelSize: 10
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 104
+                                            radius: 8
+                                            color: Qt.alpha(root.palette.accent, 0.10)
+                                            border.width: 1
+                                            border.color: root.palette.accent
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                spacing: 5
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: "Review"
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.resourceReviewText()
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 12
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 2
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.selectedJail && (root.selectedJail.state || "").toLowerCase() === "running" ? "Blackship operation: validate manifest → save → eva live update" : "Blackship operation: validate manifest → save → enforce on next start"
+                                                    color: root.palette.mutedText
+                                                    font.pixelSize: 10
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+
+                                        Row {
+                                            width: parent.width
+                                            height: 36
+                                            spacing: 8
+
+                                            Rectangle {
+                                                width: 158
+                                                height: parent.height
+                                                radius: 7
+                                                color: resourceApplyMouse.containsMouse && resourceApplyMouse.enabled ? Qt.alpha(root.palette.accent, 0.24) : Qt.alpha(root.palette.accent, 0.14)
+                                                opacity: resourceApplyMouse.enabled ? 1.0 : 0.45
+                                                border.width: 1
+                                                border.color: root.palette.accent
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "Review and apply"
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    id: resourceApplyMouse
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    enabled: !root.demoMode && root.resourceInputsValid() && !root.runningAction && root.pendingActionId.length === 0
+                                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                    onClicked: root.prepareResourceAction()
+                                                }
+                                            }
+
+                                            Text {
+                                                width: parent.width - 166
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: root.demoMode ? "Demo mode is read-only." : !root.resourceInputsValid() ? "Choose valid limits before continuing." : root.runningAction ? "Applying and verifying…" : "A final confirmation appears below."
+                                                color: root.resourceInputsValid() ? root.palette.secondaryText : root.palette.warning
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            visible: root.pendingActionId.indexOf("blackship-resources|") === 0
+                                            width: parent.width
+                                            height: 112
+                                            radius: 8
+                                            color: root.palette.panelBackground
+                                            border.width: 1
+                                            border.color: root.palette.warning
+
+                                            Column {
+                                                anchors.fill: parent
+                                                anchors.margins: 10
+                                                spacing: 7
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.pendingActionLabel
+                                                    color: root.palette.primaryText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    width: parent.width
+                                                    text: root.pendingActionDescription
+                                                    color: root.palette.secondaryText
+                                                    font.pixelSize: 11
+                                                    wrapMode: Text.WordWrap
+                                                    maximumLineCount: 2
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Row {
+                                                    height: 28
+                                                    spacing: 8
+
+                                                    Rectangle {
+                                                        width: 92
+                                                        height: parent.height
+                                                        radius: 6
+                                                        color: resourceConfirmMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.warning, 0.18)
+                                                        border.width: 1
+                                                        border.color: root.palette.warning
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "Confirm"
+                                                            color: root.palette.primaryText
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                        }
+
+                                                        MouseArea {
+                                                            id: resourceConfirmMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            onClicked: root.confirmPendingAction()
+                                                        }
+                                                    }
+
+                                                    Rectangle {
+                                                        width: 80
+                                                        height: parent.height
+                                                        radius: 6
+                                                        color: resourceCancelMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                                        border.width: 1
+                                                        border.color: root.palette.panelBorder
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "Cancel"
+                                                            color: root.palette.secondaryText
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                        }
+
+                                                        MouseArea {
+                                                            id: resourceCancelMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            onClicked: root.clearPendingAction()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            visible: root.runningAction || root.actionDetails.length > 0
+                                            width: parent.width
+                                            text: root.runningAction ? "Applying resource limits…" : root.statusMessage + (root.actionDetails.length > 0 ? "\n" + root.actionDetails : "")
+                                            color: root.runningAction ? root.palette.accent : root.toneColor(root.statusTone)
+                                            font.pixelSize: 12
+                                            wrapMode: Text.WordWrap
                                         }
                                     }
                                 }

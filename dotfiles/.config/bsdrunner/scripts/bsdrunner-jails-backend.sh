@@ -222,21 +222,43 @@ blackship_snapshot_json() {
     if [ -r "$blackship_manifest" ]; then
         awk '
             function esc(value) { gsub(/\\/, "\\\\", value); gsub(/"/, "\\\"", value); return value }
-            function flush(autostart, preset) {
+            function reset_jail() {
+                name = ""; tags = ""; memory = ""; cpu = ""; maxproc = ""
+                advanced = 0; in_resources = 0
+            }
+            function setting_value(line, value) {
+                value = line
+                sub(/^[^=]*=[[:space:]]*/, "", value)
+                gsub(/^[[:space:]\"]+|[[:space:]\"]+$/, "", value)
+                return value
+            }
+            function flush(autostart, preset, enabled) {
                 if (name == "") return
                 autostart = tags ~ /"autostart"/ ? "true" : "false"
                 preset = "blank"
                 if (tags ~ /"nginx"/) preset = "nginx"
                 else if (tags ~ /"postgres"/) preset = "postgres"
                 else if (tags ~ /"ollama"/) preset = "ollama"
+                enabled = memory != "" || cpu != "" || maxproc != "" || advanced ? "true" : "false"
                 if (!first) printf ","
                 first = 0
-                printf "{\"name\":\"%s\",\"preset\":\"%s\",\"autostart\":%s}", esc(name), preset, autostart
+                printf "{\"name\":\"%s\",\"preset\":\"%s\",\"autostart\":%s,\"limits\":{\"enabled\":%s,\"memory\":\"%s\",\"cpu\":\"%s\",\"maxproc\":\"%s\",\"advanced\":%s}}", esc(name), preset, autostart, enabled, esc(memory), esc(cpu), esc(maxproc), advanced ? "true" : "false"
             }
-            BEGIN { printf "["; first = 1; name = ""; tags = "" }
-            /^\[\[jails\]\]/ { flush(); name = ""; tags = ""; in_jail = 1; next }
+            BEGIN { printf "["; first = 1; reset_jail() }
+            /^\[\[jails\]\][[:space:]]*$/ { flush(); reset_jail(); in_jail = 1; next }
             in_jail && name == "" && /^[[:space:]]*name[[:space:]]*=/ { name = $0; sub(/^[^=]*=[[:space:]]*"/, "", name); sub(/"[[:space:]]*$/, "", name) }
             in_jail && /^[[:space:]]*tags[[:space:]]*=/ { tags = $0 }
+            in_jail && /^\[jails\.qos/ { advanced = 1 }
+            in_jail && /^\[jails\.resources\][[:space:]]*$/ { in_resources = 1; next }
+            in_resources && /^\[/ { in_resources = 0 }
+            in_resources && /^[[:space:]]*[A-Za-z][A-Za-z0-9_]*[[:space:]]*=/ {
+                key = $0; sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*=.*/, "", key)
+                value = setting_value($0)
+                if (key == "memory") memory = value
+                else if (key == "cpu") cpu = value
+                else if (key == "maxproc") maxproc = value
+                else advanced = 1
+            }
             END { flush(); printf "]" }
         ' "$blackship_manifest"
     else
@@ -2525,6 +2547,14 @@ host_physical_memory() {
     fi
 }
 
+host_cpu_count() {
+    if [ "$test_mode" = 1 ] && [ -n "${BSDRUNNER_JAILS_TEST_NCPU:-}" ]; then
+        printf '%s\n' "$BSDRUNNER_JAILS_TEST_NCPU"
+    else
+        sysctl -n hw.ncpu 2>/dev/null || printf '1\n'
+    fi
+}
+
 blackship_network_values() {
     proposed="${1:-}"
     printf '%s\n' "$proposed" | awk -F '[./]' '
@@ -3244,6 +3274,246 @@ blackship_sync_autostart_service() {
     fi
 }
 
+blackship_manifest_preset() {
+    requested="$1"
+    awk -v requested="$requested" '
+        /^\[\[jails\]\][[:space:]]*$/ { selected = 0 }
+        /^[[:space:]]*name[[:space:]]*=/ {
+            value = $0
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            selected = value == requested
+        }
+        selected && /^[[:space:]]*tags[[:space:]]*=/ {
+            if ($0 ~ /"ollama"/) print "ollama"
+            else if ($0 ~ /"postgres"/) print "postgres"
+            else if ($0 ~ /"nginx"/) print "nginx"
+            else print "blank"
+            exit
+        }
+    ' "$blackship_manifest"
+}
+
+blackship_resources_have_advanced_settings() {
+    requested="$1"
+    awk -v requested="$requested" '
+        /^\[\[jails\]\][[:space:]]*$/ { selected = 0; in_resources = 0 }
+        /^[[:space:]]*name[[:space:]]*=/ {
+            value = $0
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            selected = value == requested
+        }
+        selected && /^\[jails\.resources\][[:space:]]*$/ { in_resources = 1; next }
+        selected && /^\[jails\.qos/ { found = 1 }
+        in_resources && /^\[/ { in_resources = 0 }
+        in_resources && /^[[:space:]]*[A-Za-z][A-Za-z0-9_]*[[:space:]]*=/ {
+            key = $0
+            sub(/^[[:space:]]*/, "", key)
+            sub(/[[:space:]]*=.*/, "", key)
+            if (key != "memory" && key != "cpu" && key != "maxproc") found = 1
+        }
+        END { exit found ? 0 : 1 }
+    ' "$blackship_manifest"
+}
+
+blackship_recommended_resources() {
+    preset="$1"
+    physical="$(host_physical_memory)"
+    physical_mib="$((physical / 1024 / 1024))"
+    cpus="$(host_cpu_count)"
+    [ "$cpus" -ge 1 ] 2>/dev/null || cpus=1
+    case "$preset" in
+        nginx) memory_mib=512; cpu_cores=1; maxproc=128 ;;
+        postgres) memory_mib=2048; cpu_cores=2; maxproc=256 ;;
+        ollama)
+            memory_mib="$((physical_mib * 75 / 100))"
+            [ "$memory_mib" -ge 4096 ] || memory_mib=4096
+            cpu_cores=4
+            maxproc=512
+            ;;
+        *) memory_mib=1024; cpu_cores=1; maxproc=256 ;;
+    esac
+    [ "$cpu_cores" -le "$cpus" ] || cpu_cores="$cpus"
+    printf '%s|%s|%s\n' "$memory_mib" "$cpu_cores" "$maxproc"
+}
+
+blackship_jail_running() {
+    requested="$1"
+    inventory="$(blackship_read_json ps --host 2>/dev/null || true)"
+    [ -n "$inventory" ] || return 1
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s\n' "$inventory" | jq -e --arg requested "$requested" \
+            'any(.data.jails[]?; (.service_name == $requested or .full_name == $requested) and .running == true)' >/dev/null 2>&1
+    else
+        printf '%s\n' "$inventory" | tr -d '[:space:]' | sed 's/},{/}\
+{/g' | awk -v requested="$requested" '
+            index($0, "\"service_name\":\"" requested "\"") && index($0, "\"running\":true") { found = 1 }
+            END { exit found ? 0 : 1 }
+        '
+    fi
+}
+
+blackship_write_resources_candidate() {
+    requested="$1"
+    profile="$2"
+    memory_mib="$3"
+    cpu_percent="$4"
+    maxproc="$5"
+    destination="$6"
+    awk -v requested="$requested" -v profile="$profile" -v memory_mib="$memory_mib" -v cpu_percent="$cpu_percent" -v maxproc="$maxproc" '
+        function section_name(line, value) {
+            value = line
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            return value
+        }
+        function emit_limits() {
+            if (emitted) return
+            if (profile != "none") {
+                print ""
+                print "[jails.resources]"
+                printf "memory = \"%sm\"\n", memory_mib
+                printf "cpu = \"%s\"\n", cpu_percent
+                printf "maxproc = %s\n", maxproc
+                print ""
+            }
+            emitted = 1
+        }
+        /^\[\[jails\]\][[:space:]]*$/ {
+            if (selected && !emitted) emit_limits()
+            in_jail = 1
+            selected = 0
+            emitted = 0
+            skipping = 0
+            print
+            next
+        }
+        {
+            if (skipping) {
+                if ($0 ~ /^\[/) skipping = 0
+                else next
+            }
+            if (in_jail && /^[[:space:]]*name[[:space:]]*=/) {
+                selected = section_name($0) == requested
+                print
+                next
+            }
+            if (selected && /^\[jails\.resources\][[:space:]]*$/) {
+                emit_limits()
+                skipping = 1
+                next
+            }
+            if (selected && !emitted && /^\[jails\.healthcheck\][[:space:]]*$/) emit_limits()
+            print
+        }
+        END { if (selected && !emitted) emit_limits() }
+    ' "$blackship_manifest" >"$destination"
+}
+
+do_blackship_resource_limits() {
+    name="${1:-}"
+    profile="${2:-}"
+    requested_memory_mib="${3:-0}"
+    requested_cpu_cores="${4:-0}"
+    requested_maxproc="${5:-0}"
+    confirmation="${6:-}"
+
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    case "$profile" in none|recommended|custom) ;; *) emit_action_result false "Invalid resource profile." "$profile"; exit 1 ;; esac
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Resource-limit confirmation did not match." "Return to the selected jail and confirm again."; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.5.0 or newer first."; exit 1; }
+    preset="$(blackship_manifest_preset "$name" 2>/dev/null || true)"
+    [ -n "$preset" ] || preset=blank
+
+    if blackship_resources_have_advanced_settings "$name"; then
+        emit_action_result false "This jail has advanced resource settings." "BSDRunner will not overwrite cpusets, swap, open-file, thread, or custom RCTL rules. Review the manifest instead."
+        exit 1
+    fi
+    if [ "$profile" = none ] && [ "$preset" = ollama ]; then
+        emit_action_result false "Ollama must keep resource limits." "The experimental Ollama starter requires an enforceable memory ceiling. Choose Recommended or Custom."
+        exit 1
+    fi
+
+    memory_mib=0
+    cpu_cores=0
+    maxproc=0
+    if [ "$profile" = recommended ]; then
+        recommendation="$(blackship_recommended_resources "$preset")"
+        memory_mib="${recommendation%%|*}"
+        remainder="${recommendation#*|}"
+        cpu_cores="${remainder%%|*}"
+        maxproc="${remainder##*|}"
+    elif [ "$profile" = custom ]; then
+        memory_mib="$requested_memory_mib"
+        cpu_cores="$requested_cpu_cores"
+        maxproc="$requested_maxproc"
+        case "$memory_mib:$cpu_cores:$maxproc" in *[!0-9:]*|::*|:*:|*::* )
+            emit_action_result false "Invalid custom resource limits." "Use whole numbers for memory, CPU cores, and processes."
+            exit 1
+            ;;
+        esac
+    fi
+
+    if [ "$profile" != none ]; then
+        blackship_rctl_enabled || { emit_action_result false "RCTL is not enabled." "Set kern.racct.enable=1 in /boot/loader.conf and reboot before applying enforceable limits."; exit 1; }
+        physical="$(host_physical_memory)"
+        physical_mib="$((physical / 1024 / 1024))"
+        cpus="$(host_cpu_count)"
+        [ "$cpus" -ge 1 ] 2>/dev/null || cpus=1
+        minimum_memory=128
+        maximum_percent=90
+        if [ "$preset" = ollama ]; then minimum_memory=4096; maximum_percent=75; fi
+        maximum_memory="$((physical_mib * maximum_percent / 100))"
+        [ "$memory_mib" -ge "$minimum_memory" ] 2>/dev/null || { emit_action_result false "The memory limit is too small." "Choose at least ${minimum_memory} MiB for this jail."; exit 1; }
+        if [ "$physical_mib" -gt 0 ] && [ "$memory_mib" -gt "$maximum_memory" ]; then
+            emit_action_result false "The memory limit leaves too little for the host." "Choose no more than ${maximum_memory} MiB (${maximum_percent}% of physical RAM)."
+            exit 1
+        fi
+        [ "$cpu_cores" -ge 1 ] 2>/dev/null && [ "$cpu_cores" -le "$cpus" ] 2>/dev/null || { emit_action_result false "Invalid CPU limit." "Choose from 1 through ${cpus} CPU cores."; exit 1; }
+        [ "$maxproc" -ge 32 ] 2>/dev/null && [ "$maxproc" -le 4096 ] 2>/dev/null || { emit_action_result false "Invalid process limit." "Choose from 32 through 4096 processes."; exit 1; }
+    fi
+
+    cpu_percent="$((cpu_cores * 100))"
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-resources.XXXXXX")"
+    backup="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-resources-backup.XXXXXX")"
+    cp "$blackship_manifest" "$backup"
+    blackship_write_resources_candidate "$name" "$profile" "$memory_mib" "$cpu_percent" "$maxproc" "$candidate"
+    blackship_check_candidate "$candidate" || { rm -f "$candidate" "$backup"; emit_action_result false "Blackship rejected the resource limits." "The manifest was not changed."; exit 1; }
+    if ! install_managed_file "$candidate" "$blackship_manifest"; then
+        rm -f "$candidate" "$backup"
+        emit_action_result false "Unable to save the resource limits." "Privilege escalation was denied; the manifest was not changed."
+        exit 1
+    fi
+    rm -f "$candidate"
+
+    apply_note="Saved for the next jail start."
+    if blackship_jail_running "$name"; then
+        if ! eva_output="$(run_privileged blackship --config "$blackship_manifest" --format json --non-interactive eva "$name" 2>&1)"; then
+            rollback_note=""
+            if install_managed_file "$backup" "$blackship_manifest"; then
+                run_privileged blackship --config "$blackship_manifest" --format json --non-interactive eva "$name" >/dev/null 2>&1 || rollback_note=" The previous live rules could not be fully restored."
+            else
+                rollback_note=" The previous manifest could not be restored."
+            fi
+            rm -f "$backup"
+            emit_action_result false "Blackship could not apply the resource limits." "The manifest update was rolled back.${rollback_note}\n${eva_output}"
+            exit 1
+        fi
+        apply_note="Applied immediately with Blackship Eva; no restart was needed."
+    fi
+    rm -f "$backup"
+
+    if [ "$profile" = none ]; then
+        summary="No RCTL ceilings are configured. ${apply_note}"
+    else
+        summary="Memory: ${memory_mib} MiB\nCPU: ${cpu_cores} core(s) (${cpu_percent}%)\nProcesses: ${maxproc}\n${apply_note}\nThese are ceilings, not reserved resources."
+    fi
+    emit_action_result true "Updated resource limits for ${name}." "$summary"
+}
+
 do_blackship_autostart() {
     name="${1:-}"
     desired="${2:-}"
@@ -3411,6 +3681,9 @@ case "$action" in
         ;;
     blackship-autostart)
         do_blackship_autostart "${2:-}" "${3:-}" "${4:-}"
+        ;;
+    blackship-resource-limits)
+        do_blackship_resource_limits "${2:-}" "${3:-}" "${4:-0}" "${5:-0}" "${6:-0}" "${7:-}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"
