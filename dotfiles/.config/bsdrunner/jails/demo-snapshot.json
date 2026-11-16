@@ -62,8 +62,8 @@
   "blackship": {
     "available": true,
     "compatible": true,
-    "minimum_version": "0.4.2",
-    "version": "0.4.2",
+    "minimum_version": "0.5.0",
+    "version": "0.5.0",
     "output_schema_version": 1,
     "configured": true,
     "manifest": "/usr/local/etc/bsdrunner/blackship.toml",

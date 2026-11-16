@@ -1,7 +1,7 @@
 # BSDRunner Jails
 
 BSDRunner Jails is a beginner-oriented Quickshell control surface for learning
-and operating FreeBSD jails. New service jails use Blackship 0.4.2 or newer;
+and operating FreeBSD jails. New service jails use Blackship 0.5.0 or newer;
 existing Bastille and native jails remain visible and operable without migration.
 
 The UI is intentionally read-mostly. It helps a new user answer:
@@ -54,7 +54,7 @@ The snapshot action returns JSON with:
 - Blackship capabilities plus best-effort JSON envelopes for `host`, `ps --host`,
   `network list`, `releases`, `ports`, and `stats`; `ps --host` supplies passive
   health and effective autostart summaries without launching checks
-- compatibility status requiring Blackship `>= 0.4.2` and output schema v1
+- compatibility status requiring Blackship `>= 0.5.0` and output schema v1
 - host RCTL readiness, used only by starters whose safety requirements need an
   enforceable resource cap
 
@@ -76,8 +76,8 @@ The snapshot action returns JSON with:
 
 The setup checklist is: install Blackship, choose a ZFS pool, create the private
 network, then pick a starter. The confirmed installer accepts only the official
-FreeBSD amd64 0.4.2 archive, verifies SHA-256
-`912a6180938e0ed40a72ffa9bfda07a4dd221afa0aad94c5188fb930b1f50a5f`,
+FreeBSD amd64 0.5.0 archive, verifies SHA-256
+`02742fe641896fb1d6586eef352a6049bc8c56fee85fc5d190022e625d60ff0c`,
 validates `capabilities`, and does not downgrade a compatible newer release.
 
 BSDRunner owns one project:
@@ -102,8 +102,9 @@ The starter choices are:
   17. It creates `appdb` and `app`; the generated password is shown once and is
   never persisted by BSDRunner. Port 5432 is never published automatically.
 - **Ollama local AI — Experimental**, amd64 and CPU-only, with Vulkan disabled.
-  It requires at least 8 GiB RAM and 20 GiB free storage, downloads no models,
-  and does not support GPU passthrough.
+  It requires at least 8 GiB RAM and 20 GiB free storage, runs unprivileged,
+  disables Ollama cloud features, downloads no models, and does not support GPU
+  passthrough.
 
 RCTL is optional for Blackship and for the Blank, nginx, and PostgreSQL
 starters. Those starters do not emit `[jails.resources]` blocks. Ollama's
@@ -113,7 +114,9 @@ reboot are required.
 
 Autostart defaults off. Opting in adds an `autostart` manifest tag. The small
 `bsdrunner_blackship` rc service is enabled only while at least one managed jail
-has that tag and runs Blackship's native `autostart` reconciliation at boot.
+has that tag. It restores Blackship networking and anchors before running the
+native `autostart` reconciliation at boot. Manual starts perform the same
+idempotent setup first.
 Tagged jails and their dependencies start in order; other project jails remain
 stopped. If provisioning fails after the manifest entry is installed,
 BSDRunner retains the completed work and reports **Setup incomplete** so the user
