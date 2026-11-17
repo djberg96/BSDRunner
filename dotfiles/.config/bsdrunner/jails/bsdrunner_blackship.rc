@@ -13,6 +13,7 @@ stop_cmd="bsdrunner_blackship_stop"
 
 bsdrunner_blackship_start()
 {
+    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive setup || return 1
     /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive autostart
 }
 

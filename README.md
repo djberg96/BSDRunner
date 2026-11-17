@@ -202,7 +202,7 @@ See `docs/zfs.md` for the backend commands and scope.
 ## Jails
 
 BSDRunner includes a beginner-focused FreeBSD jails surface. New jails are
-Blackship 0.4.2+ managed services; existing Bastille and native jails remain
+Blackship 0.5.0+ managed services; existing Bastille and native jails remain
 listed and keep their guarded lifecycle actions.
 
 ```sh
@@ -215,8 +215,8 @@ experimental Ollama starter, and an external Bastille jail. The guarded
 binary, select `POOL/bsdrunner/blackship`, create a route-safe private network,
 and review Blank FreeBSD, nginx, PostgreSQL, or CPU-only Ollama starters. No
 inbound port is exposed automatically and autostart defaults off. See
-`docs/jails.md` for backend commands, fixture-backed tests, and the retained
-legacy compatibility path.
+`docs/jails.md` for the guarded per-jail resource-limit editor, backend commands,
+fixture-backed tests, and the retained legacy compatibility path.
 
 ## Scope
 
