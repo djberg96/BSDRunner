@@ -17,6 +17,7 @@ if [ "$test_mode" = "1" ]; then
     blackship_manifest="${BSDRUNNER_JAILS_TEST_BLACKSHIP_MANIFEST:-$state_dir/blackship.toml}"
     blackship_data_dir="${BSDRUNNER_JAILS_TEST_BLACKSHIP_DATA_DIR:-$state_dir/blackship-data}"
     blackship_context_dir="${BSDRUNNER_JAILS_TEST_BLACKSHIP_CONTEXT_DIR:-$state_dir/blackship-contexts}"
+    source_attachment_root="${BSDRUNNER_JAILS_TEST_SOURCE_ROOT:-$HOME}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
@@ -31,7 +32,9 @@ else
     blackship_manifest="${BSDRUNNER_BLACKSHIP_MANIFEST:-/usr/local/etc/bsdrunner/blackship.toml}"
     blackship_data_dir="${BSDRUNNER_BLACKSHIP_DATA_DIR:-/var/db/bsdrunner/blackship}"
     blackship_context_dir="${BSDRUNNER_BLACKSHIP_CONTEXT_DIR:-/var/db/bsdrunner/blackship/contexts}"
+    source_attachment_root="$HOME"
 fi
+source_attachment_file="$state_dir/source-attachments.conf"
 export PATH
 
 blackship_min_version="0.5.0"
@@ -516,6 +519,33 @@ jail_resolver_address_value() {
             exit
         }
     ' "$resolver_source"
+}
+
+blackship_resolver_address_value() {
+    if [ -n "${BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER:-}" ]; then
+        printf '%s\n' "$BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER"
+        return 0
+    fi
+
+    if [ "$test_mode" != "1" ] && command -v sockstat >/dev/null 2>&1; then
+        local_resolver="$(sockstat -4 -l 2>/dev/null | awk '
+            {
+                endpoint = $6
+                if (endpoint !~ /:53$/) next
+                sub(/:53$/, "", endpoint)
+                if (endpoint ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && endpoint !~ /^127\./ && endpoint != "0.0.0.0") {
+                    print endpoint
+                    exit
+                }
+            }
+        ')"
+        if [ -n "$local_resolver" ]; then
+            printf '%s\n' "$local_resolver"
+            return 0
+        fi
+    fi
+
+    jail_resolver_address_value "$(jail_resolver_source_value 2>/dev/null || true)"
 }
 
 network_interface_exists() {
@@ -1101,6 +1131,44 @@ port_forwards_json() {
     ' "$jail_forward_file"
 }
 
+nullfs_mountpoint_active() {
+    requested_mountpoint="$1"
+    mount -p 2>/dev/null | awk -v requested="$requested_mountpoint" '
+        function has_option(options, requested_option, values, count, position) {
+            count = split(options, values, ",")
+            for (position = 1; position <= count; position++)
+                if (values[position] == requested_option)
+                    return 1
+            return 0
+        }
+        $2 == requested && $3 == "nullfs" &&
+            has_option($4, "ro") && has_option($4, "nosuid") && has_option($4, "noexec") { found = 1 }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+source_attachments_json() {
+    if [ ! -r "$source_attachment_file" ]; then
+        printf '[]'
+        return
+    fi
+
+    printf '['
+    first=true
+    while IFS='|' read -r attachment_name attachment_source attachment_target attachment_mountpoint; do
+        valid_name "$attachment_name" || continue
+        valid_source_target "$attachment_target" || continue
+        [ -n "$attachment_source" ] || continue
+        nullfs_mountpoint_active "$attachment_mountpoint" || continue
+        if [ "$first" = true ]; then first=false; else printf ','; fi
+        printf '{"name":"%s","source":"%s","target":"%s","read_only":true,"noexec":true,"nosuid":true,"temporary":true}' \
+            "$(printf '%s' "$attachment_name" | json_escape)" \
+            "$(printf '%s' "$attachment_source" | json_escape)" \
+            "$(printf '%s' "$attachment_target" | json_escape)"
+    done <"$source_attachment_file"
+    printf ']'
+}
+
 bastille_service_inventory() {
     if command -v jq >/dev/null 2>&1; then
         service_json_output="$(run_bastille_list_json 2>/dev/null || true)"
@@ -1430,6 +1498,8 @@ emit_snapshot() {
     port_forwards_json
     printf ',"simple_services":'
     simple_services_json
+    printf ',"source_attachments":'
+    source_attachments_json
     printf ',"blackship":'
     printf '%s' "$blackship_snapshot"
     printf ',"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
@@ -1490,6 +1560,12 @@ do_lifecycle() {
             stop) blackship_verb=down ;;
             restart) blackship_verb=restart ;;
         esac
+        source_attachments_detached=false
+        if [ "$verb" != start ] && ! source_attachments_detach_all "$name"; then
+            write_last_result "error" "Unable to detach source folders from ${name}."
+            emit_action_result false "Unable to ${verb} ${name}." "A source folder is still in use. Close jail shells or tools using /workspace, detach the folder, and retry."
+            exit 1
+        fi
         setup_output=""
         if [ "$verb" = start ]; then
             if ! setup_output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive setup 2>&1)"; then
@@ -1502,6 +1578,9 @@ do_lifecycle() {
             details="$output"
             if [ -n "$setup_output" ]; then
                 details="$(printf '%s\n%s' "$setup_output" "$output")"
+            fi
+            if [ "$source_attachments_detached" = true ]; then
+                details="$(printf '%s\n%s' "Temporary source folders were detached before the jail ${verb}." "$details")"
             fi
             write_last_result "success" "$(printf '%s %s.' "$verb" "$name")"
             emit_action_result true "$(printf '%s %s.' "$verb" "$name")" "$details"
@@ -1604,8 +1683,12 @@ blackship_jail_matches() {
             sub(/"[[:space:]]*$/, "", result)
             return result
         }
-        /^\[\[jails\]\]/ { if (selected && matched) found = 1; selected = 0; matched = 0 }
-        /^[[:space:]]*name[[:space:]]*=/ { selected = value($0) == requested }
+        /^\[\[jails\]\]/ { if (selected && matched) found = 1; in_jail = 1; have_name = 0; selected = 0; matched = 0; next }
+        in_jail && !have_name && /^[[:space:]]*name[[:space:]]*=/ {
+            have_name = 1
+            selected = value($0) == requested
+            next
+        }
         selected && /^[[:space:]]*ip_cidr[[:space:]]*=/ {
             candidate = value($0); sub(/\/.*/, "", candidate); matched = candidate == address
         }
@@ -1613,12 +1696,68 @@ blackship_jail_matches() {
     ' "$blackship_manifest"
 }
 
+blackship_write_dns_candidate() {
+    requested="$1"
+    resolver="$2"
+    destination="$3"
+    awk -v requested="$requested" -v resolver="$resolver" '
+        function value(line, result) {
+            result = line
+            sub(/^[^=]*=[[:space:]]*"/, "", result)
+            sub(/"[[:space:]]*$/, "", result)
+            return result
+        }
+        /^\[\[jails\]\][[:space:]]*$/ {
+            in_jail = 1
+            have_name = selected = in_dns = 0
+            print
+            next
+        }
+        in_jail && !have_name && /^[[:space:]]*name[[:space:]]*=/ {
+            have_name = 1
+            selected = value($0) == requested
+            print
+            next
+        }
+        selected && /^\[jails\.network\.dns\][[:space:]]*$/ {
+            in_dns = 1
+            print
+            next
+        }
+        in_dns && /^\[/ { in_dns = 0 }
+        in_dns && /^[[:space:]]*nameservers[[:space:]]*=/ {
+            print "nameservers = [\"" resolver "\"]"
+            next
+        }
+        { print }
+    ' "$blackship_manifest" >"$destination"
+}
+
+blackship_reconcile_dns() {
+    requested="$1"
+    resolver="$2"
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-dns.XXXXXX")"
+    blackship_write_dns_candidate "$requested" "$resolver" "$candidate"
+
+    if ! cmp -s "$candidate" "$blackship_manifest"; then
+        blackship_check_candidate "$candidate" || { rm -f "$candidate"; return 1; }
+        install_managed_file "$candidate" "$blackship_manifest" || { rm -f "$candidate"; return 1; }
+    fi
+    rm -f "$candidate"
+
+    run_jail_privileged blackship --config "$blackship_manifest" --non-interactive exec "$requested" -- \
+        /bin/sh -c "printf 'nameserver %s\\n' '$resolver' > /etc/resolv.conf" >/dev/null 2>&1 || true
+}
+
 apply_outbound_policy() {
     policy_name="$1"
     policy_address="$(address_ipv4_value "$2")"
     policy_mode="$3"
-    policy_resolver_source="$(jail_resolver_source_value 2>/dev/null || true)"
-    policy_resolver="$(jail_resolver_address_value "$policy_resolver_source" 2>/dev/null || true)"
+    policy_resolver="${4:-}"
+    if [ -z "$policy_resolver" ]; then
+        policy_resolver_source="$(jail_resolver_source_value 2>/dev/null || true)"
+        policy_resolver="$(jail_resolver_address_value "$policy_resolver_source" 2>/dev/null || true)"
+    fi
 
     [ -r "$pf_backend" ] || return 1
     [ -n "$policy_resolver" ] || return 1
@@ -1650,12 +1789,24 @@ do_policy_set() {
         emit_action_result false "Outbound policy confirmation did not match." "Return to the selected jail and confirm again."
         exit 1
     }
-    if ! bastille_jail_matches "$name" "$policy_address" && ! blackship_jail_matches "$name" "$policy_address"; then
+    blackship_managed=false
+    if blackship_jail_matches "$name" "$policy_address"; then
+        blackship_managed=true
+    elif ! bastille_jail_matches "$name" "$policy_address"; then
         emit_action_result false "The selected managed jail could not be verified." "Refresh the inventory before changing its outbound policy."
         exit 1
     fi
 
-    if output="$(apply_outbound_policy "$name" "$policy_address" "$policy" 2>&1)"; then
+    policy_resolver=""
+    if [ "$blackship_managed" = true ]; then
+        policy_resolver="$(blackship_resolver_address_value 2>/dev/null || true)"
+        if [ -z "$policy_resolver" ] || ! blackship_reconcile_dns "$name" "$policy_resolver"; then
+            emit_action_result false "Unable to configure DNS for ${name}." "The outbound policy was not changed."
+            exit 1
+        fi
+    fi
+
+    if output="$(apply_outbound_policy "$name" "$policy_address" "$policy" "$policy_resolver" 2>&1)"; then
         write_last_result "success" "Applied outbound policy to ${name}."
         emit_action_result true "Applied outbound policy to ${name}." "$output"
     else
@@ -3076,7 +3227,7 @@ bridge = "$blackship_bridge"
 ip_cidr = "$address"
 
 [jails.network.dns]
-nameservers = ["$(jail_resolver_address_value "$(jail_resolver_source_value 2>/dev/null || true)" 2>/dev/null || printf '1.1.1.1')"]
+nameservers = ["$(blackship_resolver_address_value 2>/dev/null || printf '1.1.1.1')"]
 mode = "custom"
 EOF
     case "$preset" in
@@ -3148,7 +3299,7 @@ blackship_finish_preset_setup() {
     outbound_policy="$4"
     build_output="$5"
     success_message="$6"
-    policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" 2>&1 || true)"
+    policy_output="$(apply_outbound_policy "$name" "$address" "$outbound_policy" "$(blackship_resolver_address_value 2>/dev/null || true)" 2>&1 || true)"
     credentials=""
     credential_note=""
     if [ "$preset" = postgres ]; then
@@ -3354,6 +3505,161 @@ blackship_jail_running() {
     fi
 }
 
+valid_source_target() {
+    case "${1:-}" in
+        /workspace/* )
+            target_leaf="${1#/workspace/}"
+            case "$target_leaf" in
+                ''|.|..|*[!A-Za-z0-9_.-]*) return 1 ;;
+                *) return 0 ;;
+            esac
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+blackship_running_root() {
+    requested="$1"
+    blackship_jail_running "$requested" || return 1
+    expected_root="$blackship_data_dir/jails/$blackship_project-$requested"
+    [ -d "$expected_root" ] || return 1
+    printf '%s\n' "$expected_root"
+}
+
+canonical_source_folder() {
+    requested_source="$1"
+    case "$requested_source" in
+        /*) ;;
+        *) return 1 ;;
+    esac
+    case "$requested_source" in
+        *'|'*|*'
+'*) return 1 ;;
+    esac
+    canonical_source="$(realpath "$requested_source" 2>/dev/null || true)"
+    canonical_root="$(realpath "$source_attachment_root" 2>/dev/null || true)"
+    [ -n "$canonical_source" ] && [ -n "$canonical_root" ] && [ -d "$canonical_source" ] || return 1
+    [ "$canonical_source" != "$canonical_root" ] || return 1
+    case "$canonical_source" in
+        "$canonical_root"/*) printf '%s\n' "$canonical_source" ;;
+        *) return 1 ;;
+    esac
+}
+
+source_attachment_record_upsert() {
+    attachment_name="$1"
+    attachment_source="$2"
+    attachment_target="$3"
+    attachment_mountpoint="$4"
+    mkdir -p "$state_dir"
+    attachment_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-source-attachments.XXXXXX")"
+    if [ -r "$source_attachment_file" ]; then
+        awk -F '|' -v name="$attachment_name" -v target="$attachment_target" \
+            '$1 != name || $3 != target' "$source_attachment_file" >"$attachment_tmp"
+    fi
+    printf '%s|%s|%s|%s\n' "$attachment_name" "$attachment_source" "$attachment_target" "$attachment_mountpoint" >>"$attachment_tmp"
+    mv "$attachment_tmp" "$source_attachment_file"
+}
+
+source_attachment_records_remove() {
+    attachment_name="$1"
+    attachment_target="${2:-}"
+    [ -r "$source_attachment_file" ] || return 0
+    attachment_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-source-attachments.XXXXXX")"
+    if [ -n "$attachment_target" ]; then
+        awk -F '|' -v name="$attachment_name" -v target="$attachment_target" \
+            '$1 != name || $3 != target' "$source_attachment_file" >"$attachment_tmp"
+    else
+        awk -F '|' -v name="$attachment_name" '$1 != name' "$source_attachment_file" >"$attachment_tmp"
+    fi
+    mv "$attachment_tmp" "$source_attachment_file"
+}
+
+source_attachments_detach_all() {
+    attachment_name="$1"
+    source_attachments_detached=false
+    [ -r "$source_attachment_file" ] || return 0
+    expected_root="$blackship_data_dir/jails/$blackship_project-$attachment_name"
+
+    while IFS='|' read -r record_name record_source record_target record_mountpoint; do
+        [ "$record_name" = "$attachment_name" ] || continue
+        valid_source_target "$record_target" || continue
+        [ "$record_mountpoint" = "${expected_root}${record_target}" ] || continue
+        if nullfs_mountpoint_active "$record_mountpoint"; then
+            run_jail_privileged umount "$record_mountpoint" >/dev/null 2>&1 || return 1
+            source_attachments_detached=true
+        fi
+        run_jail_privileged rmdir "$record_mountpoint" >/dev/null 2>&1 || true
+    done <"$source_attachment_file"
+    source_attachment_records_remove "$attachment_name"
+}
+
+do_blackship_source_attach() {
+    name="${1:-}"
+    requested_source="${2:-}"
+    target="${3:-}"
+    confirmation="${4:-}"
+
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Source-folder confirmation did not match." "Return to the selected jail and review the attachment again."; exit 1; }
+    valid_source_target "$target" || { emit_action_result false "Invalid jail folder." "Use one folder directly below /workspace, such as /workspace/sys-admin."; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    source="$(canonical_source_folder "$requested_source" 2>/dev/null || true)"
+    [ -n "$source" ] || { emit_action_result false "That source folder is not allowed." "Choose an existing folder inside your home directory. BSDRunner will not attach your entire home directory."; exit 1; }
+    jail_root="$(blackship_running_root "$name" 2>/dev/null || true)"
+    [ -n "$jail_root" ] || { emit_action_result false "Start ${name} before attaching a source folder." "Temporary source folders can only be attached to a running managed jail."; exit 1; }
+    mountpoint="${jail_root}${target}"
+    if nullfs_mountpoint_active "$mountpoint"; then
+        emit_action_result false "That jail folder is already attached." "Detach ${target} before reusing it."
+        exit 1
+    fi
+    if ! run_jail_privileged install -d -m 0755 "$mountpoint"; then
+        emit_action_result false "Unable to prepare the jail folder." "Privilege escalation was denied; nothing was mounted."
+        exit 1
+    fi
+    if run_jail_privileged find "$mountpoint" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; then
+        emit_action_result false "The jail folder is not empty." "Choose a different name below /workspace so existing jail data is never hidden by a mount."
+        exit 1
+    fi
+    if ! mount_output="$(run_jail_privileged mount_nullfs -o ro -o nosuid -o noexec "$source" "$mountpoint" 2>&1)"; then
+        run_jail_privileged rmdir "$mountpoint" >/dev/null 2>&1 || true
+        emit_action_result false "Unable to attach the source folder." "$mount_output"
+        exit 1
+    fi
+    if ! nullfs_mountpoint_active "$mountpoint"; then
+        run_jail_privileged umount "$mountpoint" >/dev/null 2>&1 || true
+        run_jail_privileged rmdir "$mountpoint" >/dev/null 2>&1 || true
+        emit_action_result false "The source folder did not become active." "The mount command completed without a verifiable read-only nullfs mount."
+        exit 1
+    fi
+    source_attachment_record_upsert "$name" "$source" "$target" "$mountpoint"
+    write_last_result success "Attached a read-only source folder to ${name}."
+    emit_action_result true "Attached source folder to ${name}." "Host: ${source}\nInside jail: ${target}\nProtection: read-only, noexec, nosuid\nTemporary: detached automatically when the jail stops or restarts."
+}
+
+do_blackship_source_detach() {
+    name="${1:-}"
+    target="${2:-}"
+    confirmation="${3:-}"
+
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Source-folder confirmation did not match." "Return to the selected jail and try again."; exit 1; }
+    valid_source_target "$target" || { emit_action_result false "Invalid jail folder." "$target"; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    jail_root="$blackship_data_dir/jails/$blackship_project-$name"
+    mountpoint="${jail_root}${target}"
+    if nullfs_mountpoint_active "$mountpoint"; then
+        if ! unmount_output="$(run_jail_privileged umount "$mountpoint" 2>&1)"; then
+            emit_action_result false "Unable to detach ${target}." "A process may still be using the folder. Close shells or tools using it, then retry.\n${unmount_output}"
+            exit 1
+        fi
+    fi
+    run_jail_privileged rmdir "$mountpoint" >/dev/null 2>&1 || true
+    source_attachment_records_remove "$name" "$target"
+    write_last_result success "Detached a source folder from ${name}."
+    emit_action_result true "Detached ${target} from ${name}." "The host folder was not changed or deleted."
+}
+
 blackship_write_resources_candidate() {
     requested="$1"
     profile="$2"
@@ -3409,6 +3715,145 @@ blackship_write_resources_candidate() {
         }
         END { if (selected && !emitted) emit_limits() }
     ' "$blackship_manifest" >"$destination"
+}
+
+blackship_write_without_jail() {
+    requested="$1"
+    destination="$2"
+    awk -v requested="$requested" '
+        function setting(line, value) {
+            value = line
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            return value
+        }
+        function flush(i) {
+            if (!in_jail) return
+            if (jail_name != requested)
+                for (i = 1; i <= buffered; i++) print buffer[i]
+            delete buffer
+            buffered = 0
+            jail_name = ""
+        }
+        /^\[\[jails\]\][[:space:]]*$/ {
+            flush()
+            in_jail = 1
+            buffer[++buffered] = $0
+            next
+        }
+        in_jail && /^\[/ && $0 !~ /^\[jails\./ && $0 !~ /^\[\[jails\./ {
+            flush()
+            in_jail = 0
+        }
+        in_jail {
+            buffer[++buffered] = $0
+            if (jail_name == "" && /^[[:space:]]*name[[:space:]]*=/)
+                jail_name = setting($0)
+            next
+        }
+        { print }
+        END { flush() }
+    ' "$blackship_manifest" >"$destination"
+}
+
+append_blackship_delete_failure() {
+    failure="$1"
+    if [ -n "$cleanup_failures" ]; then
+        cleanup_failures="$(printf '%s\n%s' "$cleanup_failures" "$failure")"
+    else
+        cleanup_failures="$failure"
+    fi
+}
+
+do_blackship_delete() {
+    name="${1:-}"
+    confirmation="${2:-}"
+
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Jail deletion confirmation did not match." "Type the jail name exactly. Nothing was deleted."; exit 1; }
+    blackship_status_values
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.5.0 or newer first."; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+
+    values="$(blackship_manifest_entry_values "$name" 2>/dev/null || true)"
+    [ -n "$values" ] || { emit_action_result false "Unable to read the managed jail definition." "$name"; exit 1; }
+    old_ifs="$IFS"
+    IFS='|'
+    set -- $values
+    IFS="$old_ifs"
+    address="${2:-}"
+    context="${3:-}"
+    tags="${4:-}"
+    expected_context="$blackship_context_dir/$name"
+    if [ "$context" != "$expected_context" ] || ! printf '%s\n' "$tags" | grep -F '"bsdrunner"' >/dev/null 2>&1; then
+        emit_action_result false "BSDRunner refused to delete an unverified Blackship jail." "The manifest build context or ownership tag does not match BSDRunner's managed project."
+        exit 1
+    fi
+    valid_jail_ipv4 "$address" || { emit_action_result false "BSDRunner refused an invalid managed jail address." "$address"; exit 1; }
+    if blackship_jail_running "$name"; then
+        emit_action_result false "Stop ${name} before deleting it." "BSDRunner never force-deletes a running jail. Stop it cleanly, then return to Delete jail."
+        exit 1
+    fi
+    if ! source_attachments_detach_all "$name"; then
+        emit_action_result false "Unable to detach a source folder from ${name}." "A process may still be using /workspace. Close it, detach the folder, and retry deletion."
+        exit 1
+    fi
+
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-delete.XXXXXX")"
+    blackship_write_without_jail "$name" "$candidate"
+    blackship_check_candidate "$candidate" || { rm -f "$candidate"; emit_action_result false "Blackship rejected the manifest cleanup." "Nothing was deleted and the installed manifest was not changed."; exit 1; }
+
+    if ! remove_output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive rm "$name" --volumes 2>&1)"; then
+        rm -f "$candidate"
+        write_last_result "error" "Unable to delete ${name}."
+        emit_action_result false "Unable to delete ${name}." "Blackship left the jail definition and BSDRunner settings intact.\n${remove_output}"
+        exit 1
+    fi
+
+    cleanup_failures=""
+    case "$remove_output" in
+        *"Retained datasets"*) append_blackship_delete_failure "Blackship retained one or more ZFS datasets; review its output below." ;;
+    esac
+    manifest_updated=false
+    if ! install_managed_file "$candidate" "$blackship_manifest"; then
+        append_blackship_delete_failure "Manifest entry could not be removed; the generated build context was retained for recovery."
+    else
+        manifest_updated=true
+    fi
+    rm -f "$candidate"
+
+    if [ "$manifest_updated" = true ] && [ -e "$expected_context" ] && ! run_privileged rm -rf -- "$expected_context"; then
+        append_blackship_delete_failure "Generated build context could not be removed: ${expected_context}"
+    fi
+    address_ipv4="${address%%/*}"
+    if [ -r "$pf_backend" ]; then
+        if ! pf_output="$(sh "$pf_backend" jail-cleanup "$name" "$address_ipv4" 2>&1)" || ! printf '%s\n' "$pf_output" | grep -q '"ok":true'; then
+            append_blackship_delete_failure "Firewall policy or port-forward cleanup failed."
+        fi
+    else
+        append_blackship_delete_failure "BSDRunner's firewall backend was unavailable."
+    fi
+    if [ "$manifest_updated" = true ]; then
+        if ! blackship_sync_autostart_service; then
+            append_blackship_delete_failure "The starts-at-boot service could not be reconciled."
+        fi
+        source_attachment_records_remove "$name"
+    else
+        append_blackship_delete_failure "Starts-at-boot could not be reconciled while the stale manifest entry remains."
+    fi
+
+    details="$(printf '%s\n%s\n%s' \
+        "Blackship removed the jail filesystem and associated ZFS storage." \
+        "Removed BSDRunner manifest, generated context, autostart tag, outbound policy, and port forwards." \
+        "$remove_output")"
+    if [ -n "$cleanup_failures" ]; then
+        write_last_result "warning" "Deleted ${name}, but cleanup is incomplete."
+        failure_details="$(printf '%s\n%s\n\n%s' "The jail data is gone, but these records need attention:" "$cleanup_failures" "$remove_output")"
+        emit_action_result false "Deleted ${name}, but cleanup is incomplete." "$failure_details"
+        exit 1
+    fi
+    write_last_result "success" "Permanently deleted ${name}."
+    emit_action_result true "Permanently deleted ${name}." "$details"
 }
 
 do_blackship_resource_limits() {
@@ -3684,6 +4129,15 @@ case "$action" in
         ;;
     blackship-resource-limits)
         do_blackship_resource_limits "${2:-}" "${3:-}" "${4:-0}" "${5:-0}" "${6:-0}" "${7:-}"
+        ;;
+    blackship-source-attach)
+        do_blackship_source_attach "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+        ;;
+    blackship-source-detach)
+        do_blackship_source_detach "${2:-}" "${3:-}" "${4:-}"
+        ;;
+    blackship-delete)
+        do_blackship_delete "${2:-}" "${3:-}"
         ;;
     *)
         emit_action_result false "Unknown Jails action." "$action"

@@ -80,6 +80,10 @@ pass "enabled jail networking renders the conventional Bastille PF integration"
 
 cp "$nat_profile" "$policy_profile"
 printf '%s\n' \
+    'blackship_nat=yes' \
+    'blackship_subnet=10.17.89.0/24' \
+    'blackship_ext_if=wlan0' >>"$policy_profile"
+printf '%s\n' \
     'web|10.0.0.20|internet-only|192.168.1.254' \
     'build|10.0.0.21|none|192.168.1.254' \
     'media|10.0.0.22|lan|192.168.1.254' >"$test_root/jail-policies.conf"
@@ -92,11 +96,16 @@ printf '%s\n' \
 sh "$renderer" "$policy_profile" >"$policy_rendered"
 grep -F 'private_nets = "{ 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 }"' "$policy_rendered" >/dev/null || fail "internet-only policy should define blocked private destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.20 to 192.168.1.254 port 53 keep state' "$policy_rendered" >/dev/null || fail "internet-only policy should preserve DNS to the selected resolver"
+grep -Fx 'pass in quick on $blackship_if inet proto { tcp udp } from 10.0.0.20 to 192.168.1.254 port 53 keep state' "$policy_rendered" >/dev/null || fail "Blackship VNET ingress should permit only the selected resolver"
+grep -Fx 'block return in quick on $blackship_if inet from 10.0.0.20 to $private_nets' "$policy_rendered" >/dev/null || fail "Blackship internet-only ingress should block private destinations"
+grep -Fx 'pass in quick on $blackship_if inet from 10.0.0.20 to any keep state' "$policy_rendered" >/dev/null || fail "Blackship internet-only ingress should permit public destinations"
 grep -Fx 'block return out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.20 to any port 53' "$policy_rendered" >/dev/null || fail "internet-only policy should block alternate plain DNS resolvers"
 grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.20 to $private_nets' "$policy_rendered" >/dev/null || fail "internet-only policy should block private destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.20 to any keep state' "$policy_rendered" >/dev/null || fail "internet-only policy should allow public destinations"
 grep -Fx 'block return out quick on $jail_ext_if inet from 10.0.0.21 to any' "$policy_rendered" >/dev/null || fail "no-outbound policy should block all destinations"
+grep -Fx 'block return in quick on $blackship_if inet from 10.0.0.21 to any' "$policy_rendered" >/dev/null || fail "Blackship no-outbound ingress should block all destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet from 10.0.0.22 to any keep state' "$policy_rendered" >/dev/null || fail "LAN policy should allow all destinations"
+grep -Fx 'pass in quick on $blackship_if inet from 10.0.0.22 to any keep state' "$policy_rendered" >/dev/null || fail "Blackship LAN ingress should allow all destinations"
 grep -Fx 'pass out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.22 to 192.168.1.254 port 53 keep state' "$policy_rendered" >/dev/null || fail "LAN policy should preserve DNS to the selected resolver"
 grep -Fx 'block return out quick on $jail_ext_if inet proto { tcp udp } from 10.0.0.22 to any port 53' "$policy_rendered" >/dev/null || fail "LAN policy should block alternate plain DNS resolvers"
 grep -Fx 'rdr pass on $jail_ext_if inet proto tcp from any to ($jail_ext_if) port 8080 -> 10.0.0.20 port 80' "$policy_rendered" >/dev/null || fail "TCP port forwards should render into PF"

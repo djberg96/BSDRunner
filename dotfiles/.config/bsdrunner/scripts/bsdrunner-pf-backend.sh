@@ -335,6 +335,7 @@ emit_settings() {
 
 profile_checksum() {
     {
+        printf 'renderer-revision=2\n'
         emit_settings
         emit_jail_policies
         emit_jail_forwards
@@ -1475,6 +1476,63 @@ $state_output"
     exit 1
 }
 
+do_jail_cleanup() {
+    requested_name="${1:-}"
+    requested_address="${2:-}"
+
+    valid_jail_name "$requested_name" || {
+        emit_action_result false "Invalid jail name." "$requested_name"
+        exit 1
+    }
+    valid_ipv4 "$requested_address" || {
+        emit_action_result false "Invalid jail address." "$requested_address"
+        exit 1
+    }
+
+    mkdir -p "$profile_dir"
+    policies_present=false
+    forwards_present=false
+    [ -f "$jail_policy_file" ] && policies_present=true
+    [ -f "$jail_forward_file" ] && forwards_present=true
+    previous_policies="$(cat "$jail_policy_file" 2>/dev/null || true)"
+    previous_forwards="$(cat "$jail_forward_file" 2>/dev/null || true)"
+    policy_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-jail-cleanup-policy.XXXXXX")"
+    forward_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-jail-cleanup-forward.XXXXXX")"
+    trap 'rm -f "$policy_tmp" "$forward_tmp"' EXIT HUP INT TERM
+
+    emit_jail_policies | awk -F '|' -v name="$requested_name" -v address="$requested_address" \
+        '$1 != name && $2 != address { print }' >"$policy_tmp"
+    emit_jail_forwards | awk -F '|' -v name="$requested_name" -v address="$requested_address" \
+        '$1 != name && $2 != address { print }' >"$forward_tmp"
+    mv "$policy_tmp" "$jail_policy_file"
+    mv "$forward_tmp" "$jail_forward_file"
+    trap - EXIT HUP INT TERM
+    [ -s "$jail_policy_file" ] || rm -f "$jail_policy_file"
+    [ -s "$jail_forward_file" ] || rm -f "$jail_forward_file"
+
+    if apply_output="$(sh "$0" apply 2>&1)" && printf '%s\n' "$apply_output" | grep -q '"ok":true'; then
+        state_output="$(run_privileged_capture pfctl -k "$requested_address" || true)"
+        write_last_result "success" "Removed firewall records for ${requested_name}."
+        emit_action_result true "Removed firewall records for ${requested_name}." "$apply_output
+$state_output"
+        return
+    fi
+
+    if [ "$policies_present" = true ]; then
+        printf '%s\n' "$previous_policies" >"$jail_policy_file"
+    else
+        rm -f "$jail_policy_file"
+    fi
+    if [ "$forwards_present" = true ]; then
+        printf '%s\n' "$previous_forwards" >"$jail_forward_file"
+    else
+        rm -f "$jail_forward_file"
+    fi
+    write_last_result "error" "Unable to remove firewall records for ${requested_name}."
+    emit_action_result false "Unable to remove firewall records for ${requested_name}." "$apply_output"
+    exit 1
+}
+
 do_enable() {
     load_profile
     if [ "$allow_ssh_tarpit" = "yes" ]; then
@@ -1608,6 +1666,9 @@ case "$action" in
         ;;
     jail-forward-remove)
         do_jail_forward_remove "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
+        ;;
+    jail-cleanup)
+        do_jail_cleanup "${2:-}" "${3:-}"
         ;;
     set)
         load_profile
