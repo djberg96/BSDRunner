@@ -70,6 +70,9 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$fixtures/etc/resolvconf/interfaces}" \
     BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL="${BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL:-0}" \
     BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER="${BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER:-}" \
+    BSDRUNNER_JAILS_TEST_SOURCE_ROOT="${BSDRUNNER_JAILS_TEST_SOURCE_ROOT:-$test_root/source-root}" \
+    BSDRUNNER_JAILS_TEST_MOUNT_STATE="${BSDRUNNER_JAILS_TEST_MOUNT_STATE:-$test_root/mounts.state}" \
+    BSDRUNNER_BLACKSHIP_TEST_RUNTIME_PATH="${BSDRUNNER_BLACKSHIP_TEST_RUNTIME_PATH:-$state_dir/blackship-data/jails/bsdrunner-web}" \
     BSDRUNNER_JAILS_TEST_NETWORK_READY="${BSDRUNNER_JAILS_TEST_NETWORK_READY:-1}" \
     BSDRUNNER_JAILS_TEST_PF_STATE="${BSDRUNNER_JAILS_TEST_PF_STATE:-}" \
     BSDRUNNER_JAILS_TEST_LOOPBACK_STATE="${BSDRUNNER_JAILS_TEST_LOOPBACK_STATE:-}" \
@@ -124,6 +127,25 @@ grep -F '"blackship-resource-limits", root.activeActionName' "$jails_qml" >/dev/
 grep -F 'These are maximums, not reservations.' "$jails_qml" >/dev/null || \
     fail "the resource editor should explain ceilings in beginner language"
 pass "Blackship resource limits use a guarded beginner-oriented in-window editor"
+grep -F 'visible: root.activeTab === "sources"' "$jails_qml" >/dev/null || \
+    fail "source folders should open in a dedicated in-window tab"
+grep -F '"label": "Attach source folder"' "$jails_qml" >/dev/null || \
+    fail "managed running jails should expose the source-folder action"
+grep -F 'Read-only • noexec • nosuid' "$jails_qml" >/dev/null || \
+    fail "source-folder review should explain every mount restriction"
+grep -F '"blackship-source-attach", root.activeActionName' "$jails_qml" >/dev/null || \
+    fail "source attachments should use the guarded backend action"
+grep -F '"blackship-source-detach", root.activeActionName' "$jails_qml" >/dev/null || \
+    fail "source detachment should use the guarded backend action"
+grep -F '"--pick-directory"' "$jails_qml" >/dev/null || \
+    fail "the source-folder Browse button should launch BSDRunner Files in directory-picker mode"
+grep -F 'onClicked: root.browseSourceFolder()' "$jails_qml" >/dev/null || \
+    fail "the source-folder Browse button should use the custom folder browser"
+grep -F 'text: "Attached source folders"' "$jails_qml" >/dev/null || \
+    fail "the selected-jail panel should list attached source folders"
+grep -F 'visible: root.selectedSourceAttachments.length > 0' "$jails_qml" >/dev/null || \
+    fail "the selected-jail source-folder list should stay hidden when empty"
+pass "Blackship source folders use a guarded temporary read-only workflow"
 grep -F 'visible: root.activeTab === "delete"' "$jails_qml" >/dev/null || \
     fail "jail deletion should open in a dedicated in-window tab"
 grep -F 'text: "Danger zone"' "$jails_qml" >/dev/null || \
@@ -144,7 +166,9 @@ grep -F 'HOME=/var/lib/ollama' "$repo_root/dotfiles/.config/bsdrunner/jails/pres
     fail "the Ollama rc service should use its writable data directory as HOME"
 grep -F 'OLLAMA_NO_CLOUD=1' "$repo_root/dotfiles/.config/bsdrunner/jails/presets/ollama/Jailfile" >/dev/null || \
     fail "the isolated Ollama preset should disable cloud features in the application"
-pass "the Ollama service stays unprivileged with cloud features disabled"
+grep -F 'RUN sysrc ollama_context_length=32768' "$repo_root/dotfiles/.config/bsdrunner/jails/presets/ollama/Jailfile" >/dev/null || \
+    fail "the Ollama preset should provide enough context for coding-agent workloads"
+pass "the Ollama service stays unprivileged with cloud features disabled and a 32K context window"
 grep -F "blackship --config '\$blackship_manifest' console '\$name'" "$backend" >/dev/null || \
     fail "Blackship consoles should delegate to the fixed 0.5.0 console command"
 pass "Blackship consoles delegate to Blackship 0.5.0"
@@ -782,6 +806,72 @@ grep -F 'nameservers = ["10.44.0.1"]' "$state_dir/blackship.toml" >/dev/null || 
 grep -F "exec web -- /bin/sh -c printf 'nameserver %s\\n' '10.44.0.1' > /etc/resolv.conf" "$command_log" >/dev/null || \
     fail "Blackship policy changes should reconcile the live jail resolver"
 pass "Blackship policy verification and DNS reconciliation use the service name"
+
+mkdir -p "$test_root/source-root/sys-admin" "$state_dir/blackship-data/jails/bsdrunner-web"
+printf '%s\n' 'module SysAdmin; end' >"$test_root/source-root/sys-admin/admin.rb"
+: >"$test_root/mounts.state"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-source-attach web /tmp /workspace/tmp web >"$test_root/blackship-source-rejected.json"; then
+    fail "source attachment should reject folders outside the allowed home root"
+fi
+assert_json "$test_root/blackship-source-rejected.json" \
+    '.ok == false and .message == "That source folder is not allowed."' \
+    "source attachment should explain the allowed host scope"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-source-attach web "$test_root/source-root/sys-admin" /workspace/../escape web >"$test_root/blackship-source-rejected.json"; then
+    fail "source attachment should reject jail path traversal"
+fi
+assert_json "$test_root/blackship-source-rejected.json" \
+    '.ok == false and .message == "Invalid jail folder."' \
+    "source attachment should restrict targets to one workspace folder"
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_JAILS_TEST_MDO_DENY=1 \
+    run_backend blackship-source-attach web "$test_root/source-root/sys-admin" /workspace/sys-admin web >"$test_root/blackship-source-denied.json"; then
+    fail "source attachment should fail safely when privilege escalation is denied"
+fi
+assert_json "$test_root/blackship-source-denied.json" \
+    '.ok == false and .message == "Unable to prepare the jail folder." and (.details | contains("nothing was mounted"))' \
+    "denied privilege escalation should leave source folders unattached"
+if ! BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-source-attach web "$test_root/source-root/sys-admin" /workspace/sys-admin web >"$test_root/blackship-source-attached.json"; then
+    cat "$test_root/blackship-source-attached.json" >&2
+    fail "a valid source attachment should succeed"
+fi
+assert_json "$test_root/blackship-source-attached.json" \
+    '.ok == true and .message == "Attached source folder to web." and (.details | contains("read-only, noexec, nosuid")) and (.details | contains("Temporary"))' \
+    "source attachment should return a beginner-readable protection summary"
+grep -F "mount_nullfs -o ro -o nosuid -o noexec $test_root/source-root/sys-admin $state_dir/blackship-data/jails/bsdrunner-web/workspace/sys-admin" "$command_log" >/dev/null || \
+    fail "source attachment should use an explicitly read-only, nosuid, noexec nullfs mount"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$test_root/blackship-source-snapshot.json"
+assert_json "$test_root/blackship-source-snapshot.json" \
+    '(.source_attachments | length) == 1 and .source_attachments[0].name == "web" and (.source_attachments[0].source | endswith("/source-root/sys-admin")) and .source_attachments[0].target == "/workspace/sys-admin" and .source_attachments[0].read_only == true and .source_attachments[0].noexec == true and .source_attachments[0].nosuid == true and .source_attachments[0].temporary == true' \
+    "source attachment snapshot should expose only active temporary mounts"
+if ! BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-source-detach web /workspace/sys-admin web >"$test_root/blackship-source-detached.json"; then
+    cat "$test_root/blackship-source-detached.json" >&2
+    fail "a valid source detachment should succeed"
+fi
+assert_json "$test_root/blackship-source-detached.json" \
+    '.ok == true and .message == "Detached /workspace/sys-admin from web." and (.details | contains("not changed or deleted"))' \
+    "source detachment should preserve the host folder"
+grep -F "umount $state_dir/blackship-data/jails/bsdrunner-web/workspace/sys-admin" "$command_log" >/dev/null || \
+    fail "source detachment should unmount only the reviewed jail target"
+[ ! -s "$test_root/mounts.state" ] || fail "source detachment should remove the active fixture mount"
+if ! BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-source-attach web "$test_root/source-root/sys-admin" /workspace/sys-admin web >"$test_root/blackship-source-reattached.json"; then
+    cat "$test_root/blackship-source-reattached.json" >&2
+    fail "source attachment should be reusable after detachment"
+fi
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend stop web blackship >"$test_root/blackship-source-stop.json"
+assert_json "$test_root/blackship-source-stop.json" \
+    '.ok == true and .message == "stop web." and (.details | contains("Temporary source folders were detached"))' \
+    "stopping a jail should explain that temporary source folders were detached"
+[ ! -s "$test_root/mounts.state" ] || fail "stopping a jail should detach its temporary source folders"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$test_root/blackship-source-stopped-snapshot.json"
+assert_json "$test_root/blackship-source-stopped-snapshot.json" \
+    '(.source_attachments | length) == 0' \
+    "stopped jails should not retain stale source attachments"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_RUNNING=false \
+run_backend blackship-source-attach web "$test_root/source-root/sys-admin" /workspace/sys-admin web >"$test_root/blackship-source-stopped.json" && \
+    fail "source attachment should require a running jail"
+assert_json "$test_root/blackship-source-stopped.json" \
+    '.ok == false and (.message | startswith("Start web"))' \
+    "stopped jails should explain why temporary attachment is unavailable"
+pass "Blackship source folders are scoped, read-only, temporary, and detachable"
 
 : >"$command_log"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-resource-limits web recommended 0 0 0 web >"$test_root/blackship-resources-recommended.json"

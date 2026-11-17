@@ -17,6 +17,7 @@ if [ "$test_mode" = "1" ]; then
     blackship_manifest="${BSDRUNNER_JAILS_TEST_BLACKSHIP_MANIFEST:-$state_dir/blackship.toml}"
     blackship_data_dir="${BSDRUNNER_JAILS_TEST_BLACKSHIP_DATA_DIR:-$state_dir/blackship-data}"
     blackship_context_dir="${BSDRUNNER_JAILS_TEST_BLACKSHIP_CONTEXT_DIR:-$state_dir/blackship-contexts}"
+    source_attachment_root="${BSDRUNNER_JAILS_TEST_SOURCE_ROOT:-$HOME}"
 else
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
     etc_dir="/etc"
@@ -31,7 +32,9 @@ else
     blackship_manifest="${BSDRUNNER_BLACKSHIP_MANIFEST:-/usr/local/etc/bsdrunner/blackship.toml}"
     blackship_data_dir="${BSDRUNNER_BLACKSHIP_DATA_DIR:-/var/db/bsdrunner/blackship}"
     blackship_context_dir="${BSDRUNNER_BLACKSHIP_CONTEXT_DIR:-/var/db/bsdrunner/blackship/contexts}"
+    source_attachment_root="$HOME"
 fi
+source_attachment_file="$state_dir/source-attachments.conf"
 export PATH
 
 blackship_min_version="0.5.0"
@@ -1128,6 +1131,44 @@ port_forwards_json() {
     ' "$jail_forward_file"
 }
 
+nullfs_mountpoint_active() {
+    requested_mountpoint="$1"
+    mount -p 2>/dev/null | awk -v requested="$requested_mountpoint" '
+        function has_option(options, requested_option, values, count, position) {
+            count = split(options, values, ",")
+            for (position = 1; position <= count; position++)
+                if (values[position] == requested_option)
+                    return 1
+            return 0
+        }
+        $2 == requested && $3 == "nullfs" &&
+            has_option($4, "ro") && has_option($4, "nosuid") && has_option($4, "noexec") { found = 1 }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+source_attachments_json() {
+    if [ ! -r "$source_attachment_file" ]; then
+        printf '[]'
+        return
+    fi
+
+    printf '['
+    first=true
+    while IFS='|' read -r attachment_name attachment_source attachment_target attachment_mountpoint; do
+        valid_name "$attachment_name" || continue
+        valid_source_target "$attachment_target" || continue
+        [ -n "$attachment_source" ] || continue
+        nullfs_mountpoint_active "$attachment_mountpoint" || continue
+        if [ "$first" = true ]; then first=false; else printf ','; fi
+        printf '{"name":"%s","source":"%s","target":"%s","read_only":true,"noexec":true,"nosuid":true,"temporary":true}' \
+            "$(printf '%s' "$attachment_name" | json_escape)" \
+            "$(printf '%s' "$attachment_source" | json_escape)" \
+            "$(printf '%s' "$attachment_target" | json_escape)"
+    done <"$source_attachment_file"
+    printf ']'
+}
+
 bastille_service_inventory() {
     if command -v jq >/dev/null 2>&1; then
         service_json_output="$(run_bastille_list_json 2>/dev/null || true)"
@@ -1457,6 +1498,8 @@ emit_snapshot() {
     port_forwards_json
     printf ',"simple_services":'
     simple_services_json
+    printf ',"source_attachments":'
+    source_attachments_json
     printf ',"blackship":'
     printf '%s' "$blackship_snapshot"
     printf ',"last_result":{"tone":"%s","message":"%s","timestamp":"%s"}' \
@@ -1517,6 +1560,12 @@ do_lifecycle() {
             stop) blackship_verb=down ;;
             restart) blackship_verb=restart ;;
         esac
+        source_attachments_detached=false
+        if [ "$verb" != start ] && ! source_attachments_detach_all "$name"; then
+            write_last_result "error" "Unable to detach source folders from ${name}."
+            emit_action_result false "Unable to ${verb} ${name}." "A source folder is still in use. Close jail shells or tools using /workspace, detach the folder, and retry."
+            exit 1
+        fi
         setup_output=""
         if [ "$verb" = start ]; then
             if ! setup_output="$(run_privileged blackship --config "$blackship_manifest" --non-interactive setup 2>&1)"; then
@@ -1529,6 +1578,9 @@ do_lifecycle() {
             details="$output"
             if [ -n "$setup_output" ]; then
                 details="$(printf '%s\n%s' "$setup_output" "$output")"
+            fi
+            if [ "$source_attachments_detached" = true ]; then
+                details="$(printf '%s\n%s' "Temporary source folders were detached before the jail ${verb}." "$details")"
             fi
             write_last_result "success" "$(printf '%s %s.' "$verb" "$name")"
             emit_action_result true "$(printf '%s %s.' "$verb" "$name")" "$details"
@@ -3453,6 +3505,161 @@ blackship_jail_running() {
     fi
 }
 
+valid_source_target() {
+    case "${1:-}" in
+        /workspace/* )
+            target_leaf="${1#/workspace/}"
+            case "$target_leaf" in
+                ''|.|..|*[!A-Za-z0-9_.-]*) return 1 ;;
+                *) return 0 ;;
+            esac
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+blackship_running_root() {
+    requested="$1"
+    blackship_jail_running "$requested" || return 1
+    expected_root="$blackship_data_dir/jails/$blackship_project-$requested"
+    [ -d "$expected_root" ] || return 1
+    printf '%s\n' "$expected_root"
+}
+
+canonical_source_folder() {
+    requested_source="$1"
+    case "$requested_source" in
+        /*) ;;
+        *) return 1 ;;
+    esac
+    case "$requested_source" in
+        *'|'*|*'
+'*) return 1 ;;
+    esac
+    canonical_source="$(realpath "$requested_source" 2>/dev/null || true)"
+    canonical_root="$(realpath "$source_attachment_root" 2>/dev/null || true)"
+    [ -n "$canonical_source" ] && [ -n "$canonical_root" ] && [ -d "$canonical_source" ] || return 1
+    [ "$canonical_source" != "$canonical_root" ] || return 1
+    case "$canonical_source" in
+        "$canonical_root"/*) printf '%s\n' "$canonical_source" ;;
+        *) return 1 ;;
+    esac
+}
+
+source_attachment_record_upsert() {
+    attachment_name="$1"
+    attachment_source="$2"
+    attachment_target="$3"
+    attachment_mountpoint="$4"
+    mkdir -p "$state_dir"
+    attachment_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-source-attachments.XXXXXX")"
+    if [ -r "$source_attachment_file" ]; then
+        awk -F '|' -v name="$attachment_name" -v target="$attachment_target" \
+            '$1 != name || $3 != target' "$source_attachment_file" >"$attachment_tmp"
+    fi
+    printf '%s|%s|%s|%s\n' "$attachment_name" "$attachment_source" "$attachment_target" "$attachment_mountpoint" >>"$attachment_tmp"
+    mv "$attachment_tmp" "$source_attachment_file"
+}
+
+source_attachment_records_remove() {
+    attachment_name="$1"
+    attachment_target="${2:-}"
+    [ -r "$source_attachment_file" ] || return 0
+    attachment_tmp="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-source-attachments.XXXXXX")"
+    if [ -n "$attachment_target" ]; then
+        awk -F '|' -v name="$attachment_name" -v target="$attachment_target" \
+            '$1 != name || $3 != target' "$source_attachment_file" >"$attachment_tmp"
+    else
+        awk -F '|' -v name="$attachment_name" '$1 != name' "$source_attachment_file" >"$attachment_tmp"
+    fi
+    mv "$attachment_tmp" "$source_attachment_file"
+}
+
+source_attachments_detach_all() {
+    attachment_name="$1"
+    source_attachments_detached=false
+    [ -r "$source_attachment_file" ] || return 0
+    expected_root="$blackship_data_dir/jails/$blackship_project-$attachment_name"
+
+    while IFS='|' read -r record_name record_source record_target record_mountpoint; do
+        [ "$record_name" = "$attachment_name" ] || continue
+        valid_source_target "$record_target" || continue
+        [ "$record_mountpoint" = "${expected_root}${record_target}" ] || continue
+        if nullfs_mountpoint_active "$record_mountpoint"; then
+            run_jail_privileged umount "$record_mountpoint" >/dev/null 2>&1 || return 1
+            source_attachments_detached=true
+        fi
+        run_jail_privileged rmdir "$record_mountpoint" >/dev/null 2>&1 || true
+    done <"$source_attachment_file"
+    source_attachment_records_remove "$attachment_name"
+}
+
+do_blackship_source_attach() {
+    name="${1:-}"
+    requested_source="${2:-}"
+    target="${3:-}"
+    confirmation="${4:-}"
+
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Source-folder confirmation did not match." "Return to the selected jail and review the attachment again."; exit 1; }
+    valid_source_target "$target" || { emit_action_result false "Invalid jail folder." "Use one folder directly below /workspace, such as /workspace/sys-admin."; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    source="$(canonical_source_folder "$requested_source" 2>/dev/null || true)"
+    [ -n "$source" ] || { emit_action_result false "That source folder is not allowed." "Choose an existing folder inside your home directory. BSDRunner will not attach your entire home directory."; exit 1; }
+    jail_root="$(blackship_running_root "$name" 2>/dev/null || true)"
+    [ -n "$jail_root" ] || { emit_action_result false "Start ${name} before attaching a source folder." "Temporary source folders can only be attached to a running managed jail."; exit 1; }
+    mountpoint="${jail_root}${target}"
+    if nullfs_mountpoint_active "$mountpoint"; then
+        emit_action_result false "That jail folder is already attached." "Detach ${target} before reusing it."
+        exit 1
+    fi
+    if ! run_jail_privileged install -d -m 0755 "$mountpoint"; then
+        emit_action_result false "Unable to prepare the jail folder." "Privilege escalation was denied; nothing was mounted."
+        exit 1
+    fi
+    if run_jail_privileged find "$mountpoint" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; then
+        emit_action_result false "The jail folder is not empty." "Choose a different name below /workspace so existing jail data is never hidden by a mount."
+        exit 1
+    fi
+    if ! mount_output="$(run_jail_privileged mount_nullfs -o ro -o nosuid -o noexec "$source" "$mountpoint" 2>&1)"; then
+        run_jail_privileged rmdir "$mountpoint" >/dev/null 2>&1 || true
+        emit_action_result false "Unable to attach the source folder." "$mount_output"
+        exit 1
+    fi
+    if ! nullfs_mountpoint_active "$mountpoint"; then
+        run_jail_privileged umount "$mountpoint" >/dev/null 2>&1 || true
+        run_jail_privileged rmdir "$mountpoint" >/dev/null 2>&1 || true
+        emit_action_result false "The source folder did not become active." "The mount command completed without a verifiable read-only nullfs mount."
+        exit 1
+    fi
+    source_attachment_record_upsert "$name" "$source" "$target" "$mountpoint"
+    write_last_result success "Attached a read-only source folder to ${name}."
+    emit_action_result true "Attached source folder to ${name}." "Host: ${source}\nInside jail: ${target}\nProtection: read-only, noexec, nosuid\nTemporary: detached automatically when the jail stops or restarts."
+}
+
+do_blackship_source_detach() {
+    name="${1:-}"
+    target="${2:-}"
+    confirmation="${3:-}"
+
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    [ "$confirmation" = "$name" ] || { emit_action_result false "Source-folder confirmation did not match." "Return to the selected jail and try again."; exit 1; }
+    valid_source_target "$target" || { emit_action_result false "Invalid jail folder." "$target"; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    jail_root="$blackship_data_dir/jails/$blackship_project-$name"
+    mountpoint="${jail_root}${target}"
+    if nullfs_mountpoint_active "$mountpoint"; then
+        if ! unmount_output="$(run_jail_privileged umount "$mountpoint" 2>&1)"; then
+            emit_action_result false "Unable to detach ${target}." "A process may still be using the folder. Close shells or tools using it, then retry.\n${unmount_output}"
+            exit 1
+        fi
+    fi
+    run_jail_privileged rmdir "$mountpoint" >/dev/null 2>&1 || true
+    source_attachment_records_remove "$name" "$target"
+    write_last_result success "Detached a source folder from ${name}."
+    emit_action_result true "Detached ${target} from ${name}." "The host folder was not changed or deleted."
+}
+
 blackship_write_resources_candidate() {
     requested="$1"
     profile="$2"
@@ -3587,6 +3794,10 @@ do_blackship_delete() {
         emit_action_result false "Stop ${name} before deleting it." "BSDRunner never force-deletes a running jail. Stop it cleanly, then return to Delete jail."
         exit 1
     fi
+    if ! source_attachments_detach_all "$name"; then
+        emit_action_result false "Unable to detach a source folder from ${name}." "A process may still be using /workspace. Close it, detach the folder, and retry deletion."
+        exit 1
+    fi
 
     candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-delete.XXXXXX")"
     blackship_write_without_jail "$name" "$candidate"
@@ -3626,6 +3837,7 @@ do_blackship_delete() {
         if ! blackship_sync_autostart_service; then
             append_blackship_delete_failure "The starts-at-boot service could not be reconciled."
         fi
+        source_attachment_records_remove "$name"
     else
         append_blackship_delete_failure "Starts-at-boot could not be reconciled while the stale manifest entry remains."
     fi
@@ -3917,6 +4129,12 @@ case "$action" in
         ;;
     blackship-resource-limits)
         do_blackship_resource_limits "${2:-}" "${3:-}" "${4:-0}" "${5:-0}" "${6:-0}" "${7:-}"
+        ;;
+    blackship-source-attach)
+        do_blackship_source_attach "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+        ;;
+    blackship-source-detach)
+        do_blackship_source_detach "${2:-}" "${3:-}" "${4:-}"
         ;;
     blackship-delete)
         do_blackship_delete "${2:-}" "${3:-}"

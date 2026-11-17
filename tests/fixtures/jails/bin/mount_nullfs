@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'mount_nullfs'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+
+[ -n "${BSDRUNNER_JAILS_TEST_MOUNT_STATE:-}" ] || exit 1
+while [ "${1:-}" = "-o" ]; do
+    shift 2
+done
+source_path="${1:-}"
+mountpoint="${2:-}"
+[ -n "$source_path" ] && [ -n "$mountpoint" ] || exit 1
+printf '%s|%s\n' "$source_path" "$mountpoint" >>"$BSDRUNNER_JAILS_TEST_MOUNT_STATE"

@@ -85,6 +85,8 @@ ShellRoot {
     property string activeActionMemoryMiB: "0"
     property string activeActionCpuCores: "0"
     property string activeActionMaxProcesses: "0"
+    property string activeActionSourcePath: ""
+    property string activeActionSourceTarget: ""
     property string activeActionLabel: ""
     property string pendingActionId: ""
     property string pendingActionLabel: ""
@@ -99,6 +101,14 @@ ShellRoot {
     property string resourceCpuCores: "1"
     property string resourceMaxProcesses: "256"
     property string deleteConfirmation: ""
+    property string sourceFolderPath: ""
+    property string sourceFolderName: ""
+    property string sourcePickerStdoutText: ""
+    property string sourcePickerStderrText: ""
+    property int sourcePickerExitCode: 0
+    property bool sourcePickerExited: false
+    property bool sourcePickerStdoutFinished: false
+    property bool sourcePickerStderrFinished: false
     property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"})
     property var blackshipJails: []
     property var runningJails: []
@@ -107,6 +117,7 @@ ShellRoot {
     property var outboundPolicies: []
     property var portForwards: []
     property var simpleServices: []
+    property var sourceAttachments: []
     property var tools: ({})
     property var services: ({})
     property var bastilleReleases: []
@@ -153,6 +164,7 @@ ShellRoot {
     readonly property var selectedJail: findJail(selectedJailName, selectedJailBackend)
     readonly property var selectedSimpleService: simpleServiceFor(selectedJail, "nginx")
     readonly property var selectedServiceForwards: serviceForwardsFor(selectedJail, selectedSimpleService)
+    readonly property var selectedSourceAttachments: sourceAttachmentsFor(selectedJail)
     readonly property bool wizardBusy: createPreviewLoading || creationRunning || storageSetupRunning || networkSetupRunning
     readonly property var wizardSteps: ["Storage", "Userland", "Network", "Config", "Lifecycle"]
     readonly property var outboundPolicyChoices: [
@@ -446,6 +458,105 @@ ShellRoot {
             return
         deleteConfirmation = ""
         activeTab = "jails"
+    }
+
+    function sourceAttachmentsFor(jail) {
+        var matches = []
+        if (!jail)
+            return matches
+        for (var i = 0; i < sourceAttachments.length; i += 1) {
+            if (sourceAttachments[i].name === jail.name)
+                matches.push(sourceAttachments[i])
+        }
+        return matches
+    }
+
+    function sourceFolderBaseName(path) {
+        var normalized = String(path || "").replace(/\/+$/, "")
+        var parts = normalized.split("/")
+        var candidate = parts.length > 0 ? parts[parts.length - 1] : "source"
+        candidate = candidate.replace(/[^A-Za-z0-9_.-]/g, "-")
+        return candidate.length > 0 ? candidate : "source"
+    }
+
+    function chooseSourceFolder(path) {
+        sourceFolderPath = String(path || "")
+        sourceFolderName = sourceFolderBaseName(sourceFolderPath)
+        actionDetails = ""
+    }
+
+    function browseSourceFolder() {
+        if (runningAction || sourcePickerProcess.running)
+            return
+        sourcePickerStdoutText = ""
+        sourcePickerStderrText = ""
+        sourcePickerExitCode = 0
+        sourcePickerExited = false
+        sourcePickerStdoutFinished = false
+        sourcePickerStderrFinished = false
+        actionDetails = ""
+        sourcePickerProcess.running = true
+    }
+
+    function maybeFinalizeSourcePicker() {
+        if (!sourcePickerExited || !sourcePickerStdoutFinished || !sourcePickerStderrFinished)
+            return
+        var selectedPath = sourcePickerStdoutText.trim()
+        if (sourcePickerExitCode === 0) {
+            if (selectedPath.length > 0)
+                chooseSourceFolder(selectedPath)
+            return
+        }
+        actionDetails = sourcePickerStderrText.trim().length > 0
+            ? sourcePickerStderrText.trim()
+            : "BSDRunner Files could not open the folder picker."
+    }
+
+    function openSourceFolders() {
+        if (!selectedJail || selectedJail.backend !== "blackship" || runningAction)
+            return
+        sourceFolderPath = ""
+        sourceFolderName = ""
+        actionDetails = ""
+        clearPendingAction()
+        activeTab = "sources"
+    }
+
+    function closeSourceFolders() {
+        if (runningAction)
+            return
+        activeTab = "jails"
+    }
+
+    function sourceAttachmentReady() {
+        if (!selectedJail || selectedJail.backend !== "blackship" || (selectedJail.state || "").toLowerCase() !== "running")
+            return false
+        return sourceFolderPath.indexOf("/") === 0 && /^[A-Za-z0-9_.-]+$/.test(sourceFolderName)
+            && sourceFolderName !== "." && sourceFolderName !== ".."
+    }
+
+    function attachSourceFolder() {
+        if (demoMode || runningAction || !sourceAttachmentReady())
+            return
+        activeActionId = "blackship-source-attach"
+        activeActionName = selectedJail.name
+        activeActionBackend = selectedJail.backend
+        activeActionSourcePath = sourceFolderPath
+        activeActionSourceTarget = "/workspace/" + sourceFolderName
+        activeActionLabel = "Attaching source folder"
+        runActionProcess()
+    }
+
+    function detachSourceFolder(attachment) {
+        if (!selectedJail || !attachment || demoMode || runningAction)
+            return
+        activeActionId = "blackship-source-detach"
+        activeActionName = selectedJail.name
+        activeActionBackend = selectedJail.backend
+        activeActionSourcePath = ""
+        activeActionSourceTarget = attachment.target
+        activeActionLabel = "Detaching source folder"
+        runActionProcess()
     }
 
     function deleteDataDescription(jail) {
@@ -887,6 +998,8 @@ ShellRoot {
             return selectedJail.backend === "blackship"
         if (actionId === "open-resource-limits")
             return selectedJail.backend === "blackship"
+        if (actionId === "open-source-folders")
+            return selectedJail.backend === "blackship" && (selectedJail.state || "").toLowerCase() === "running"
         if (actionId === "open-delete-jail")
             return selectedJail.backend === "blackship"
         if (actionId.indexOf("blackship-resources|") === 0)
@@ -1558,6 +1671,7 @@ ShellRoot {
         outboundPolicies = payload.outbound_policies || []
         portForwards = payload.port_forwards || []
         simpleServices = payload.simple_services || []
+        sourceAttachments = payload.source_attachments || []
         blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"}
         blackshipJails = normalizedBlackshipJails(blackshipInfo)
         if (!previewAddressCustomized && blackshipInfo.recommended_address)
@@ -1612,6 +1726,8 @@ ShellRoot {
         activeActionMemoryMiB = "0"
         activeActionCpuCores = "0"
         activeActionMaxProcesses = "0"
+        activeActionSourcePath = ""
+        activeActionSourceTarget = ""
         activeActionLabel = ""
         if (completedDelete) {
             deleteConfirmation = ""
@@ -1668,6 +1784,10 @@ ShellRoot {
                     ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-resource-limits", root.activeActionName, root.activeActionResourceProfile, root.activeActionMemoryMiB, root.activeActionCpuCores, root.activeActionMaxProcesses, root.activeActionName]
                 : root.activeActionId === "blackship-delete"
                     ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-delete", root.activeActionName, root.activeActionName]
+                : root.activeActionId === "blackship-source-attach"
+                    ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-source-attach", root.activeActionName, root.activeActionSourcePath, root.activeActionSourceTarget, root.activeActionName]
+                : root.activeActionId === "blackship-source-detach"
+                    ? ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", "blackship-source-detach", root.activeActionName, root.activeActionSourceTarget, root.activeActionName]
                 : ["sh", themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh", root.activeActionId, root.activeActionName, root.activeActionBackend]
         stdout: StdioCollector {
             waitForEnd: true
@@ -1745,6 +1865,41 @@ ShellRoot {
             manifestProcess.controller.manifestExitCode = exitCode
             manifestProcess.controller.manifestExited = true
             manifestProcess.controller.maybeFinalizeManifest()
+        }
+    }
+
+    Process {
+        id: sourcePickerProcess
+
+        property var controller: root
+
+        command: [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-files.sh",
+            "--pick-directory",
+            root.sourceFolderPath.indexOf("/") === 0 ? root.sourceFolderPath : themeLoader.homeDir
+        ]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                sourcePickerProcess.controller.sourcePickerStdoutText = this.text
+                sourcePickerProcess.controller.sourcePickerStdoutFinished = true
+                sourcePickerProcess.controller.maybeFinalizeSourcePicker()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                sourcePickerProcess.controller.sourcePickerStderrText = this.text
+                sourcePickerProcess.controller.sourcePickerStderrFinished = true
+                sourcePickerProcess.controller.maybeFinalizeSourcePicker()
+            }
+        }
+
+        onExited: function(exitCode, exitStatus) {
+            sourcePickerProcess.controller.sourcePickerExitCode = exitCode
+            sourcePickerProcess.controller.sourcePickerExited = true
+            sourcePickerProcess.controller.maybeFinalizeSourcePicker()
         }
     }
 
@@ -2641,6 +2796,74 @@ ShellRoot {
                             }
 
                             Text {
+                                visible: root.selectedSourceAttachments.length > 0
+                                width: parent.width
+                                height: visible ? implicitHeight : 0
+                                text: "Attached source folders"
+                                color: root.palette.accent
+                                font.pixelSize: 14
+                                font.bold: true
+                            }
+
+                            Column {
+                                visible: root.selectedSourceAttachments.length > 0
+                                width: parent.width
+                                height: visible ? implicitHeight : 0
+                                spacing: 6
+
+                                Repeater {
+                                    model: root.selectedSourceAttachments
+
+                                    Rectangle {
+                                        id: attachedSourceCard
+
+                                        required property var modelData
+
+                                        width: parent.width
+                                        height: 66
+                                        radius: 7
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.frameBorder
+                                        ToolTip.visible: attachedSourceMouse.containsMouse
+                                        ToolTip.text: String(attachedSourceCard.modelData.source) + " → " + String(attachedSourceCard.modelData.target)
+                                        ToolTip.delay: 350
+                                        ToolTip.timeout: 10000
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            spacing: 3
+
+                                            Text {
+                                                width: parent.width
+                                                text: attachedSourceCard.modelData.source + "  →  " + attachedSourceCard.modelData.target
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                elide: Text.ElideMiddle
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: "Read-only • noexec • nosuid • detached when the jail stops"
+                                                color: root.palette.mutedText
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: attachedSourceMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            acceptedButtons: Qt.NoButton
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
                                 width: parent.width
                                 text: "Port forwarding"
                                 color: root.palette.accent
@@ -3225,6 +3448,7 @@ ShellRoot {
                                         {"id": "stop", "label": "Stop", "detail": "Shut the jail down"},
                                         {"id": "restart", "label": "Restart", "detail": "Stop, then start again"},
                                         {"id": "console", "label": "Console", "detail": "Open a root shell"},
+                                        {"id": "open-source-folders", "label": "Attach source folder", "detail": "Read-only workspace access"},
                                         {"id": "open-resource-limits", "label": "Resource limits", "detail": "Cap memory, CPU, and processes"},
                                         {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Reconcile tagged jails at boot"},
                                         {"id": "blackship-postgres-reset", "label": "Reset DB password", "detail": "Show a new app password once"}
@@ -3273,6 +3497,8 @@ ShellRoot {
                                             onClicked: {
                                                 if (actionCell.modelData.id === "open-resource-limits")
                                                     root.openResourceLimits()
+                                                else if (actionCell.modelData.id === "open-source-folders")
+                                                    root.openSourceFolders()
                                                 else
                                                     root.requestAction(actionCell.modelData.id, actionCell.modelData.label, actionCell.modelData.label + " " + root.selectedJail.name + "?")
                                             }
@@ -3535,6 +3761,7 @@ ShellRoot {
                                             {"id": "stop", "label": "Stop", "detail": "Shut the jail down"},
                                             {"id": "restart", "label": "Restart", "detail": "Stop, then start again"},
                                             {"id": "console", "label": "Console", "detail": "Open a root shell"},
+                                            {"id": "open-source-folders", "label": "Attach source folder", "detail": "Read-only workspace access"},
                                             {"id": "open-resource-limits", "label": "Resource limits", "detail": "Cap memory, CPU, and processes"},
                                             {"id": root.selectedJail && root.selectedJail.autostart === "On" ? "blackship-autostart|no" : "blackship-autostart|yes", "label": root.selectedJail && root.selectedJail.autostart === "On" ? "Stop starting at boot" : "Start at boot", "detail": "Reconcile tagged jails at boot"},
                                             {"id": "blackship-postgres-reset", "label": "Reset DB password", "detail": "Show a new app password once"}
@@ -3583,6 +3810,8 @@ ShellRoot {
                                                 onClicked: {
                                                     if (compactActionCell.modelData.id === "open-resource-limits")
                                                         root.openResourceLimits()
+                                                    else if (compactActionCell.modelData.id === "open-source-folders")
+                                                        root.openSourceFolders()
                                                     else
                                                         root.requestAction(compactActionCell.modelData.id, compactActionCell.modelData.label, compactActionCell.modelData.label + " " + root.selectedJail.name + "?")
                                                 }
@@ -3845,6 +4074,393 @@ ShellRoot {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: root.activeTab === "sources"
+                anchors.fill: parent
+                z: 20
+                color: root.palette.panelBackground
+
+                Flickable {
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    contentWidth: width
+                    contentHeight: sourceFoldersContent.height
+                    clip: true
+
+                    Column {
+                        id: sourceFoldersContent
+                        width: parent.width
+                        spacing: 12
+
+                        Row {
+                            width: parent.width
+                            height: 44
+                            spacing: 12
+
+                            Column {
+                                width: parent.width - 112
+                                spacing: 3
+
+                                Text {
+                                    width: parent.width
+                                    text: "Source folders for " + (root.selectedJail ? root.selectedJail.name : "jail")
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    text: "Temporary, read-only access to one host folder"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 11
+                                }
+                            }
+
+                            Rectangle {
+                                width: 100
+                                height: 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 7
+                                color: sourceBackMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Back to Jails"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: sourceBackMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !root.runningAction
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.closeSourceFolders()
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 84
+                            radius: 8
+                            color: Qt.alpha(root.palette.accent, 0.10)
+                            border.width: 1
+                            border.color: root.palette.accent
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 11
+                                spacing: 5
+
+                                Text {
+                                    text: "What this allows"
+                                    color: root.palette.accent
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "The jail can read this folder at /workspace, but cannot change it, run programs directly from it, or see the folder's parent. Ollama only sees file contents that you explicitly put into a prompt."
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "Currently attached"
+                            color: root.palette.primaryText
+                            font.pixelSize: 14
+                            font.bold: true
+                        }
+
+                        Text {
+                            visible: root.selectedSourceAttachments.length === 0
+                            width: parent.width
+                            text: "No source folders are attached to this running jail."
+                            color: root.palette.mutedText
+                            font.pixelSize: 12
+                        }
+
+                        Repeater {
+                            model: root.selectedSourceAttachments
+
+                            Rectangle {
+                                id: sourceAttachmentRow
+                                required property var modelData
+                                width: parent.width
+                                height: 68
+                                radius: 8
+                                color: root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.frameBorder
+
+                                Row {
+                                    anchors.fill: parent
+                                    anchors.margins: 9
+                                    spacing: 10
+
+                                    Column {
+                                        width: parent.width - 126
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 4
+
+                                        Text {
+                                            width: parent.width
+                                            text: sourceAttachmentRow.modelData.target
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            elide: Text.ElideMiddle
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: sourceAttachmentRow.modelData.source + "  •  read-only • noexec • temporary"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 11
+                                            elide: Text.ElideMiddle
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 116
+                                        height: 34
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        radius: 6
+                                        color: detachSourceMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.warning
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Detach"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: detachSourceMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: !root.demoMode && !root.runningAction
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.detachSourceFolder(sourceAttachmentRow.modelData)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 142
+                            radius: 8
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 7
+
+                                Text {
+                                    text: "Choose a host folder"
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                }
+
+                                Row {
+                                    width: parent.width
+                                    height: 38
+                                    spacing: 8
+
+                                    Rectangle {
+                                        width: parent.width - 128
+                                        height: parent.height
+                                        radius: 6
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: sourcePathInput.activeFocus ? root.palette.accent : root.palette.panelBorder
+
+                                        TextInput {
+                                            id: sourcePathInput
+                                            anchors.fill: parent
+                                            anchors.margins: 9
+                                            text: root.sourceFolderPath
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.pixelSize: 12
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            selectByMouse: true
+                                            clip: true
+                                            onTextEdited: root.chooseSourceFolder(text)
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 120
+                                        height: parent.height
+                                        radius: 6
+                                        color: sourceBrowseMouse.containsMouse ? root.palette.cardHover : Qt.alpha(root.palette.accent, 0.15)
+                                        border.width: 1
+                                        border.color: root.palette.accent
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Browse…"
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: sourceBrowseMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            enabled: !root.runningAction && !sourcePickerProcess.running
+                                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            onClicked: root.browseSourceFolder()
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "BSDRunner accepts an existing folder inside " + themeLoader.homeDir + ", but refuses the home directory itself."
+                                    color: root.palette.mutedText
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+
+                                Row {
+                                    width: parent.width
+                                    height: 30
+                                    spacing: 8
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Inside jail: /workspace/"
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 12
+                                    }
+
+                                    Rectangle {
+                                        width: 260
+                                        height: parent.height
+                                        radius: 5
+                                        color: root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.panelBorder
+
+                                        TextInput {
+                                            anchors.fill: parent
+                                            anchors.margins: 7
+                                            text: root.sourceFolderName
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 12
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            selectByMouse: true
+                                            clip: true
+                                            onTextEdited: root.sourceFolderName = text
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 94
+                            radius: 8
+                            color: root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.sourceAttachmentReady() ? root.palette.success : root.palette.frameBorder
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 12
+
+                                Column {
+                                    width: parent.width - 188
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 5
+
+                                    Text {
+                                        text: "Review"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        text: root.sourceAttachmentReady()
+                                            ? root.sourceFolderPath + " → /workspace/" + root.sourceFolderName + "\nRead-only • noexec • nosuid • removed on stop/restart"
+                                            : "Choose a folder and a simple destination name. The jail must be running."
+                                        color: root.palette.secondaryText
+                                        font.pixelSize: 11
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideMiddle
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: 176
+                                    height: 38
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    radius: 7
+                                    opacity: attachSourceMouse.enabled ? 1.0 : 0.45
+                                    color: attachSourceMouse.containsMouse && attachSourceMouse.enabled ? root.palette.cardHover : Qt.alpha(root.palette.success, 0.16)
+                                    border.width: 1
+                                    border.color: root.palette.success
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.runningAction ? "Attaching…" : "Attach read-only"
+                                        color: root.palette.primaryText
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: attachSourceMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: !root.demoMode && !root.runningAction && root.sourceAttachmentReady()
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: root.attachSourceFolder()
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: root.runningAction || root.actionDetails.length > 0
+                            width: parent.width
+                            text: root.runningAction ? root.statusMessage : root.statusMessage + (root.actionDetails.length > 0 ? "\n" + root.actionDetails : "")
+                            color: root.runningAction ? root.palette.accent : root.toneColor(root.statusTone)
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
                         }
                     }
                 }

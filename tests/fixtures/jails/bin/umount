@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -eu
+
+{
+    printf 'umount'
+    printf ' %s' "$@"
+    printf '\n'
+} >>"$BSDRUNNER_JAILS_TEST_LOG"
+
+mountpoint="${1:-}"
+[ -n "$mountpoint" ] || exit 1
+mount_tmp="${BSDRUNNER_JAILS_TEST_MOUNT_STATE}.tmp"
+awk -F '|' -v mountpoint="$mountpoint" '$2 != mountpoint' "$BSDRUNNER_JAILS_TEST_MOUNT_STATE" >"$mount_tmp"
+mv "$mount_tmp" "$BSDRUNNER_JAILS_TEST_MOUNT_STATE"

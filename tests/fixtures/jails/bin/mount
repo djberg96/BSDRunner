@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -eu
+
+[ "${1:-}" = "-p" ] || exit 1
+[ -n "${BSDRUNNER_JAILS_TEST_MOUNT_STATE:-}" ] || exit 0
+[ -r "$BSDRUNNER_JAILS_TEST_MOUNT_STATE" ] || exit 0
+awk -F '|' '{ printf "%s\t%s\tnullfs\tro,nosuid,noexec\t0\t0\n", $1, $2 }' "$BSDRUNNER_JAILS_TEST_MOUNT_STATE"

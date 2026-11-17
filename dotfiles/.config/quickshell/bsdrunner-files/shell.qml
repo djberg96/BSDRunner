@@ -14,6 +14,9 @@ ShellRoot {
     readonly property var palette: themeLoader.palette
     readonly property string homeDir: themeLoader.homeDir
     readonly property string backendScript: homeDir + "/.config/bsdrunner/scripts/bsdrunner-files-backend.sh"
+    readonly property bool directoryPickerMode: Quickshell.env("BSDRUNNER_FILES_PICK_MODE") === "directory"
+    readonly property string pickerResultPath: Quickshell.env("BSDRUNNER_FILES_PICK_RESULT") || ""
+    readonly property string initialPath: Quickshell.env("BSDRUNNER_FILES_INITIAL_PATH") || homeDir
     property string currentPath: homeDir
     property string currentPathRef: homeDir
     property string parentPath: homeDir
@@ -69,6 +72,13 @@ ShellRoot {
     property bool actionStdoutFinished: false
     property bool actionStderrFinished: false
     property bool runningAction: false
+    property string pickerStdoutText: ""
+    property string pickerStderrText: ""
+    property int pickerExitCode: 0
+    property bool pickerExited: false
+    property bool pickerStdoutFinished: false
+    property bool pickerStderrFinished: false
+    property bool pickerRunning: false
     property bool contextMenuOpen: false
     property real contextMenuX: 0
     property real contextMenuY: 0
@@ -963,6 +973,43 @@ ShellRoot {
         pendingActionArg2 = ""
     }
 
+    function chooseCurrentDirectory() {
+        if (!directoryPickerMode || pickerRunning || loading || pickerResultPath.length === 0)
+            return
+        pickerStdoutText = ""
+        pickerStderrText = ""
+        pickerExitCode = 0
+        pickerExited = false
+        pickerStdoutFinished = false
+        pickerStderrFinished = false
+        pickerRunning = true
+        statusTone = "info"
+        statusMessage = "Selecting " + currentPath
+        pickerProcess.running = true
+    }
+
+    function maybeFinalizePicker() {
+        if (!pickerExited || !pickerStdoutFinished || !pickerStderrFinished)
+            return
+
+        var payload = null
+        try {
+            payload = JSON.parse(pickerStdoutText || "{}")
+        } catch (error) {
+            payload = null
+        }
+
+        pickerRunning = false
+        if (pickerExitCode === 0 && payload && payload.ok) {
+            Qt.quit()
+            return
+        }
+        statusTone = "error"
+        statusMessage = payload && payload.message
+            ? payload.message
+            : (pickerStderrText.trim().length > 0 ? pickerStderrText.trim() : "Unable to select this folder.")
+    }
+
     function statusColor() {
         if (statusTone === "error")
             return palette.danger
@@ -990,12 +1037,12 @@ ShellRoot {
     }
 
     Component.onCompleted: {
-        currentPath = homeDir
-        currentPathRef = homeDir
-        pathInputText = homeDir
-        history = [homeDir]
+        currentPath = initialPath
+        currentPathRef = initialPath
+        pathInputText = initialPath
+        history = [initialPath]
         historyIndex = 0
-        requestSnapshot(homeDir, false)
+        requestSnapshot(initialPath, false)
     }
 
     Timer {
@@ -1119,6 +1166,42 @@ ShellRoot {
         }
     }
 
+    Process {
+        id: pickerProcess
+
+        property var controller: root
+
+        command: [
+            "sh",
+            root.backendScript,
+            "select-directory",
+            root.pickerResultPath,
+            root.currentPathRef
+        ]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                pickerProcess.controller.pickerStdoutText = this.text
+                pickerProcess.controller.pickerStdoutFinished = true
+                pickerProcess.controller.maybeFinalizePicker()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                pickerProcess.controller.pickerStderrText = this.text
+                pickerProcess.controller.pickerStderrFinished = true
+                pickerProcess.controller.maybeFinalizePicker()
+            }
+        }
+
+        onExited: function(exitCode, exitStatus) {
+            pickerProcess.controller.pickerExitCode = exitCode
+            pickerProcess.controller.pickerExited = true
+            pickerProcess.controller.maybeFinalizePicker()
+        }
+    }
+
     Connections {
         target: Quickshell
 
@@ -1131,7 +1214,7 @@ ShellRoot {
         id: window
 
         visible: true
-        title: "BSDRunner Files"
+        title: root.directoryPickerMode ? "Choose a Source Folder" : "BSDRunner Files"
         minimumSize: Qt.size(980, 620)
         maximumSize: Qt.size(980, 620)
         color: "transparent"
@@ -1165,7 +1248,7 @@ ShellRoot {
 
                         Text {
                             width: parent.width
-                            text: "Files"
+                            text: root.directoryPickerMode ? "Choose folder" : "Files"
                             color: root.palette.primaryText
                             font.pixelSize: 28
                             font.bold: true
@@ -1707,7 +1790,7 @@ ShellRoot {
                         id: listPanel
 
                         width: parent.width
-                        height: parent.height - 34 - 30 - 34 - 28 - (parent.spacing * 4)
+                        height: parent.height - 34 - 30 - 34 - 34 - (parent.spacing * 4)
                         radius: 8
                         color: root.palette.cardBackground
                         border.width: 1
@@ -2370,11 +2453,13 @@ ShellRoot {
 
                     Row {
                         width: parent.width
-                        height: 28
+                        height: 34
                         spacing: 10
 
                         Text {
-                            width: parent.width * 0.65
+                            width: root.directoryPickerMode
+                                ? parent.width - pickerCancelButton.width - pickerChooseButton.width - (parent.spacing * 2)
+                                : parent.width * 0.65
                             height: parent.height
                             text: root.currentPath
                             color: root.palette.secondaryText
@@ -2384,6 +2469,7 @@ ShellRoot {
                         }
 
                         Text {
+                            visible: !root.directoryPickerMode
                             width: parent.width * 0.15
                             height: parent.height
                             text: root.countLabel()
@@ -2395,6 +2481,7 @@ ShellRoot {
                         }
 
                         Text {
+                            visible: !root.directoryPickerMode
                             width: parent.width * 0.20 - parent.spacing * 2
                             height: parent.height
                             text: root.loading ? "Loading" : root.statusMessage
@@ -2403,6 +2490,69 @@ ShellRoot {
                             horizontalAlignment: Text.AlignRight
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            id: pickerCancelButton
+
+                            visible: root.directoryPickerMode
+                            width: visible ? 88 : 0
+                            height: parent.height
+                            radius: 6
+                            color: pickerCancelMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.frameBorder
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Cancel"
+                                color: root.palette.secondaryText
+                                font.pixelSize: 12
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: pickerCancelMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: !root.pickerRunning
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: Qt.quit()
+                            }
+                        }
+
+                        Rectangle {
+                            id: pickerChooseButton
+
+                            visible: root.directoryPickerMode
+                            width: visible ? 146 : 0
+                            height: parent.height
+                            radius: 6
+                            opacity: root.pickerRunning || root.loading ? 0.45 : 1.0
+                            color: pickerChooseMouse.containsMouse && !root.pickerRunning && !root.loading
+                                ? root.palette.cardHover
+                                : root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.accent
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: root.pickerRunning ? "Selecting…" : "Use This Folder"
+                                color: root.palette.accentStrong
+                                font.pixelSize: 12
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: pickerChooseMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: !root.pickerRunning && !root.loading
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: root.chooseCurrentDirectory()
+                            }
                         }
                     }
                 }

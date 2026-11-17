@@ -756,6 +756,35 @@ add_place() {
     json_action true "Added $target_label to Places." "$target_real"
 }
 
+select_directory() {
+    result_file="${1:-}"
+    target="$(resolve_directory "${2:-$HOME}")" || {
+        json_error "Folder is not readable: ${2:-$HOME}"
+        exit 1
+    }
+
+    picker_tmp_dir="$(resolve_directory "${TMPDIR:-/tmp}")" || {
+        json_error "Temporary directory is unavailable."
+        exit 1
+    }
+    result_dir="$(resolve_directory "$(dirname "$result_file")" 2>/dev/null || true)"
+    case "${result_file##*/}" in
+        bsdrunner-folder-picker.*) ;;
+        *) result_dir="" ;;
+    esac
+    if [ -z "$result_file" ] || [ "$result_dir" != "$picker_tmp_dir" ] || [ ! -f "$result_file" ] || [ -L "$result_file" ]; then
+        json_error "Folder picker result file is not valid."
+        exit 1
+    fi
+
+    umask 077
+    if ! printf '%s\n' "$target" >"$result_file"; then
+        json_error "Unable to return the selected folder."
+        exit 1
+    fi
+    json_action true "Selected ${target##*/}." "$target"
+}
+
 action="${1:-snapshot}"
 case "$action" in
     snapshot)
@@ -784,6 +813,9 @@ case "$action" in
         ;;
     add-place)
         add_place "${2:-}"
+        ;;
+    select-directory)
+        select_directory "${2:-}" "${3:-$HOME}"
         ;;
     *)
         json_error "Unknown files backend action: $action"

@@ -104,7 +104,9 @@ The starter choices are:
 - **Ollama local AI — Experimental**, amd64 and CPU-only, with Vulkan disabled.
   It requires at least 8 GiB RAM and 20 GiB free storage, runs unprivileged,
   disables Ollama cloud features, downloads no models, and does not support GPU
-  passthrough.
+  passthrough. Its service uses a 32K-token context window so local coding agents
+  can inspect moderately sized source files; larger contexts consume additional
+  memory.
 
 RCTL is optional for Blackship and for the Blank, nginx, and PostgreSQL
 starters. Those starters do not emit `[jails.resources]` blocks. Ollama's
@@ -124,6 +126,18 @@ manifest. Stopped jails receive the new limits on their next start. Resource
 tables containing QoS profiles, cpusets, swap, open-file, thread, or raw custom
 rules remain read-only in BSDRunner so the simplified editor cannot erase
 advanced settings.
+
+Running Blackship jails also have an **Attach source folder** action. It lets a
+user choose one existing directory below their home directory and exposes only
+that directory below `/workspace/NAME` in the jail. BSDRunner refuses the home
+directory itself, paths outside it, nested jail destinations, and nonempty
+destinations. The nullfs mount is verified as read-only, `nosuid`, and `noexec`;
+the UI lists it with a separate Detach action. These attachments are temporary:
+BSDRunner detaches them before a managed stop or restart and does not add them
+to the Blackship manifest. Detaching never deletes or changes the host folder.
+Ollama does not automatically browse an attached repository; its file contents
+must still be included in a prompt or read by a separate tool running in the
+jail.
 
 Permanent removal is intentionally separate from normal lifecycle actions.
 For a BSDRunner-managed Blackship jail, expand **Technical details**, open the

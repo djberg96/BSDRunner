@@ -50,7 +50,8 @@ case "$args" in
         state="Running"
         jid=4
         [ "$running" = true ] || { state="Stopped"; jid=null; }
-        printf '{"schema_version":1,"ok":true,"data":{"project":"bsdrunner","config_path":"blackship.toml","jails":[{"service_name":"web","full_name":"bsdrunner-web","manager":"blackship","managed":true,"configured":true,"running":%s,"state":"%s","jid":%s,"release":"15.0-RELEASE","hostname":"web.local","ip":"10.44.0.20","ips":["10.44.0.20"],"path":"/var/db/bsdrunner/blackship/jails/bsdrunner-web","networks":["bsdrunner"],"depends_on":[],"tags":["bsdrunner","nginx","autostart"],"autostart":true,"health":{"configured":true,"status":"healthy","reason":null,"checked_at":1794560400,"checks_total":1,"checks_passing":1,"checks_failing":0,"checks_pending":0}}]}}\n' "$running" "$state" "$jid"
+        runtime_path="${BSDRUNNER_BLACKSHIP_TEST_RUNTIME_PATH:-/var/db/bsdrunner/blackship/jails/bsdrunner-web}"
+        printf '{"schema_version":1,"ok":true,"data":{"project":"bsdrunner","config_path":"blackship.toml","jails":[{"service_name":"web","full_name":"bsdrunner-web","manager":"blackship","managed":true,"configured":true,"running":%s,"state":"%s","jid":%s,"release":"15.0-RELEASE","hostname":"web.local","ip":"10.44.0.20","ips":["10.44.0.20"],"path":"%s","networks":["bsdrunner"],"depends_on":[],"tags":["bsdrunner","nginx","autostart"],"autostart":true,"health":{"configured":true,"status":"healthy","reason":null,"checked_at":1794560400,"checks_total":1,"checks_passing":1,"checks_failing":0,"checks_pending":0}}]}}\n' "$running" "$state" "$jid" "$runtime_path"
         ;;
     *" network list "*)
         printf '%s\n' '{"schema_version":1,"ok":true,"data":[]}'
