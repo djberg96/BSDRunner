@@ -37,6 +37,7 @@ assert_json() {
 run_backend() {
     BSDRUNNER_JAILS_TEST_MODE=1 \
     BSDRUNNER_JAILS_TEST_PATH="$fixture_path" \
+    BSDRUNNER_JQ_BIN="${BSDRUNNER_JQ_BIN:-$(command -v jq)}" \
     BSDRUNNER_JAILS_TEST_ETC_DIR="$fixtures/etc" \
     BSDRUNNER_JAILS_TEST_STATE_DIR="$state_dir" \
     BSDRUNNER_JAILS_TEST_FIXTURES="$fixtures" \
@@ -133,9 +134,15 @@ grep -F 'activeTab = "manifest"' "$jails_qml" >/dev/null || \
     fail "the Manifest field should open an in-window viewer"
 grep -F '"blackship-manifest-view", root.selectedJailName' "$jails_qml" >/dev/null || \
     fail "the manifest viewer should use the guarded backend action"
-grep -F 'readOnly: true' "$jails_qml" >/dev/null || \
-    fail "the managed manifest viewer should be read-only"
-pass "the managed manifest opens in a read-only viewer"
+grep -F 'root.manifestOperation === "apply" ? "blackship-manifest-apply" : "blackship-manifest-preview"' "$jails_qml" >/dev/null || \
+    fail "the manifest editor should expose guarded preview and apply operations"
+grep -F 'readOnly: root.manifestLoading || root.manifestBusy' "$jails_qml" >/dev/null || \
+    fail "the managed manifest should be editable when it is not loading or applying"
+grep -F 'stdinEnabled: true' "$jails_qml" >/dev/null || \
+    fail "the manifest editor should send content over standard input instead of process arguments"
+grep -F 'text: "Dry Run"' "$jails_qml" >/dev/null || \
+    fail "the manifest editor should offer a dry run before apply"
+pass "the managed manifest supports guarded editing, dry runs, and apply"
 grep -F 'visible: root.activeTab === "resources"' "$jails_qml" >/dev/null || \
     fail "resource limits should open in a dedicated in-window tab"
 grep -F 'function recommendedResourceLimits(jail)' "$jails_qml" >/dev/null || \
@@ -806,11 +813,62 @@ assert_json "$blackship_snapshot" \
     "Blackship runtime jails should not also appear as native external jails"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view web >"$test_root/blackship-manifest.json"
 assert_json "$test_root/blackship-manifest.json" \
-    '.ok == true and .schema_version == 2 and (.path | endswith("/blackship.toml")) and (.content | contains("name = \"web\""))' \
-    "managed Blackship jails should expose the canonical manifest read-only"
+    '.ok == true and .schema_version == 2 and (.path | endswith("/blackship.toml")) and (.revision | test("^[0-9]+:[0-9]+$")) and (.content | contains("name = \"web\""))' \
+    "managed Blackship jails should expose the canonical manifest with a revision"
 if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view unmanaged >"$test_root/blackship-manifest-unmanaged.json"; then
     fail "the manifest viewer should reject unmanaged jail names"
 fi
+manifest_revision="$(jq -r '.revision' "$test_root/blackship-manifest.json")"
+manifest_edit="$(printf '%s\n\n%s\n' "$(jq -r '.content' "$test_root/blackship-manifest.json")" '# Edited through the BSDRunner manifest editor fixture.')"
+manifest_request="$(jq -cn --arg content "$manifest_edit" '{content:$content}')"
+manifest_before="$(cksum "$state_dir/blackship.toml")"
+printf '%s\n' "$manifest_request" | BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
+    run_backend blackship-manifest-preview web "$manifest_revision" >"$test_root/blackship-manifest-preview.json"
+assert_json "$test_root/blackship-manifest-preview.json" \
+    '.ok == true and (.message | contains("Dry run complete")) and (.details | contains("Manifest diff:")) and (.details | contains("Blackship Eva plan:"))' \
+    "manifest dry runs should return both the text diff and Eva plan"
+[ "$(cksum "$state_dir/blackship.toml")" = "$manifest_before" ] || fail "manifest dry runs must not save the candidate"
+grep -F 'mdo blackship --config ' "$command_log" | grep -F ' --non-interactive eva --all --dry-run' >/dev/null || \
+    fail "manifest dry runs should use Blackship Eva against the candidate"
+printf '%s\n' "$manifest_request" | BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
+    run_backend blackship-manifest-apply web "$manifest_revision" >"$test_root/blackship-manifest-apply.json"
+assert_json "$test_root/blackship-manifest-apply.json" \
+    '.ok == true and .message == "Applied the Blackship manifest." and (.details | contains("reconciled running jails with Eva"))' \
+    "manifest apply should save and reconcile the validated candidate"
+grep -F '# Edited through the BSDRunner manifest editor fixture.' "$state_dir/blackship.toml" >/dev/null || \
+    fail "manifest apply should install the edited candidate"
+grep -F 'mdo blackship --config ' "$command_log" | grep -F ' --non-interactive eva --all' | grep -v -- '--dry-run' >/dev/null || \
+    fail "manifest apply should reconcile all configured running jails"
+if printf '%s\n' "$manifest_request" | BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
+    run_backend blackship-manifest-apply web "$manifest_revision" >"$test_root/blackship-manifest-stale.json"; then
+    fail "manifest apply should reject a stale editor revision"
+fi
+assert_json "$test_root/blackship-manifest-stale.json" \
+    '.ok == false and (.message | contains("changed after you opened"))' \
+    "stale manifest edits should require a reload"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-manifest-view web >"$test_root/blackship-manifest-current.json"
+manifest_revision="$(jq -r '.revision' "$test_root/blackship-manifest-current.json")"
+removed_edit="$(jq -r '.content' "$test_root/blackship-manifest-current.json" | awk '/^\[\[jails\]\]/{ exit } { print }')"
+removed_request="$(jq -cn --arg content "$removed_edit" '{content:$content}')"
+if printf '%s\n' "$removed_request" | BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
+    run_backend blackship-manifest-preview web "$manifest_revision" >"$test_root/blackship-manifest-removal.json"; then
+    fail "the manifest editor should reject removal of a managed jail entry"
+fi
+assert_json "$test_root/blackship-manifest-removal.json" \
+    '.ok == false and (.message | contains("removes managed jail entries")) and (.details | contains("Delete jail workflow"))' \
+    "manifest removal should remain in the dedicated destructive workflow"
+rollback_edit="$(printf '%s\n%s\n' "$(jq -r '.content' "$test_root/blackship-manifest-current.json")" '# This change should be rolled back when Eva fails.')"
+rollback_request="$(jq -cn --arg content "$rollback_edit" '{content:$content}')"
+manifest_before="$(cksum "$state_dir/blackship.toml")"
+if printf '%s\n' "$rollback_request" | BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL=1 \
+    run_backend blackship-manifest-apply web "$manifest_revision" >"$test_root/blackship-manifest-rollback.json"; then
+    fail "manifest apply should fail when Blackship cannot reconcile it"
+fi
+assert_json "$test_root/blackship-manifest-rollback.json" \
+    '.ok == false and (.message | contains("could not apply")) and (.details | contains("previous manifest was restored"))' \
+    "failed manifest reconciliation should explain its rollback"
+[ "$(cksum "$state_dir/blackship.toml")" = "$manifest_before" ] || fail "failed manifest reconciliation should restore the previous manifest"
+pass "Blackship manifests support revision-safe dry runs, apply, and rollback"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
 BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER=10.44.0.1 \
 run_backend policy-set web 10.44.0.20 internet-only web >"$test_root/blackship-policy.json"

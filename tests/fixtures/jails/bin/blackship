@@ -67,7 +67,7 @@ case "$args" in
         printf '%s\n' '{"schema_version":1,"ok":true,"data":[]}'
         ;;
     *" eva "*)
-        if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL:-0}" = 1 ]; then
+        if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL:-0}" = 1 ] && ! printf '%s\n' "$args" | grep -F ' --dry-run ' >/dev/null; then
             printf '%s\n' '{"schema_version":1,"ok":false,"error":{"code":"fixture_failure","message":"simulated Eva failure"}}'
             exit 1
         fi

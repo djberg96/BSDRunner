@@ -36,6 +36,7 @@ else
 fi
 source_attachment_file="$state_dir/source-attachments.conf"
 export PATH
+jq_command="${BSDRUNNER_JQ_BIN:-jq}"
 
 blackship_min_version="0.5.0"
 blackship_release_version="0.5.0"
@@ -2720,18 +2721,77 @@ blackship_network_values() {
     '
 }
 
-blackship_manifest_has_name() {
-    requested="$1"
-    [ -r "$blackship_manifest" ] || return 1
+blackship_manifest_file_has_name() {
+    manifest_file="$1"
+    requested="$2"
+    [ -r "$manifest_file" ] || return 1
     awk -v requested="$requested" '
-        /^[[:space:]]*name[[:space:]]*=/ {
+        /^\[\[jails\]\][[:space:]]*$/ { awaiting_name = 1; next }
+        awaiting_name && /^\[/ { awaiting_name = 0 }
+        awaiting_name && /^[[:space:]]*name[[:space:]]*=/ {
             value = $0
             sub(/^[^=]*=[[:space:]]*"/, "", value)
             sub(/"[[:space:]]*$/, "", value)
             if (value == requested) found = 1
+            awaiting_name = 0
         }
         END { exit found ? 0 : 1 }
-    ' "$blackship_manifest"
+    ' "$manifest_file"
+}
+
+blackship_manifest_jail_names() {
+    manifest_file="$1"
+    [ -r "$manifest_file" ] || return 1
+    awk '
+        /^\[\[jails\]\][[:space:]]*$/ { awaiting_name = 1; next }
+        awaiting_name && /^\[/ { awaiting_name = 0 }
+        awaiting_name && /^[[:space:]]*name[[:space:]]*=/ {
+            value = $0
+            sub(/^[^=]*=[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*$/, "", value)
+            print value
+            awaiting_name = 0
+        }
+    ' "$manifest_file"
+}
+
+blackship_manifest_missing_jails() {
+    candidate="$1"
+    missing=""
+    for existing_name in $(blackship_manifest_jail_names "$blackship_manifest"); do
+        if ! blackship_manifest_file_has_name "$candidate" "$existing_name"; then
+            missing="${missing}${missing:+, }${existing_name}"
+        fi
+    done
+    printf '%s\n' "$missing"
+}
+
+blackship_manifest_has_name() {
+    requested="$1"
+    blackship_manifest_file_has_name "$blackship_manifest" "$requested"
+}
+
+blackship_manifest_revision() {
+    [ -r "$blackship_manifest" ] || return 1
+    cksum "$blackship_manifest" | awk '{ print $1 ":" $2 }'
+}
+
+blackship_manifest_revision_matches() {
+    expected="$1"
+    case "$expected" in
+        *[!0-9:]*|:*|*:|*:*:*) return 1 ;;
+    esac
+    [ "$expected" = "$(blackship_manifest_revision 2>/dev/null || true)" ]
+}
+
+blackship_read_manifest_candidate() {
+    destination="$1"
+    command -v "$jq_command" >/dev/null 2>&1 || return 1
+    request=""
+    IFS= read -r request || return 1
+    printf '%s\n' "$request" | "$jq_command" -er '.content | select(type == "string")' >"$destination" 2>/dev/null || return 1
+    size="$(wc -c <"$destination" | tr -d '[:space:]')"
+    [ "$size" -gt 0 ] 2>/dev/null && [ "$size" -le 1048576 ] 2>/dev/null
 }
 
 blackship_manifest_entry_values() {
@@ -4036,9 +4096,122 @@ do_blackship_manifest_view() {
         exit 1
     fi
 
-    printf '{"ok":true,"schema_version":2,"path":"%s","content":"%s"}\n' \
+    revision="$(blackship_manifest_revision)"
+    printf '{"ok":true,"schema_version":2,"path":"%s","revision":"%s","content":"%s"}\n' \
         "$(printf '%s' "$blackship_manifest" | json_escape)" \
+        "$(printf '%s' "$revision" | json_escape)" \
         "$(printf '%s' "$manifest_content" | json_escape)"
+}
+
+do_blackship_manifest_preview() {
+    name="${1:-}"
+    expected_revision="${2:-}"
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    blackship_manifest_revision_matches "$expected_revision" || {
+        emit_action_result false "The manifest changed after you opened it." "Reload the editor before running another dry run."
+        exit 1
+    }
+
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-editor.XXXXXX")"
+    if ! blackship_read_manifest_candidate "$candidate"; then
+        rm -f "$candidate"
+        emit_action_result false "Unable to read the edited manifest." "The editor accepts a non-empty manifest up to 1 MiB."
+        exit 1
+    fi
+    if ! blackship_check_candidate "$candidate"; then
+        rm -f "$candidate"
+        emit_action_result false "Blackship rejected the edited manifest." "Fix the TOML or unsupported settings, then run the dry run again."
+        exit 1
+    fi
+    missing_jails="$(blackship_manifest_missing_jails "$candidate")"
+    if [ -n "$missing_jails" ]; then
+        rm -f "$candidate"
+        emit_action_result false "The edited manifest removes managed jail entries." "Missing: ${missing_jails}. Use the dedicated Delete jail workflow for destructive removal."
+        exit 1
+    fi
+
+    diff_output="$(diff -u "$blackship_manifest" "$candidate" 2>&1 || true)"
+    if [ -z "$diff_output" ]; then
+        rm -f "$candidate"
+        emit_action_result true "The manifest is valid and unchanged." "There is nothing to apply."
+        return
+    fi
+    if ! eva_output="$(run_privileged blackship --config "$candidate" --format json --non-interactive eva --all --dry-run 2>&1)"; then
+        rm -f "$candidate"
+        emit_action_result false "Blackship could not plan the edited manifest." "$eva_output"
+        exit 1
+    fi
+    rm -f "$candidate"
+    emit_action_result true "Dry run complete; nothing was changed." "Manifest diff:\n${diff_output}\n\nBlackship Eva plan:\n${eva_output}"
+}
+
+do_blackship_manifest_apply() {
+    name="${1:-}"
+    expected_revision="${2:-}"
+    valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
+    blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
+    blackship_manifest_revision_matches "$expected_revision" || {
+        emit_action_result false "The manifest changed after you opened it." "Reload the editor before applying your changes."
+        exit 1
+    }
+
+    candidate="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-editor.XXXXXX")"
+    backup="$(mktemp "${TMPDIR:-/tmp}/bsdrunner-blackship-editor-backup.XXXXXX")"
+    if ! blackship_read_manifest_candidate "$candidate"; then
+        rm -f "$candidate" "$backup"
+        emit_action_result false "Unable to read the edited manifest." "The editor accepts a non-empty manifest up to 1 MiB."
+        exit 1
+    fi
+    if cmp -s "$candidate" "$blackship_manifest"; then
+        rm -f "$candidate" "$backup"
+        emit_action_result true "The manifest is already up to date." "There is nothing to apply."
+        return
+    fi
+    if ! blackship_check_candidate "$candidate"; then
+        rm -f "$candidate" "$backup"
+        emit_action_result false "Blackship rejected the edited manifest." "Nothing was saved. Fix the TOML or unsupported settings and try again."
+        exit 1
+    fi
+    missing_jails="$(blackship_manifest_missing_jails "$candidate")"
+    if [ -n "$missing_jails" ]; then
+        rm -f "$candidate" "$backup"
+        emit_action_result false "The edited manifest removes managed jail entries." "Missing: ${missing_jails}. Use the dedicated Delete jail workflow for destructive removal."
+        exit 1
+    fi
+    if ! plan_output="$(run_privileged blackship --config "$candidate" --format json --non-interactive eva --all --dry-run 2>&1)"; then
+        rm -f "$candidate" "$backup"
+        emit_action_result false "Blackship could not plan the edited manifest." "$plan_output"
+        exit 1
+    fi
+    if ! blackship_manifest_revision_matches "$expected_revision"; then
+        rm -f "$candidate" "$backup"
+        emit_action_result false "The manifest changed during the dry run." "Reload the editor before applying your changes."
+        exit 1
+    fi
+    cp "$blackship_manifest" "$backup"
+    if ! install_managed_file "$candidate" "$blackship_manifest"; then
+        rm -f "$candidate" "$backup"
+        emit_action_result false "Unable to save the edited manifest." "Privilege escalation was denied; the current manifest was not changed."
+        exit 1
+    fi
+    rm -f "$candidate"
+
+    if ! eva_output="$(run_privileged blackship --config "$blackship_manifest" --format json --non-interactive eva --all 2>&1)"; then
+        rollback_note="The previous manifest was restored."
+        if install_managed_file "$backup" "$blackship_manifest"; then
+            run_privileged blackship --config "$blackship_manifest" --format json --non-interactive eva --all >/dev/null 2>&1 || rollback_note="The previous manifest was restored, but its live rules could not be fully reconciled."
+        else
+            rollback_note="The previous manifest could not be restored."
+        fi
+        rm -f "$backup"
+        emit_action_result false "Blackship could not apply the edited manifest." "${rollback_note}\n${eva_output}"
+        exit 1
+    fi
+    rm -f "$backup"
+    revision="$(blackship_manifest_revision)"
+    write_last_result success "Applied Blackship manifest changes."
+    emit_action_result true "Applied the Blackship manifest." "Blackship validated and installed the candidate, then reconciled running jails with Eva.\nRevision: ${revision}\n\nDry-run plan:\n${plan_output}\n\nApply result:\n${eva_output}"
 }
 
 if [ -n "$fixture_file" ]; then
@@ -4126,6 +4299,12 @@ case "$action" in
         ;;
     blackship-manifest-view)
         do_blackship_manifest_view "${2:-}"
+        ;;
+    blackship-manifest-preview)
+        do_blackship_manifest_preview "${2:-}" "${3:-}"
+        ;;
+    blackship-manifest-apply)
+        do_blackship_manifest_apply "${2:-}" "${3:-}"
         ;;
     blackship-postgres-reset)
         do_blackship_postgres_reset "${2:-}" "${3:-}"
