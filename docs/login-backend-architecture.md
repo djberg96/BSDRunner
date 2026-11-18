@@ -48,6 +48,11 @@ On success, greetd runs the installed user's wrapper:
 `SESSION` is either `BSDRunner` or `Terminal`; that value is selected from a
 Rust enum rather than passed through from arbitrary UI input.
 
+The BSDRunner launcher creates one D-Bus session around the complete logged-in
+Hyprland session. The compositor, portals, panel, and applications therefore
+share one bus for the lifetime of the login instead of creating app-specific
+private buses.
+
 ## Security Invariants
 
 - Passwords are never passed in argv or environment variables.
