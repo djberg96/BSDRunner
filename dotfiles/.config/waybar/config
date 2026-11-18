@@ -11,7 +11,7 @@
     "margin-right": 10,
     "modules-left": ["custom/theme", "custom/apps", "custom/settings", "ext/workspaces", "custom/wallpaper-animation", "hyprland/window"],
     "modules-center": [],
-    "modules-right": ["cpu", "custom/memory", "disk", "pulseaudio", "custom/network", "custom/battery", "custom/clock", "tray", "custom/power"],
+    "modules-right": ["custom/cpu", "custom/memory", "disk", "pulseaudio", "custom/network", "custom/battery", "custom/clock", "tray", "custom/power"],
 
     "ext/workspaces": {
       "all-outputs": true,
@@ -73,10 +73,12 @@
       "on-click": "sh ~/.config/bsdrunner/scripts/bsdrunner-settings.sh"
     },
 
-    "cpu": {
+    "custom/cpu": {
+      "exec": "sh ~/.config/waybar/scripts/bsdrunner-cpu-summary.sh",
+      "return-type": "json",
       "interval": 3,
-      "format": " {usage}%",
-      "tooltip-format": "CPU usage: {usage}%"
+      "format": "{}",
+      "tooltip": true
     },
 
     "custom/memory": {
