@@ -50,7 +50,8 @@ fi
 printf 'ok - launcher uses detached zombie-safe startup\n'
 
 cpu_output="$(
-    BSDRUNNER_CPU_VMSTAT_JSON='{"vmstat":{"cpu":[{"name":0,"idle":70},{"name":1,"idle":50}]}}' \
+    BSDRUNNER_CPU_TIMES_PREVIOUS='100 0 50 10 840 200 0 50 10 740' \
+    BSDRUNNER_CPU_TIMES_CURRENT='120 0 60 10 910 240 0 60 10 790' \
     BSDRUNNER_CPU_TEMPERATURES='48.2
 52.7' \
         sh "$cpu_summary"
@@ -68,14 +69,16 @@ fi
 printf '%s\n' "$cpu_output" | grep -Fq '"class":"cool"' || fail "temperatures below 70°C should be cool"
 
 warm_output="$(
-    BSDRUNNER_CPU_VMSTAT_JSON='{"vmstat":{"cpu":[{"name":0,"idle":70},{"name":1,"idle":50}]}}' \
+    BSDRUNNER_CPU_TIMES_PREVIOUS='100 0 50 10 840 200 0 50 10 740' \
+    BSDRUNNER_CPU_TIMES_CURRENT='120 0 60 10 910 240 0 60 10 790' \
     BSDRUNNER_CPU_TEMPERATURES='70' \
         sh "$cpu_summary"
 )"
 printf '%s\n' "$warm_output" | grep -Fq '"class":"warm"' || fail "70°C should be warm"
 
 hot_output="$(
-    BSDRUNNER_CPU_VMSTAT_JSON='{"vmstat":{"cpu":[{"name":0,"idle":70},{"name":1,"idle":50}]}}' \
+    BSDRUNNER_CPU_TIMES_PREVIOUS='100 0 50 10 840 200 0 50 10 740' \
+    BSDRUNNER_CPU_TIMES_CURRENT='120 0 60 10 910 240 0 60 10 790' \
     BSDRUNNER_CPU_TEMPERATURES='85' \
         sh "$cpu_summary"
 )"

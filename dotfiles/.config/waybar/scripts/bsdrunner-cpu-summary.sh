@@ -3,21 +3,55 @@
 set -eu
 PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin${PATH:+:$PATH}"
 
-if [ "${BSDRUNNER_CPU_VMSTAT_JSON+x}" = "x" ]; then
-    snapshot="$BSDRUNNER_CPU_VMSTAT_JSON"
+if [ "${BSDRUNNER_CPU_TIMES_PREVIOUS+x}" = "x" ] &&
+    [ "${BSDRUNNER_CPU_TIMES_CURRENT+x}" = "x" ]; then
+    previous_times="$BSDRUNNER_CPU_TIMES_PREVIOUS"
+    current_times="$BSDRUNNER_CPU_TIMES_CURRENT"
 else
-    snapshot="$(vmstat --libxo json -P -w 0.2 -c 2 2>/dev/null || true)"
+    state_dir="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
+    state_file="$state_dir/bsdrunner-waybar-cpu-summary-$(id -u).state"
+    current_times="$(sysctl -n kern.cp_times 2>/dev/null || true)"
+    previous_times="$(cat "$state_file" 2>/dev/null || true)"
+
+    if [ -z "$previous_times" ]; then
+        previous_times="$current_times"
+        sleep 0.2
+        current_times="$(sysctl -n kern.cp_times 2>/dev/null || true)"
+    fi
+
+    umask 077
+    state_temp="$state_file.$$"
+    if printf '%s\n' "$current_times" > "$state_temp" 2>/dev/null; then
+        mv -f "$state_temp" "$state_file"
+    else
+        rm -f "$state_temp"
+    fi
 fi
 
-cpu_data="$(printf '%s\n' "$snapshot" | jq -r '
-    [.vmstat.cpu[]? | {
-        core: ((.name | tonumber) + 1),
-        usage: ([0, (100 - .idle), 100] | sort | .[1])
-    }] as $cores |
-    select($cores | length > 0) |
-    (($cores | map(.usage) | add / length) | round),
-    ($cores[] | "Core \(.core): \(.usage)%")
-' 2>/dev/null || true)"
+cpu_data="$(awk -v previous="$previous_times" -v current="$current_times" '
+    BEGIN {
+        before_count = split(previous, before, " ")
+        after_count = split(current, after, " ")
+        if (before_count != after_count || after_count < 5 || after_count % 5 != 0) exit
+
+        for (start = 1; start <= after_count; start += 5) {
+            total = 0
+            for (field = start; field < start + 5; field++) {
+                delta = after[field] - before[field]
+                if (delta < 0) exit
+                total += delta
+            }
+            idle = after[start + 4] - before[start + 4]
+            if (total <= 0) exit
+            usage[++cores] = int((((total - idle) * 100) / total) + 0.5)
+            combined_total += total
+            combined_idle += idle
+        }
+
+        print int((((combined_total - combined_idle) * 100) / combined_total) + 0.5)
+        for (core = 1; core <= cores; core++) print "Core " core ": " usage[core] "%"
+    }
+')"
 
 overall_usage="$(printf '%s\n' "$cpu_data" | sed -n '1p')"
 core_tooltip="$(printf '%s\n' "$cpu_data" | sed '1d')"
