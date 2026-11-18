@@ -2,7 +2,8 @@ LATEXMK ?= latexmk
 MAIN := main.tex
 BUILD_DIR := build
 PDF := $(BUILD_DIR)/main.pdf
-CHAPTERS := chapters/01-introduction.tex
+CHAPTERS := chapters/01-introduction.tex \
+	chapters/02-inventory.tex
 
 .PHONY: all pdf clean
 
