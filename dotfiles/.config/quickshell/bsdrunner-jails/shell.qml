@@ -20,13 +20,27 @@ ShellRoot {
     property bool manifestLoading: false
     property string manifestPath: ""
     property string manifestContent: ""
+    property string manifestOriginalContent: ""
+    property string manifestRevision: ""
     property string manifestError: ""
+    property bool manifestBusy: false
+    property string manifestOperation: ""
+    property string manifestResultTone: "info"
+    property string manifestResultMessage: ""
+    property string manifestResultDetails: ""
+    readonly property bool manifestDirty: manifestContent !== manifestOriginalContent
     property string manifestStdoutText: ""
     property string manifestStderrText: ""
     property int manifestExitCode: 0
     property bool manifestExited: false
     property bool manifestStdoutFinished: false
     property bool manifestStderrFinished: false
+    property string manifestEditStdoutText: ""
+    property string manifestEditStderrText: ""
+    property int manifestEditExitCode: 0
+    property bool manifestEditExited: false
+    property bool manifestEditStdoutFinished: false
+    property bool manifestEditStderrFinished: false
     property bool createPreviewLoading: false
     property int wizardStep: 0
     property bool demoMode: false
@@ -1149,9 +1163,22 @@ ShellRoot {
         if (!selectedJail || selectedJail.backend !== "blackship" || manifestProcess.running)
             return
         activeTab = "manifest"
+        beginManifestLoad(false)
+    }
+
+    function beginManifestLoad(preserveResult) {
+        if (manifestProcess.running)
+            return
         manifestLoading = true
         manifestPath = "/usr/local/etc/bsdrunner/blackship.toml"
-        manifestContent = ""
+        if (!preserveResult) {
+            manifestContent = ""
+            manifestOriginalContent = ""
+            manifestRevision = ""
+            manifestResultTone = "info"
+            manifestResultMessage = ""
+            manifestResultDetails = ""
+        }
         manifestError = ""
         manifestStdoutText = ""
         manifestStderrText = ""
@@ -1163,9 +1190,41 @@ ShellRoot {
     }
 
     function closeManifestViewer() {
-        if (manifestLoading)
+        if (manifestLoading || manifestBusy)
             return
+        if (manifestContent !== manifestOriginalContent) {
+            manifestResultTone = "warning"
+            manifestResultMessage = "This manifest has unsaved changes."
+            manifestResultDetails = "Apply the changes or choose Revert before leaving the editor."
+            return
+        }
         activeTab = "jails"
+    }
+
+    function revertManifestEdits() {
+        if (manifestLoading || manifestBusy)
+            return
+        manifestContent = manifestOriginalContent
+        manifestResultTone = "info"
+        manifestResultMessage = "Reverted the unsaved edits."
+        manifestResultDetails = "The installed manifest was not changed."
+    }
+
+    function startManifestOperation(operation) {
+        if (manifestLoading || manifestBusy || manifestContent === manifestOriginalContent || manifestRevision.length === 0)
+            return
+        manifestOperation = operation
+        manifestBusy = true
+        manifestResultTone = "info"
+        manifestResultMessage = operation === "apply" ? "Applying the candidate manifest…" : "Planning the candidate manifest…"
+        manifestResultDetails = ""
+        manifestEditStdoutText = ""
+        manifestEditStderrText = ""
+        manifestEditExitCode = 0
+        manifestEditExited = false
+        manifestEditStdoutFinished = false
+        manifestEditStderrFinished = false
+        manifestEditProcess.running = true
     }
 
     function maybeFinalizeManifest() {
@@ -1185,6 +1244,39 @@ ShellRoot {
         }
         manifestPath = payload.path || manifestPath
         manifestContent = payload.content || ""
+        manifestOriginalContent = manifestContent
+        manifestRevision = payload.revision || ""
+    }
+
+    function maybeFinalizeManifestEdit() {
+        if (!manifestEditExited || !manifestEditStdoutFinished || !manifestEditStderrFinished)
+            return
+        manifestBusy = false
+        var payload = null
+        try {
+            payload = JSON.parse(manifestEditStdoutText || "{}")
+        } catch (error) {
+            payload = null
+        }
+        if (payload && payload.ok && manifestEditExitCode === 0) {
+            manifestResultTone = "success"
+            manifestResultMessage = payload.message || "Manifest operation completed."
+            manifestResultDetails = payload.details || ""
+            if (manifestOperation === "apply") {
+                manifestOriginalContent = manifestContent
+                beginManifestLoad(true)
+                refreshSnapshot()
+            }
+        } else if (payload) {
+            manifestResultTone = "error"
+            manifestResultMessage = payload.message || "Manifest operation failed."
+            manifestResultDetails = payload.details || manifestEditStderrText || ""
+        } else {
+            manifestResultTone = "error"
+            manifestResultMessage = "The manifest editor received invalid JSON."
+            manifestResultDetails = manifestEditStderrText || manifestEditStdoutText || ""
+        }
+        manifestOperation = ""
     }
 
     function invalidateCreatePlan() {
@@ -1865,6 +1957,44 @@ ShellRoot {
             manifestProcess.controller.manifestExitCode = exitCode
             manifestProcess.controller.manifestExited = true
             manifestProcess.controller.maybeFinalizeManifest()
+        }
+    }
+
+    Process {
+        id: manifestEditProcess
+        property var controller: root
+
+        command: [
+            "sh",
+            themeLoader.homeDir + "/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh",
+            root.manifestOperation === "apply" ? "blackship-manifest-apply" : "blackship-manifest-preview",
+            root.selectedJailName,
+            root.manifestRevision
+        ]
+        stdinEnabled: true
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                manifestEditProcess.controller.manifestEditStdoutText = text
+                manifestEditProcess.controller.manifestEditStdoutFinished = true
+                manifestEditProcess.controller.maybeFinalizeManifestEdit()
+            }
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                manifestEditProcess.controller.manifestEditStderrText = text
+                manifestEditProcess.controller.manifestEditStderrFinished = true
+                manifestEditProcess.controller.maybeFinalizeManifestEdit()
+            }
+        }
+        onStarted: {
+            manifestEditProcess.write(JSON.stringify({"content": manifestEditProcess.controller.manifestContent}) + "\n")
+        }
+        onExited: function (exitCode) {
+            manifestEditProcess.controller.manifestEditExitCode = exitCode
+            manifestEditProcess.controller.manifestEditExited = true
+            manifestEditProcess.controller.maybeFinalizeManifestEdit()
         }
     }
 
@@ -4980,7 +5110,7 @@ ShellRoot {
                                     Text {
                                         visible: root.selectedJail && root.selectedJail.limits && root.selectedJail.limits.advanced
                                         width: parent.width
-                                        text: "Advanced resource settings are present in the manifest. BSDRunner leaves them untouched; use the read-only manifest viewer to inspect them."
+                                        text: "Advanced resource settings are present in the manifest. BSDRunner leaves them untouched; use the advanced manifest editor to review or change them."
                                         color: root.palette.warning
                                         font.pixelSize: 12
                                         wrapMode: Text.WordWrap
@@ -5440,7 +5570,7 @@ ShellRoot {
                             spacing: 12
 
                             Column {
-                                width: parent.width - 214
+                                width: parent.width - 222
                                 spacing: 3
 
                                 Text {
@@ -5461,18 +5591,18 @@ ShellRoot {
                             }
 
                             Rectangle {
-                                width: 92
+                                width: 100
                                 height: 34
                                 anchors.verticalCenter: parent.verticalCenter
                                 radius: 7
                                 color: root.palette.panelBackground
                                 border.width: 1
-                                border.color: root.palette.success
+                                border.color: root.manifestDirty ? root.palette.warning : root.palette.success
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Read only"
-                                    color: root.palette.success
+                                    text: root.manifestLoading ? "Loading…" : root.manifestBusy ? "Working…" : root.manifestDirty ? "Unsaved" : "Current"
+                                    color: root.manifestDirty ? root.palette.warning : root.palette.success
                                     font.pixelSize: 12
                                     font.bold: true
                                 }
@@ -5500,16 +5630,164 @@ ShellRoot {
                                     id: manifestBackMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    enabled: !root.manifestLoading
+                                    enabled: !root.manifestLoading && !root.manifestBusy
                                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                     onClicked: root.closeManifestViewer()
                                 }
                             }
                         }
 
+                        Row {
+                            width: parent.width
+                            height: 40
+                            spacing: 8
+
+                            Text {
+                                width: parent.width - 304
+                                height: parent.height
+                                text: "Edit desired state directly. Dry Run validates TOML and shows the Eva plan; Apply validates again, installs the candidate, and reconciles running jails."
+                                color: root.palette.secondaryText
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Rectangle {
+                                width: 88
+                                height: 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 7
+                                color: manifestRevertMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                opacity: root.manifestDirty && !root.manifestBusy ? 1.0 : 0.45
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Revert"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: manifestRevertMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: root.manifestDirty && !root.manifestLoading && !root.manifestBusy
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.revertManifestEdits()
+                                }
+                            }
+
+                            Rectangle {
+                                width: 96
+                                height: 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 7
+                                color: manifestDryRunMouse.containsMouse ? root.palette.cardHover : root.palette.cardBackground
+                                opacity: root.manifestDirty && !root.manifestBusy ? 1.0 : 0.45
+                                border.width: 1
+                                border.color: root.palette.accent
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Dry Run"
+                                    color: root.palette.accent
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: manifestDryRunMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: root.manifestDirty && !root.manifestLoading && !root.manifestBusy
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.startManifestOperation("preview")
+                                }
+                            }
+
+                            Rectangle {
+                                width: 96
+                                height: 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                radius: 7
+                                color: manifestApplyMouse.containsMouse ? Qt.lighter(root.palette.accent, 1.08) : root.palette.accent
+                                opacity: root.manifestDirty && !root.manifestBusy ? 1.0 : 0.45
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Apply"
+                                    color: root.palette.panelBackground
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: manifestApplyMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: root.manifestDirty && !root.manifestLoading && !root.manifestBusy
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: root.startManifestOperation("apply")
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            visible: root.manifestResultMessage.length > 0
+                            width: parent.width
+                            height: visible ? 122 : 0
+                            radius: 7
+                            color: Qt.alpha(root.toneColor(root.manifestResultTone), 0.08)
+                            border.width: 1
+                            border.color: root.toneColor(root.manifestResultTone)
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 10
+                                text: root.manifestResultMessage
+                                color: root.toneColor(root.manifestResultTone)
+                                font.pixelSize: 12
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            ScrollView {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                anchors.topMargin: 32
+                                anchors.bottomMargin: 6
+                                clip: true
+                                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+                                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                                TextArea {
+                                    text: root.manifestResultDetails
+                                    readOnly: true
+                                    selectByMouse: true
+                                    wrapMode: TextEdit.NoWrap
+                                    color: root.palette.secondaryText
+                                    selectionColor: root.palette.accent
+                                    selectedTextColor: root.palette.panelBackground
+                                    font.family: "monospace"
+                                    font.pixelSize: 11
+                                    padding: 4
+                                    background: null
+                                }
+                            }
+                        }
+
                         Rectangle {
                             width: parent.width
-                            height: parent.height - 60
+                            height: parent.height - 112 - (root.manifestResultMessage.length > 0 ? 134 : 0)
                             radius: 8
                             color: root.palette.cardBackground
                             border.width: 1
@@ -5537,8 +5815,9 @@ ShellRoot {
                                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
                                 TextArea {
+                                    id: manifestEditor
                                     text: root.manifestContent
-                                    readOnly: true
+                                    readOnly: root.manifestLoading || root.manifestBusy
                                     selectByMouse: true
                                     wrapMode: TextEdit.NoWrap
                                     color: root.palette.primaryText
@@ -5548,6 +5827,10 @@ ShellRoot {
                                     font.pixelSize: 13
                                     padding: 12
                                     background: null
+                                    onTextChanged: {
+                                        if (!root.manifestLoading && !root.manifestBusy && root.manifestContent !== text)
+                                            root.manifestContent = text
+                                    }
                                 }
                             }
                         }

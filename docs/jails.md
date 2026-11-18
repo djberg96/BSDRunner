@@ -93,6 +93,26 @@ managed route-safe `/24`; inbound LAN exposure remains a separate confirmed PF
 port-forward action. Lifecycle, console, dependency ordering, health, stats,
 ports, and audit details delegate to Blackship.
 
+The **Manifest** field opens an advanced in-window editor for the complete
+project manifest. Edits remain local to the UI until the user chooses an
+operation:
+
+- **Dry Run** validates the candidate with `blackship check`, displays a unified
+  text diff, and runs `blackship eva --all --dry-run` against the candidate. It
+  never replaces the installed manifest.
+- **Apply** repeats the validation and dry run, installs the candidate, and
+  asks Eva to reconcile running jails. If Eva fails, BSDRunner
+  restores the previous manifest and attempts to restore its live rules.
+
+The editor records a revision when it loads and rejects an apply if another
+operation changed the manifest in the meantime. It also refuses to remove
+existing jail entries; destructive removal remains in the typed-confirmation
+Delete jail workflow. Unsaved text must be applied or reverted before returning
+to the inventory. Candidate text travels to the backend over standard input,
+not in process arguments. Eva applies compatible live parameters immediately;
+changes Blackship marks as restart-required remain desired state for the next
+restart.
+
 The starter choices are:
 
 - **Blank FreeBSD** for learning and custom work.
@@ -124,8 +144,9 @@ validated before replacement. A running jail is updated without a restart via
 `blackship eva`; if that live update fails, BSDRunner restores the previous
 manifest. Stopped jails receive the new limits on their next start. Resource
 tables containing QoS profiles, cpusets, swap, open-file, thread, or raw custom
-rules remain read-only in BSDRunner so the simplified editor cannot erase
-advanced settings.
+rules remain untouched by the simplified resource editor so it cannot erase
+advanced settings; they can be reviewed and deliberately changed in the
+advanced manifest editor.
 
 Running Blackship jails also have an **Attach source folder** action. It lets a
 user choose one existing directory below their home directory and exposes only
