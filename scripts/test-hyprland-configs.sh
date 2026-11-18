@@ -34,6 +34,9 @@ fi
 grep -F 'dbus-run-session "$0"' \
     "$repo_root/greeter/start-greeter-hyprland.sh" >/dev/null || \
     fail "the greeter launcher does not own its D-Bus session"
+grep -F 'focus_on_activate = true' \
+    "$repo_root/dotfiles/.config/hypr/hyprland.lua" >/dev/null || \
+    fail "the desktop does not honor application activation requests"
 
 if command -v Hyprland >/dev/null 2>&1; then
     for config in "$greeter_config" "$terminal_config"; do
