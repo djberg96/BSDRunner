@@ -57,6 +57,7 @@ cpu_output="$(
 )"
 printf '%s\n' "$cpu_output" | grep -Fq '"text":" 40%"' || fail "CPU panel should show one overall percentage"
 printf '%s\n' "$cpu_output" | grep -Fq 'Core 1: 30%\nCore 2: 50%' || fail "CPU tooltip should show per-core usage"
+printf '%s\n' "$cpu_output" | grep -Fq 'Core 2: 50%\n──────────────────────────────\nCPU temperature:' || fail "CPU tooltip should divide core usage from temperature"
 printf '%s\n' "$cpu_output" | grep -Fq '52.7°C' || fail "CPU summary should show the hottest sensor"
 if printf '%s\n' "$cpu_output" | grep -Fq '"text":" 40% 52.7°C'; then
     fail "CPU temperature should only appear in the tooltip"

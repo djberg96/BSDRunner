@@ -68,7 +68,8 @@ fi
 
 jq -cn \
     --arg text " ${overall_usage}%" \
-    --arg tooltip "$(printf '%s\n%s' "$core_tooltip" \
+    --arg tooltip "$(printf '%s\n%s\n%s' "$core_tooltip" \
+        "──────────────────────────────" \
         "CPU temperature: $temperature_label ($temperature_description)")" \
     --arg class "$temperature_class" \
     --argjson percentage "$percentage" \
