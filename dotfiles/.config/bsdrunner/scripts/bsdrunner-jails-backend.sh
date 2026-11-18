@@ -3202,6 +3202,7 @@ render_blackship_context() {
     for asset in "$source"/*; do
         [ -f "$asset" ] || continue
         [ "${asset##*/}" = Jailfile ] && continue
+        [ "${asset##*/}" = manifest.toml ] && continue
         cp "$asset" "$destination/${asset##*/}"
     done
 }
@@ -3230,6 +3231,11 @@ ip_cidr = "$address"
 nameservers = ["$(blackship_resolver_address_value 2>/dev/null || printf '1.1.1.1')"]
 mode = "custom"
 EOF
+    preset_manifest="$blackship_preset_source/$preset/manifest.toml"
+    if [ -r "$preset_manifest" ]; then
+        printf '\n' >>"$candidate"
+        cat "$preset_manifest" >>"$candidate"
+    fi
     case "$preset" in
         nginx)
             cat >>"$candidate" <<'EOF'
@@ -3285,7 +3291,7 @@ blackship_create_postgres_credentials() {
 ALTER ROLE app WITH LOGIN PASSWORD '${password}';
 SELECT 'CREATE DATABASE appdb OWNER app' WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_database WHERE datname = 'appdb') \\gexec
 ALTER DATABASE appdb OWNER TO app;"
-    if printf '%s\n' "$sql" | run_privileged blackship --config "$blackship_manifest" --non-interactive exec "$name" -- /usr/bin/su -l postgres -c '/usr/local/bin/psql postgres' >/dev/null 2>&1; then
+    if printf '%s\n' "$sql" | run_jail_privileged blackship --config "$blackship_manifest" --non-interactive exec "$name" -- /usr/bin/su -l postgres -c '/usr/local/bin/psql postgres' >/dev/null 2>&1; then
         printf '%s\n' "$password"
         return 0
     fi

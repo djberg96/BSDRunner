@@ -1,0 +1,4 @@
+[jails.params]
+sysvmsg = "new"
+sysvsem = "new"
+sysvshm = "new"

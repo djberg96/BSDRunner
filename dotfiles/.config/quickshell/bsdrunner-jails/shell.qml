@@ -993,7 +993,7 @@ ShellRoot {
         if (actionId.indexOf("service-action|") === 0)
             return selectedJail.backend === "bastille" && (selectedJail.state || "").toLowerCase() === "running" && selectedJail.ipv4 && selectedJail.ipv4 !== "unknown" && selectedSimpleService && selectedSimpleService.status_known
         if (actionId === "blackship-postgres-reset")
-            return selectedJail.backend === "blackship" && selectedJail.preset === "postgres"
+            return selectedJail.backend === "blackship" && selectedJail.preset === "postgres" && canStop(selectedJail)
         if (actionId.indexOf("blackship-autostart|") === 0)
             return selectedJail.backend === "blackship"
         if (actionId === "open-resource-limits")
@@ -1527,8 +1527,11 @@ ShellRoot {
             progress = "PROGRESS\n[>] Bootstrapping " + previewRelease + "\n[ ] Creating " + previewName + "\n\n"
         else if (creationStage === "creating")
             progress = "PROGRESS\n" + (creationBootstrapped ? "[ok] Release bootstrapped\n" : "[ok] Release already available\n") + "[>] Creating " + previewName + "\n\n"
-        else if (creationStage === "complete")
+        else if (creationStage === "complete") {
             progress = "COMPLETE\n[ok] " + creationMessage + "\n\n"
+            if (actionDetails.length > 0)
+                progress += "RESULT — COPY ONE-TIME CREDENTIALS NOW\n" + actionDetails + "\n\n"
+        }
         else if (creationStage === "failed")
             progress = "NEEDS ATTENTION\n[!] " + creationError + "\n" + creationMessage + "\n\n"
         return progress + createPreviewText()
@@ -3507,6 +3510,19 @@ ShellRoot {
                                 }
                             }
 
+                            TextEdit {
+                                id: beginnerActionResult
+                                visible: root.beginnerMapVisible && (root.runningAction || root.actionDetails.length > 0)
+                                width: parent.width
+                                height: visible ? Math.max(44, implicitHeight) : 0
+                                text: root.runningAction ? root.statusMessage : root.statusMessage + (root.actionDetails.length > 0 ? "\n" + root.actionDetails : "")
+                                readOnly: true
+                                selectByMouse: true
+                                wrapMode: TextEdit.Wrap
+                                color: root.runningAction ? root.palette.accent : root.toneColor(root.statusTone)
+                                font.pixelSize: 12
+                            }
+
                             }
                         }
                     }
@@ -3907,6 +3923,19 @@ ShellRoot {
                                             }
                                         }
                                     }
+                                }
+
+                                TextEdit {
+                                    id: compactActionResult
+                                    visible: root.runningAction || root.actionDetails.length > 0
+                                    width: parent.width
+                                    height: visible ? Math.max(44, implicitHeight) : 0
+                                    text: root.runningAction ? root.statusMessage : root.statusMessage + (root.actionDetails.length > 0 ? "\n" + root.actionDetails : "")
+                                    readOnly: true
+                                    selectByMouse: true
+                                    wrapMode: TextEdit.Wrap
+                                    color: root.runningAction ? root.palette.accent : root.toneColor(root.statusTone)
+                                    font.pixelSize: 12
                                 }
 
                                 Rectangle {
@@ -6326,74 +6355,6 @@ ShellRoot {
                                                 root.previewRelease = text
                                                 root.previewReleaseCustomized = true
                                                 root.invalidateCreatePlan()
-                                            }
-                                        }
-                                    }
-
-                                    Text {
-                                        visible: root.wizardStep === 1
-                                        width: parent.width
-                                        text: "Jail userland"
-                                        color: root.palette.secondaryText
-                                        font.pixelSize: root.wizardBodyFontSize
-                                        font.bold: true
-                                    }
-
-                                    Row {
-                                        visible: root.wizardStep === 1
-                                        width: parent.width
-                                        height: 74
-                                        spacing: 8
-
-                                        Repeater {
-                                            model: [
-                                                {"id": "thick", "label": "Thick", "detail": "Independent copy • Recommended"},
-                                                {"id": "thin", "label": "Thin", "detail": "Shared base • Less disk"}
-                                            ]
-
-                                            Rectangle {
-                                                id: jailTypeChoice
-                                                required property var modelData
-                                                readonly property bool selected: root.previewJailType === modelData.id
-
-                                                width: (parent.width - 8) / 2
-                                                height: parent.height
-                                                radius: 7
-                                                color: jailTypeMouse.containsMouse ? root.palette.cardHover : selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.cardBackground
-                                                border.width: 1
-                                                border.color: selected ? root.palette.accent : root.palette.panelBorder
-
-                                                Column {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 9
-                                                    spacing: 5
-
-                                                    Text {
-                                                        width: parent.width
-                                                        text: (jailTypeChoice.selected ? "✓ " : "") + jailTypeChoice.modelData.label
-                                                        color: jailTypeChoice.selected ? root.palette.accent : root.palette.primaryText
-                                                        font.pixelSize: root.wizardControlFontSize
-                                                        font.bold: true
-                                                    }
-
-                                                    Text {
-                                                        width: parent.width
-                                                        text: jailTypeChoice.modelData.detail
-                                                        color: root.palette.mutedText
-                                                        font.pixelSize: root.wizardCaptionFontSize
-                                                        wrapMode: Text.WordWrap
-                                                        maximumLineCount: 2
-                                                        elide: Text.ElideRight
-                                                    }
-                                                }
-
-                                                MouseArea {
-                                                    id: jailTypeMouse
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: root.chooseJailType(jailTypeChoice.modelData.id)
-                                                }
                                             }
                                         }
                                     }

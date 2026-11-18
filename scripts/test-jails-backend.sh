@@ -6,6 +6,7 @@ repo_root="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 backend="$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-jails-backend.sh"
 demo_fixture="$repo_root/dotfiles/.config/bsdrunner/jails/demo-snapshot.json"
 jails_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-jails/shell.qml"
+postgres_manifest="$repo_root/dotfiles/.config/bsdrunner/jails/presets/postgres/manifest.toml"
 fixtures="$repo_root/tests/fixtures/jails"
 fixture_path="$fixtures/bin:/usr/bin:/bin"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/bsdrunner-jails-tests.XXXXXX")"
@@ -81,6 +82,13 @@ run_backend() {
 }
 
 command -v jq >/dev/null 2>&1 || fail "jq is required to run the Jails backend tests"
+grep -F 'sysvmsg = "new"' "$postgres_manifest" >/dev/null || \
+    fail "the PostgreSQL starter template should request a private System V message namespace"
+grep -F 'sysvsem = "new"' "$postgres_manifest" >/dev/null || \
+    fail "the PostgreSQL starter template should request a private System V semaphore namespace"
+grep -F 'sysvshm = "new"' "$postgres_manifest" >/dev/null || \
+    fail "the PostgreSQL starter template should request a private System V shared-memory namespace"
+pass "the PostgreSQL starter template declares its private IPC requirements"
 grep -F 'return storageConfirmation === "0.5.0"' "$jails_qml" >/dev/null || \
     fail "the Blackship installer confirmation gate should match the pinned release"
 pass "Blackship installer confirmation matches the pinned release"
@@ -96,6 +104,9 @@ grep -F 'visible: root.activeTab === "create"' "$jails_qml" >/dev/null || \
 if grep -F 'createPreviewVisible' "$jails_qml" >/dev/null; then
     fail "the creation workflow should not use the former modal visibility state"
 fi
+if grep -F 'text: "Jail userland"' "$jails_qml" >/dev/null; then
+    fail "Blackship service starters should not show the unrelated Bastille thick/thin choice"
+fi
 pass "service creation uses the in-window Create tab"
 [ "$(grep -Fc 'visible: !root.beginnerMapVisible' "$jails_qml")" -ge 1 ] || \
     fail "hiding the beginner map should reveal the compact action rail"
@@ -106,6 +117,13 @@ grep -F 'id: compactTechnicalMouse' "$jails_qml" >/dev/null || \
 grep -F 'id: compactTechnicalDetails' "$jails_qml" >/dev/null || \
     fail "the collapsed beginner map area should hold expanded technical details"
 pass "hiding the beginner map replaces it with jail controls"
+grep -F 'RESULT — COPY ONE-TIME CREDENTIALS NOW' "$jails_qml" >/dev/null || \
+    fail "starter completion should call out one-time credentials"
+grep -F 'id: beginnerActionResult' "$jails_qml" >/dev/null || \
+    fail "the beginner layout should display action details"
+grep -F 'id: compactActionResult' "$jails_qml" >/dev/null || \
+    fail "the compact layout should display action details"
+pass "one-time action details remain visible and copyable in both layouts"
 grep -F 'function managerLabel(jail)' "$jails_qml" >/dev/null || \
     fail "technical details should use concise manager names"
 [ "$(grep -Fc 'ToolTip.text: String(' "$jails_qml")" -ge 2 ] || \
@@ -989,6 +1007,10 @@ BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-preset-create 
 assert_json "$test_root/blackship-postgres.json" \
     '.ok == true and (.details | contains("Database: appdb")) and (.details | contains("Password (shown once):"))' \
     "PostgreSQL starter should return one-time app credentials"
+grep -A22 'name = "database"' "$state_dir/blackship.toml" | grep -F '[jails.params]' >/dev/null || fail "PostgreSQL should receive private System V IPC parameters"
+grep -A22 'name = "database"' "$state_dir/blackship.toml" | grep -F 'sysvmsg = "new"' >/dev/null || fail "PostgreSQL should receive a private System V message namespace"
+grep -A22 'name = "database"' "$state_dir/blackship.toml" | grep -F 'sysvsem = "new"' >/dev/null || fail "PostgreSQL should receive a private System V semaphore namespace"
+grep -A22 'name = "database"' "$state_dir/blackship.toml" | grep -F 'sysvshm = "new"' >/dev/null || fail "PostgreSQL should receive a private System V shared-memory namespace"
 generated_password="$(jq -r '.details | split("Password (shown once): ")[1] | split("\\n")[0]' "$test_root/blackship-postgres.json")"
 [ -n "$generated_password" ] && [ "$generated_password" != null ] || fail "PostgreSQL starter should generate a password"
 if grep -R -F "$generated_password" "$state_dir" >/dev/null 2>&1; then fail "generated database passwords must not persist in BSDRunner state"; fi
@@ -996,6 +1018,8 @@ BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend blackship-postgres-reset
 assert_json "$test_root/blackship-postgres-reset.json" \
     '.ok == true and .message == "Reset the app database password." and (.details | contains("Database: appdb")) and (.details | contains("Password (shown once):"))' \
     "PostgreSQL recovery should ensure missing app credentials before resetting them"
+grep -F 'mdo sudo -n blackship --config ' "$command_log" | grep -F ' --non-interactive exec database -- /usr/bin/su -l postgres -c /usr/local/bin/psql postgres' >/dev/null || \
+    fail "PostgreSQL credential setup should use the jail-safe privilege path"
 
 : >"$command_log"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend start web blackship >"$test_root/blackship-start.json"
