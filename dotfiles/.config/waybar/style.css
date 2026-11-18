@@ -24,6 +24,7 @@ tooltip {
 #custom-wallpaper-animation,
 #window,
 #cpu,
+#custom-cpu,
 #memory,
 #custom-memory,
 #disk,
@@ -144,6 +145,22 @@ tooltip {
     background: rgba(208, 135, 112, 0.20);
     color: #fff4ef;
     border-color: rgba(208, 135, 112, 0.75);
+}
+
+#custom-cpu.cool {
+    color: #a3be8c;
+}
+
+#custom-cpu.warm {
+    color: #ebcb8b;
+}
+
+#custom-cpu.hot {
+    color: #ff6b6b;
+}
+
+#custom-cpu.unknown {
+    color: #d8dee9;
 }
 
 #custom-power {
