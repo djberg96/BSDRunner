@@ -16,6 +16,7 @@ ShellRoot {
     property bool loading: false
     property bool runningAction: false
     property bool beginnerMapVisible: true
+    property bool activityPaneVisible: false
     property string activeTab: "jails"
     property bool manifestLoading: false
     property string manifestPath: ""
@@ -123,7 +124,7 @@ ShellRoot {
     property bool sourcePickerExited: false
     property bool sourcePickerStdoutFinished: false
     property bool sourcePickerStderrFinished: false
-    property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"})
+    property var blackshipInfo: ({"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.1"})
     property var blackshipJails: []
     property var runningJails: []
     property var configuredJails: []
@@ -1111,6 +1112,7 @@ ShellRoot {
 
     function runActionProcess() {
         runningAction = true
+        activityPaneVisible = true
         actionDetails = ""
         statusTone = "info"
         statusMessage = activeActionLabel + "..."
@@ -1170,7 +1172,7 @@ ShellRoot {
         if (manifestProcess.running)
             return
         manifestLoading = true
-        manifestPath = "/usr/local/etc/bsdrunner/blackship.toml"
+        manifestPath = "/usr/local/etc/bsdrunner/blackship.d/" + selectedJailName + ".toml"
         if (!preserveResult) {
             manifestContent = ""
             manifestOriginalContent = ""
@@ -1336,7 +1338,7 @@ ShellRoot {
         if (demoMode || storageSetupRunning || storageReady())
             return false
         if (!blackshipInfo.compatible)
-            return storageConfirmation === "0.5.0"
+            return storageConfirmation === (blackshipInfo.minimum_version || "0.5.1")
         return selectedStoragePool.length > 0 && storageConfirmation === selectedStoragePool
     }
 
@@ -1345,7 +1347,7 @@ ShellRoot {
             return
         storageSetupRunning = true
         storageSetupStage = "configuring"
-        storageSetupMessage = blackshipInfo.compatible ? "Configuring Blackship storage and private networking on " + selectedStoragePool + "…" : "Installing verified Blackship 0.5.0…"
+        storageSetupMessage = blackshipInfo.compatible ? "Configuring Blackship storage and private networking on " + selectedStoragePool + "…" : "Installing verified Blackship " + (blackshipInfo.minimum_version || "0.5.1") + "…"
         storageSetupDetails = ""
         storageStdoutText = ""
         storageStderrText = ""
@@ -1572,12 +1574,12 @@ ShellRoot {
         if (wizardStep === 0) {
             var storageLines = ["INSTALL + STORAGE", "", "New BSDRunner jails use one managed Blackship project. The first setup installs Blackship if needed, then places releases and jail roots under POOL/bsdrunner/blackship.", ""]
             if (storageReady()) {
-                storageLines.push("[ok] Blackship " + (blackshipInfo.version || "0.5.0+") + " is compatible.")
+                storageLines.push("[ok] Blackship " + (blackshipInfo.version || (blackshipInfo.minimum_version || "0.5.1") + "+") + " is compatible.")
                 storageLines.push("[ok] Managed manifest: /usr/local/etc/bsdrunner/blackship.toml")
                 storageLines.push("[ok] Dataset: " + storageTargetDataset())
             } else {
                 storageLines.push("SELECTED PLAN")
-                storageLines.push(blackshipInfo.compatible ? "[ok] Compatible Blackship installed" : "[ ] Install verified Blackship 0.5.0")
+                storageLines.push(blackshipInfo.compatible ? "[ok] Compatible Blackship installed" : "[ ] Install verified Blackship " + (blackshipInfo.minimum_version || "0.5.1"))
                 storageLines.push("Pool: " + (selectedStoragePool || "No ZFS pool detected"))
                 storageLines.push("Dataset: " + storageTargetDataset())
                 storageLines.push("Private network: bsdrunner on blackship0")
@@ -1767,7 +1769,7 @@ ShellRoot {
         portForwards = payload.port_forwards || []
         simpleServices = payload.simple_services || []
         sourceAttachments = payload.source_attachments || []
-        blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.0"}
+        blackshipInfo = payload.blackship || {"available": false, "compatible": false, "configured": false, "minimum_version": "0.5.1"}
         blackshipJails = normalizedBlackshipJails(blackshipInfo)
         if (!previewAddressCustomized && blackshipInfo.recommended_address)
             previewAddress = blackshipInfo.recommended_address
@@ -2282,20 +2284,29 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                id: activityToggle
                                 width: 88
                                 height: 38
                                 radius: 7
-                                color: Qt.alpha(root.palette.accent, 0.18)
+                                color: activityToggleMouse.containsMouse || root.activityPaneVisible ? Qt.alpha(root.palette.accent, 0.24) : Qt.alpha(root.palette.accent, 0.12)
                                 border.width: 1
-                                border.color: root.palette.accent
+                                border.color: root.activityPaneVisible ? root.toneColor(root.statusTone) : root.palette.accent
                                 anchors.verticalCenter: parent.verticalCenter
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "Jails"
-                                    color: root.palette.accent
+                                    text: "Activity"
+                                    color: root.activityPaneVisible ? root.toneColor(root.statusTone) : root.palette.accent
                                     font.pixelSize: 13
                                     font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: activityToggleMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.activityPaneVisible = !root.activityPaneVisible
                                 }
                             }
 
@@ -2445,7 +2456,10 @@ ShellRoot {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.beginnerMapVisible = !root.beginnerMapVisible
+                                        onClicked: {
+                                            root.beginnerMapVisible = !root.beginnerMapVisible
+                                            root.activityPaneVisible = false
+                                        }
                                     }
                                 }
                             }
@@ -3640,19 +3654,6 @@ ShellRoot {
                                 }
                             }
 
-                            TextEdit {
-                                id: beginnerActionResult
-                                visible: root.beginnerMapVisible && (root.runningAction || root.actionDetails.length > 0)
-                                width: parent.width
-                                height: visible ? Math.max(44, implicitHeight) : 0
-                                text: root.runningAction ? root.statusMessage : root.statusMessage + (root.actionDetails.length > 0 ? "\n" + root.actionDetails : "")
-                                readOnly: true
-                                selectByMouse: true
-                                wrapMode: TextEdit.Wrap
-                                color: root.runningAction ? root.palette.accent : root.toneColor(root.statusTone)
-                                font.pixelSize: 12
-                            }
-
                             }
                         }
                     }
@@ -3665,8 +3666,133 @@ ShellRoot {
                         border.width: 1
                         border.color: root.palette.frameBorder
 
+                        Item {
+                            visible: root.activityPaneVisible
+                            anchors.fill: parent
+                            anchors.margins: 14
+
+                            Column {
+                                anchors.fill: parent
+                                spacing: 10
+
+                                Row {
+                                    width: parent.width
+                                    height: 30
+                                    spacing: 8
+
+                                    Text {
+                                        width: parent.width - 72
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Activity Log"
+                                        color: root.palette.accent
+                                        font.pixelSize: 15
+                                        font.bold: true
+                                    }
+
+                                    Rectangle {
+                                        width: 64
+                                        height: 30
+                                        radius: 6
+                                        color: activityCloseMouse.containsMouse ? root.palette.cardHover : root.palette.panelBackground
+                                        border.width: 1
+                                        border.color: root.palette.panelBorder
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Close"
+                                            color: root.palette.secondaryText
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        MouseArea {
+                                            id: activityCloseMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.activityPaneVisible = false
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 76
+                                    radius: 8
+                                    color: Qt.alpha(root.toneColor(root.statusTone), 0.10)
+                                    border.width: 1
+                                    border.color: root.toneColor(root.statusTone)
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 5
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.runningAction ? "Working" : root.statusTone === "error" ? "Needs attention" : "Last action"
+                                            color: root.toneColor(root.statusTone)
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: root.statusMessage
+                                            color: root.palette.primaryText
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 2
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "Technical output"
+                                    color: root.palette.secondaryText
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: Math.max(120, parent.height - 156)
+                                    radius: 8
+                                    color: root.palette.panelBackground
+                                    border.width: 1
+                                    border.color: root.palette.frameBorder
+
+                                    Flickable {
+                                        id: activityLogFlickable
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        contentWidth: width
+                                        contentHeight: activityLogText.implicitHeight
+                                        clip: true
+
+                                        TextEdit {
+                                            id: activityLogText
+                                            width: activityLogFlickable.width
+                                            text: root.runningAction ? "Waiting for backend output…" : root.actionDetails.length > 0 ? root.actionDetails : "No technical output is available for the last action."
+                                            readOnly: true
+                                            selectByMouse: true
+                                            wrapMode: TextEdit.Wrap
+                                            color: root.palette.primaryText
+                                            selectionColor: root.palette.accent
+                                            selectedTextColor: root.palette.panelBackground
+                                            font.family: "monospace"
+                                            font.pixelSize: 13
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Flickable {
-                            visible: root.beginnerMapVisible
+                            visible: root.beginnerMapVisible && !root.activityPaneVisible
                             anchors.fill: parent
                             anchors.margins: 14
                             contentWidth: width
@@ -3817,7 +3943,7 @@ ShellRoot {
 
                                     Text {
                                         width: parent.width
-                                        text: root.blackshipInfo.compatible ? (root.blackshipInfo.configured ? "Installed and configured for new BSDRunner service jails." : "Installed. Click to choose storage and create the private network.") : "Click to install the pinned, verified 0.5.0 FreeBSD amd64 binary. Existing Bastille/native jails remain operable."
+                                        text: root.blackshipInfo.compatible ? (root.blackshipInfo.configured ? "Installed and configured for new BSDRunner service jails." : "Installed. Click to choose storage and create the private network.") : "Click to install the pinned, verified " + (root.blackshipInfo.minimum_version || "0.5.1") + " FreeBSD amd64 binary. Existing Bastille/native jails remain operable."
                                         color: root.palette.secondaryText
                                         font.pixelSize: 11
                                         wrapMode: Text.WordWrap
@@ -3874,7 +4000,7 @@ ShellRoot {
                         }
 
                         Flickable {
-                            visible: !root.beginnerMapVisible
+                            visible: !root.beginnerMapVisible && !root.activityPaneVisible
                             anchors.fill: parent
                             anchors.margins: 14
                             contentWidth: width
@@ -4053,19 +4179,6 @@ ShellRoot {
                                             }
                                         }
                                     }
-                                }
-
-                                TextEdit {
-                                    id: compactActionResult
-                                    visible: root.runningAction || root.actionDetails.length > 0
-                                    width: parent.width
-                                    height: visible ? Math.max(44, implicitHeight) : 0
-                                    text: root.runningAction ? root.statusMessage : root.statusMessage + (root.actionDetails.length > 0 ? "\n" + root.actionDetails : "")
-                                    readOnly: true
-                                    selectByMouse: true
-                                    wrapMode: TextEdit.Wrap
-                                    color: root.runningAction ? root.palette.accent : root.toneColor(root.statusTone)
-                                    font.pixelSize: 12
                                 }
 
                                 Rectangle {
@@ -5604,7 +5717,7 @@ ShellRoot {
 
                                 Text {
                                     width: parent.width
-                                    text: "Blackship manifest"
+                                    text: "Blackship jail manifest"
                                     color: root.palette.primaryText
                                     font.pixelSize: 22
                                     font.bold: true
@@ -5826,7 +5939,7 @@ ShellRoot {
                                 visible: root.manifestLoading || root.manifestError.length > 0
                                 anchors.centerIn: parent
                                 width: parent.width - 48
-                                text: root.manifestLoading ? "Loading the managed manifest…" : root.manifestError
+                                text: root.manifestLoading ? "Loading this jail’s manifest…" : root.manifestError
                                 color: root.manifestError.length > 0 ? root.palette.danger : root.palette.secondaryText
                                 font.pixelSize: 14
                                 wrapMode: Text.WordWrap
@@ -6088,7 +6201,7 @@ ShellRoot {
 
                                             Text {
                                                 width: parent.width
-                                                text: root.storageReady() ? "Blackship project ready" : root.blackshipInfo.compatible ? "Choose a ZFS pool" : "Install Blackship 0.5.0"
+                                                text: root.storageReady() ? "Blackship project ready" : root.blackshipInfo.compatible ? "Choose a ZFS pool" : "Install Blackship " + (root.blackshipInfo.minimum_version || "0.5.1")
                                                 color: root.palette.primaryText
                                                 font.pixelSize: root.wizardHeadingFontSize
                                                 font.bold: true
@@ -6177,7 +6290,7 @@ ShellRoot {
                                             Text {
                                                 visible: !root.storageReady()
                                                 width: parent.width
-                                                text: "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.5.0") + "” to confirm"
+                                                text: "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : (root.blackshipInfo.minimum_version || "0.5.1")) + "” to confirm"
                                                 color: root.palette.secondaryText
                                                 font.pixelSize: root.wizardCaptionFontSize
                                                 font.bold: true
@@ -6191,7 +6304,7 @@ ShellRoot {
                                                 radius: 6
                                                 color: root.palette.panelBackground
                                                 border.width: 1
-                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.5.0") ? root.palette.success : root.palette.panelBorder
+                                                border.color: storageConfirmationInput.activeFocus ? root.palette.accent : root.storageConfirmation === (root.blackshipInfo.compatible ? root.selectedStoragePool : (root.blackshipInfo.minimum_version || "0.5.1")) ? root.palette.success : root.palette.panelBorder
 
                                                 TextInput {
                                                     id: storageConfirmationInput
@@ -6240,7 +6353,7 @@ ShellRoot {
                                                             return
                                                         }
                                                         root.storageSetupStage = "failed"
-                                                        root.storageSetupMessage = "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : "0.5.0") + "” exactly in the confirmation field first."
+                                                        root.storageSetupMessage = "Type “" + (root.blackshipInfo.compatible ? root.selectedStoragePool : (root.blackshipInfo.minimum_version || "0.5.1")) + "” exactly in the confirmation field first."
                                                         storageConfirmationInput.forceActiveFocus()
                                                     }
                                                 }
@@ -6892,7 +7005,7 @@ ShellRoot {
                                     Text {
                                         visible: root.wizardStep !== 2
                                         width: parent.width
-                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.blackshipInfo.compatible ? "Install the verified Blackship 0.5.0 binary to create new service jails." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool to create the BSDRunner Blackship project and private network." : "Blackship is installed, but no ZFS pool was detected.") : "Blackship storage and private networking are ready" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
+                                        text: root.demoMode ? "Demo mode shows the full workflow but blocks mutations." : !root.blackshipInfo.compatible ? "Install the verified Blackship " + (root.blackshipInfo.minimum_version || "0.5.1") + " binary to create new service jails." : !root.storageReady() ? (root.storagePools().length > 0 ? "Select a pool to create the BSDRunner Blackship project and private network." : "Blackship is installed, but no ZFS pool was detected.") : "Blackship storage and private networking are ready" + (root.hostRelease.length > 0 ? " • Host " + root.hostRelease : "")
                                         color: !root.demoMode && root.tools.bastille && root.storageReady() && root.networkReady() ? root.palette.success : root.palette.warning
                                         font.pixelSize: root.wizardCaptionFontSize
                                         wrapMode: Text.WordWrap

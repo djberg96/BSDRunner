@@ -1,7 +1,7 @@
 # BSDRunner Jails
 
 BSDRunner Jails is a beginner-oriented Quickshell control surface for learning
-and operating FreeBSD jails. New service jails use Blackship 0.5.0 or newer;
+and operating FreeBSD jails. New service jails use Blackship 0.5.1 or newer;
 existing Bastille and native jails remain visible and operable without migration.
 
 The UI is intentionally read-mostly. It helps a new user answer:
@@ -54,7 +54,7 @@ The snapshot action returns JSON with:
 - Blackship capabilities plus best-effort JSON envelopes for `host`, `ps --host`,
   `network list`, `releases`, `ports`, and `stats`; `ps --host` supplies passive
   health and effective autostart summaries without launching checks
-- compatibility status requiring Blackship `>= 0.5.0` and output schema v1
+- compatibility status requiring Blackship `>= 0.5.1` and output schema v1
 - host RCTL readiness, used only by starters whose safety requirements need an
   enforceable resource cap
 
@@ -76,13 +76,14 @@ The snapshot action returns JSON with:
 
 The setup checklist is: install Blackship, choose a ZFS pool, create the private
 network, then pick a starter. The confirmed installer accepts only the official
-FreeBSD amd64 0.5.0 archive, verifies SHA-256
-`02742fe641896fb1d6586eef352a6049bc8c56fee85fc5d190022e625d60ff0c`,
+FreeBSD amd64 0.5.1 archive, verifies SHA-256
+`5c92c530369e0e5656a64c759de412b7f4a7a782127abb740b1e3679e943ad86`,
 validates `capabilities`, and does not downgrade a compatible newer release.
 
-BSDRunner owns one project:
+BSDRunner owns one project assembled from ordered Blackship manifests:
 
-- manifest: `/usr/local/etc/bsdrunner/blackship.toml`
+- shared project manifest: `/usr/local/etc/bsdrunner/blackship.toml`
+- per-jail manifests: `/usr/local/etc/bsdrunner/blackship.d/NAME.toml`
 - state: `/var/db/bsdrunner/blackship`
 - dataset: `POOL/bsdrunner/blackship`
 - private network: `bsdrunner` on `blackship0`
@@ -93,21 +94,25 @@ managed route-safe `/24`; inbound LAN exposure remains a separate confirmed PF
 port-forward action. Lifecycle, console, dependency ordering, health, stats,
 ports, and audit details delegate to Blackship.
 
-The **Manifest** field opens an advanced in-window editor for the complete
-project manifest. Edits remain local to the UI until the user chooses an
+The **Manifest** field opens an advanced in-window editor for the selected
+jail's own manifest fragment. Shared project and network settings remain in the
+project manifest, while Blackship merges every jail fragment in filename order.
+Edits remain local to the UI until the user chooses an
 operation:
 
-- **Dry Run** validates the candidate with `blackship check`, displays a unified
-  text diff, and runs `blackship eva --all --dry-run` against the candidate. It
+- **Dry Run** validates the complete merged configuration with `blackship
+  check`, displays a unified text diff for the selected jail, and runs
+  `blackship eva NAME --dry-run` against the candidate. It
   never replaces the installed manifest.
 - **Apply** repeats the validation and dry run, installs the candidate, and
   asks Eva to reconcile running jails. If Eva fails, BSDRunner
   restores the previous manifest and attempts to restore its live rules.
 
-The editor records a revision when it loads and rejects an apply if another
-operation changed the manifest in the meantime. It also refuses to remove
-existing jail entries; destructive removal remains in the typed-confirmation
-Delete jail workflow. Unsaved text must be applied or reverted before returning
+The editor records the selected fragment's revision when it loads and rejects
+an apply if another operation changed that fragment in the meantime. It also
+requires exactly one `[[jails]]` entry with the selected jail's name;
+destructive removal remains in the typed-confirmation Delete jail workflow.
+Unsaved text must be applied or reverted before returning
 to the inventory. Candidate text travels to the backend over standard input,
 not in process arguments. Eva applies compatible live parameters immediately;
 changes Blackship marks as restart-required remain desired state for the next

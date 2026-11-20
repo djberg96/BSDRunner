@@ -1,4 +1,5 @@
 [jails.params]
-sysvmsg = "new"
-sysvsem = "new"
-sysvshm = "new"
+# FreeBSD JAIL_SYS_NEW; Blackship sends jail parameters using native types.
+sysvmsg = 1
+sysvsem = 1
+sysvshm = 1
