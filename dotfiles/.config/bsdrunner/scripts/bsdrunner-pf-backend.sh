@@ -1195,7 +1195,8 @@ do_apply() {
         exit 1
     fi
 
-    if [ "$mode" != "adopt" ] && [ "$config_state" = "managed" ] && [ "$installed_checksum" = "$current_profile_checksum" ]; then
+    if [ "$mode" != "adopt" ] && [ "$config_state" = "managed" ] && \
+       [ "$installed_checksum" = "$current_profile_checksum" ] && cmp -s "$rendered" "$pf_config_file"; then
         if ! sshd_output="$(sync_ssh_services_with_profile 2>&1)"; then
             write_last_result "error" "Firewall profile is applied, but SSH services could not be synchronized."
             emit_action_result false "Firewall profile is applied, but SSH services could not be synchronized." "$validation

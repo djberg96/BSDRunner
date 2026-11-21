@@ -98,6 +98,10 @@ emit_policies() {
     done <"$policy_file"
 }
 
+policy_tag_value() {
+    printf 'bsdrunner_jail_%s\n' "$(printf '%s' "$1" | tr '.' '_')"
+}
+
 valid_port() {
     case "${1:-}" in
         ''|*[!0-9]*)
@@ -324,6 +328,14 @@ EOF
 
     if [ "$jail_nat" = "yes" ]; then
         cat <<'EOF'
+# Tag managed jail traffic before NAT so its outbound policy survives source
+# address translation on the external interface.
+EOF
+        emit_policies | while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+            policy_tag="$(policy_tag_value "$policy_address")"
+            printf 'nat on $jail_ext_if inet from %s to any tag "%s" -> ($jail_ext_if:0)\n' "$policy_address" "$policy_tag"
+        done
+        cat <<'EOF'
 # Translate traffic from running Bastille jails on the current uplink.
 # Bastille adds and removes jail addresses from <jails> as jails start and stop.
 nat on $jail_ext_if inet from <jails> to any -> ($jail_ext_if:0)
@@ -340,6 +352,12 @@ EOF
     fi
 
     if [ "$blackship_nat" = "yes" ]; then
+        if [ "$blackship_ext_if" != "$jail_ext_if" ]; then
+            emit_policies | while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+                policy_tag="$(policy_tag_value "$policy_address")"
+                printf 'nat on $blackship_ext_if inet from %s to any tag "%s" -> ($blackship_ext_if:0)\n' "$policy_address" "$policy_tag"
+            done
+        fi
         cat <<'EOF'
 # Blackship owns per-jail rules in these anchors; BSDRunner owns subnet NAT.
 nat on $blackship_ext_if inet from $blackship_subnet to any -> ($blackship_ext_if:0)
@@ -372,6 +390,7 @@ EOF
     if [ "$allow_outbound" = "yes" ]; then
         if [ "$jail_nat" = "yes" ]; then
             emit_policies | while IFS='|' read -r policy_name policy_address policy_mode policy_resolver; do
+                policy_tag="$(policy_tag_value "$policy_address")"
                 printf '\n# Outbound policy for Bastille jail %s.\n' "$policy_name"
                 case "$policy_mode" in
                     internet-only)
@@ -381,11 +400,15 @@ EOF
                             printf 'pass in quick on $blackship_if inet from %s to any keep state\n' "$policy_address"
                         fi
                         printf 'pass out quick on $jail_ext_if inet proto { tcp udp } from %s to %s port 53 keep state\n' "$policy_address" "$policy_resolver"
+                        printf 'pass out quick on $jail_ext_if inet proto { tcp udp } to %s port 53 tagged "%s" keep state\n' "$policy_resolver" "$policy_tag"
                         if [ "$dns_leak_protection" = "yes" ]; then
                             printf 'block return out quick on $jail_ext_if inet proto { tcp udp } from %s to any port 53\n' "$policy_address"
+                            printf 'block return out quick on $jail_ext_if inet proto { tcp udp } to any port 53 tagged "%s"\n' "$policy_tag"
                         fi
                         printf 'block return out quick on $jail_ext_if inet from %s to $private_nets\n' "$policy_address"
+                        printf 'block return out quick on $jail_ext_if inet to $private_nets tagged "%s"\n' "$policy_tag"
                         printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
+                        printf 'pass out quick on $jail_ext_if inet tagged "%s" keep state\n' "$policy_tag"
                         ;;
                     lan)
                         if [ "$dns_leak_protection" = "yes" ]; then
@@ -393,18 +416,22 @@ EOF
                                 printf 'pass in quick on $blackship_if inet proto { tcp udp } from %s to %s port 53 keep state\n' "$policy_address" "$policy_resolver"
                             fi
                             printf 'pass out quick on $jail_ext_if inet proto { tcp udp } from %s to %s port 53 keep state\n' "$policy_address" "$policy_resolver"
+                            printf 'pass out quick on $jail_ext_if inet proto { tcp udp } to %s port 53 tagged "%s" keep state\n' "$policy_resolver" "$policy_tag"
                             printf 'block return out quick on $jail_ext_if inet proto { tcp udp } from %s to any port 53\n' "$policy_address"
+                            printf 'block return out quick on $jail_ext_if inet proto { tcp udp } to any port 53 tagged "%s"\n' "$policy_tag"
                         fi
                         if [ "$blackship_nat" = "yes" ]; then
                             printf 'pass in quick on $blackship_if inet from %s to any keep state\n' "$policy_address"
                         fi
                         printf 'pass out quick on $jail_ext_if inet from %s to any keep state\n' "$policy_address"
+                        printf 'pass out quick on $jail_ext_if inet tagged "%s" keep state\n' "$policy_tag"
                         ;;
                     none)
                         if [ "$blackship_nat" = "yes" ]; then
                             printf 'block return in quick on $blackship_if inet from %s to any\n' "$policy_address"
                         fi
                         printf 'block return out quick on $jail_ext_if inet from %s to any\n' "$policy_address"
+                        printf 'block return out quick on $jail_ext_if inet tagged "%s"\n' "$policy_tag"
                         ;;
                 esac
             done

@@ -73,6 +73,7 @@ run_backend() {
     BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR="${BSDRUNNER_JAILS_TEST_RESOLVCONF_INTERFACES_DIR:-$fixtures/etc/resolvconf/interfaces}" \
     BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL="${BSDRUNNER_JAILS_TEST_DNS_COPY_FAIL:-0}" \
     BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER="${BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER:-}" \
+    BSDRUNNER_JAILS_TEST_BLACKSHIP_LOCAL_RESOLVER="${BSDRUNNER_JAILS_TEST_BLACKSHIP_LOCAL_RESOLVER:-}" \
     BSDRUNNER_JAILS_TEST_SOURCE_ROOT="${BSDRUNNER_JAILS_TEST_SOURCE_ROOT:-$test_root/source-root}" \
     BSDRUNNER_JAILS_TEST_MOUNT_STATE="${BSDRUNNER_JAILS_TEST_MOUNT_STATE:-$test_root/mounts.state}" \
     BSDRUNNER_BLACKSHIP_TEST_RUNTIME_PATH="${BSDRUNNER_BLACKSHIP_TEST_RUNTIME_PATH:-$state_dir/blackship-data/jails/bsdrunner-web}" \
@@ -880,6 +881,17 @@ assert_json "$test_root/blackship-manifest-rollback.json" \
     "failed manifest reconciliation should explain its rollback"
 [ "$(cksum "$blackship_fragments/web.toml")" = "$manifest_before" ] || fail "failed manifest reconciliation should restore the previous manifest"
 pass "Blackship manifests support revision-safe dry runs, apply, and rollback"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
+BSDRUNNER_JAILS_TEST_BLACKSHIP_LOCAL_RESOLVER=10.0.0.1 \
+run_backend policy-set web 10.44.0.20 internet-only web >"$test_root/blackship-upstream-dns-policy.json"
+assert_json "$test_root/blackship-upstream-dns-policy.json" \
+    '.ok == true and .message == "Applied outbound policy to web."' \
+    "managed Blackship policy changes should accept the active upstream resolver"
+grep -F 'nameservers = ["192.0.2.53"]' "$blackship_fragments/web.toml" >/dev/null || \
+    fail "the active interface resolver should take precedence over unrelated local DNS listeners"
+grep -F 'pf-backend jail-policy web 10.44.0.20 internet-only 192.0.2.53' "$command_log" >/dev/null || \
+    fail "the outbound policy should allow the preferred active interface resolver"
+pass "Blackship DNS prefers the active interface over unrelated local listeners"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible \
 BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER=10.44.0.1 \
 run_backend policy-set web 10.44.0.20 internet-only web >"$test_root/blackship-policy.json"

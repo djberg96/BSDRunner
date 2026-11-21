@@ -669,9 +669,9 @@ jail_resolver_address_value() {
     ' "$resolver_source"
 }
 
-blackship_resolver_address_value() {
-    if [ -n "${BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER:-}" ]; then
-        printf '%s\n' "$BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER"
+blackship_local_resolver_address_value() {
+    if [ -n "${BSDRUNNER_JAILS_TEST_BLACKSHIP_LOCAL_RESOLVER:-}" ]; then
+        printf '%s\n' "$BSDRUNNER_JAILS_TEST_BLACKSHIP_LOCAL_RESOLVER"
         return 0
     fi
 
@@ -693,7 +693,22 @@ blackship_resolver_address_value() {
         fi
     fi
 
-    jail_resolver_address_value "$(jail_resolver_source_value 2>/dev/null || true)"
+    return 1
+}
+
+blackship_resolver_address_value() {
+    if [ -n "${BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER:-}" ]; then
+        printf '%s\n' "$BSDRUNNER_JAILS_TEST_BLACKSHIP_RESOLVER"
+        return 0
+    fi
+
+    upstream_resolver="$(jail_resolver_address_value "$(jail_resolver_source_value 2>/dev/null || true)" 2>/dev/null || true)"
+    if [ -n "$upstream_resolver" ]; then
+        printf '%s\n' "$upstream_resolver"
+        return 0
+    fi
+
+    blackship_local_resolver_address_value
 }
 
 network_interface_exists() {
