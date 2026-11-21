@@ -18,7 +18,7 @@ case "$args" in
             printf '%s\n' '{not-json'
             exit 0
         fi
-        version="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.5.1}"
+        version="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.6.2}"
         schema="${BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA:-1}"
         operations='[{"operation":"ps.host"},{"operation":"armada.up"},{"operation":"armada.up.dry_run"}]'
         if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL:-0}" = 1 ]; then

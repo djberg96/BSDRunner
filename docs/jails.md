@@ -1,7 +1,7 @@
 # BSDRunner Jails
 
 BSDRunner Jails is a beginner-oriented Quickshell control surface for learning
-and operating FreeBSD jails. New service jails use Blackship 0.5.1 or newer;
+and operating FreeBSD jails. New service jails use Blackship 0.6.2 or newer;
 existing Bastille and native jails remain visible and operable without migration.
 
 The UI is intentionally read-mostly. It helps a new user answer:
@@ -54,7 +54,7 @@ The snapshot action returns JSON with:
 - Blackship capabilities plus best-effort JSON envelopes for `host`, `ps --host`,
   `network list`, `releases`, `ports`, and `stats`; `ps --host` supplies passive
   health and effective autostart summaries without launching checks
-- compatibility status requiring Blackship `>= 0.5.1` and output schema v1
+- compatibility status requiring Blackship `>= 0.6.2` and output schema v1
 - host RCTL readiness, used only by starters whose safety requirements need an
   enforceable resource cap
 
@@ -76,8 +76,8 @@ The snapshot action returns JSON with:
 
 The setup checklist is: install Blackship, choose a ZFS pool, create the private
 network, then pick a starter. The confirmed installer accepts only the official
-FreeBSD amd64 0.5.1 archive, verifies SHA-256
-`5c92c530369e0e5656a64c759de412b7f4a7a782127abb740b1e3679e943ad86`,
+FreeBSD amd64 0.6.2 archive, verifies SHA-256
+`e0548d6db082e538ca51b97e5b32ec215aa09d987894d68b09f61fc6fbb4535b`,
 validates `capabilities`, and does not downgrade a compatible newer release.
 
 BSDRunner owns one project assembled from ordered Blackship manifests:

@@ -31,8 +31,8 @@ forwarded to the host's LAN interface.
 PostgreSQL also needs System V shared memory. BSDRunner gives this jail private
 message, semaphore, and shared-memory namespaces by setting
 \texttt{sysvmsg}, \texttt{sysvsem}, and \texttt{sysvshm} to FreeBSD's
-\texttt{JAIL\_SYS\_NEW} value. Blackship sends these as native jail parameters,
-so the TOML manifest encodes that value as the integer~\texttt{1}. Private
+\texttt{JAIL\_SYS\_NEW} value. Blackship 0.6.2 translates the readable TOML
+value \texttt{"new"} to the native integer expected by \texttt{jail\_set(2)}. Private
 namespaces supply the required kernel features without exposing the host's IPC
 objects to the jail. The older
 \texttt{allow.sysvipc} setting is deliberately not used because it makes the

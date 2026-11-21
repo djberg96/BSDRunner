@@ -40,10 +40,10 @@ source_attachment_file="$state_dir/source-attachments.conf"
 export PATH
 jq_command="${BSDRUNNER_JQ_BIN:-jq}"
 
-blackship_min_version="0.5.1"
-blackship_release_version="0.5.1"
-blackship_release_sha256="5c92c530369e0e5656a64c759de412b7f4a7a782127abb740b1e3679e943ad86"
-blackship_release_url="https://github.com/seuros/blackship/releases/download/blackship-v0.5.1/blackship-freebsd-amd64.tar.gz"
+blackship_min_version="0.6.2"
+blackship_release_version="0.6.2"
+blackship_release_sha256="e0548d6db082e538ca51b97e5b32ec215aa09d987894d68b09f61fc6fbb4535b"
+blackship_release_url="https://github.com/seuros/blackship/releases/download/blackship-v0.6.2/blackship-freebsd-amd64.tar.gz"
 blackship_required_operations="ps.host armada.up armada.up.dry_run"
 blackship_network_name="bsdrunner"
 blackship_bridge="blackship0"
@@ -1684,7 +1684,7 @@ do_lifecycle() {
         blackship)
             blackship_status_values
             if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
-                emit_action_result false "Blackship is not ready." "Install Blackship 0.5.1 or newer and configure the BSDRunner project."
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.6.2 or newer and configure the BSDRunner project."
                 exit 1
             fi
             blackship_manifest_has_name "$name" || {
@@ -2170,7 +2170,7 @@ do_console() {
         blackship)
             blackship_status_values
             if [ "$blackship_compatible" != true ] || [ ! -r "$blackship_manifest" ]; then
-                emit_action_result false "Blackship is not ready." "Install Blackship 0.5.1 or newer and configure its project."
+                emit_action_result false "Blackship is not ready." "Install Blackship 0.6.2 or newer and configure its project."
                 exit 1
             fi
             blackship_manifest_has_name "$name" || {
@@ -3401,7 +3401,7 @@ do_blackship_project_setup() {
     remainder="${network_values#*|}"
     gateway="${remainder%%|*}"
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship 0.5.1 or newer is required." "Install Blackship first."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship 0.6.2 or newer is required." "Install Blackship first."; exit 1; }
     if [ -r "$blackship_manifest" ] && grep -q '^\[\[jails\]\]' "$blackship_manifest"; then
         emit_action_result false "The BSDRunner Blackship project already contains jails." "Project setup will not replace a populated managed manifest."
         exit 1
@@ -3479,7 +3479,7 @@ do_blackship_preset_preview() {
         notes="Demo preview only; creation remains disabled."
     else
         blackship_status_values
-        [ "$blackship_compatible" = true ] || { ready=false; notes="Blackship 0.5.1 or newer is required."; }
+        [ "$blackship_compatible" = true ] || { ready=false; notes="Blackship 0.6.2 or newer is required."; }
         [ -r "$blackship_manifest" ] || { ready=false; notes="${notes}${notes:+ }Configure Blackship storage and networking first."; }
         if blackship_manifest_has_name "$name"; then ready=false; notes="${notes}${notes:+ }The jail name is already in use."; fi
         collect_jail_conflicts "$name" "$address"
@@ -3709,7 +3709,7 @@ blackship_finish_preset_setup() {
 do_blackship_preset_retry() {
     preset="$1" name="$2" release="$3" address="$4" outbound_policy="$5"
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.5.1 or newer first."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.6.2 or newer first."; exit 1; }
     blackship_manifest_entry_matches "$name" "$preset" "$release" "$address" || {
         emit_action_result false "The existing jail cannot be safely retried." "Its release, address, starter tag, or managed context differs from this creation plan."
         exit 1
@@ -4178,7 +4178,7 @@ do_blackship_delete() {
     valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
     [ "$confirmation" = "$name" ] || { emit_action_result false "Jail deletion confirmation did not match." "Type the jail name exactly. Nothing was deleted."; exit 1; }
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.5.1 or newer first."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.6.2 or newer first."; exit 1; }
     blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
 
     values="$(blackship_manifest_entry_values "$name" 2>/dev/null || true)"
@@ -4282,7 +4282,7 @@ do_blackship_resource_limits() {
     [ "$confirmation" = "$name" ] || { emit_action_result false "Resource-limit confirmation did not match." "Return to the selected jail and confirm again."; exit 1; }
     blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.5.1 or newer first."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not ready." "Install Blackship 0.6.2 or newer first."; exit 1; }
     preset="$(blackship_manifest_preset "$name" 2>/dev/null || true)"
     [ -n "$preset" ] || preset=blank
 
@@ -4416,7 +4416,7 @@ do_blackship_details() {
     valid_name "$name" || { emit_action_result false "Invalid jail name." "$name"; exit 1; }
     blackship_manifest_has_name "$name" || { emit_action_result false "The Blackship jail is not managed by BSDRunner." "$name"; exit 1; }
     blackship_status_values
-    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not compatible." "Version 0.5.1 or newer with JSON schema 1 is required."; exit 1; }
+    [ "$blackship_compatible" = true ] || { emit_action_result false "Blackship is not compatible." "Version 0.6.2 or newer with JSON schema 1 is required."; exit 1; }
     stats="$(blackship_read_json stats "$name" 2>/dev/null || true)"
     health="$(blackship_read_json_privileged --non-interactive health "$name" 2>/dev/null || true)"
     ports="$(blackship_read_json ports "$name" 2>/dev/null || true)"

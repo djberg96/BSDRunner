@@ -53,7 +53,7 @@ run_backend() {
     BSDRUNNER_BLACKSHIP_RC_SOURCE="$repo_root/dotfiles/.config/bsdrunner/jails/bsdrunner_blackship.rc" \
     BSDRUNNER_BLACKSHIP_RC_TARGET="$state_dir/bsdrunner_blackship" \
     BSDRUNNER_BLACKSHIP_FIXTURE_MODE="${BSDRUNNER_BLACKSHIP_FIXTURE_MODE:-missing}" \
-    BSDRUNNER_BLACKSHIP_FIXTURE_VERSION="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.5.1}" \
+    BSDRUNNER_BLACKSHIP_FIXTURE_VERSION="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.6.2}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA="${BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA:-1}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL="${BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL:-0}" \
     BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE="${BSDRUNNER_BLACKSHIP_FIXTURE_RUNTIME_DUPLICATE:-0}" \
@@ -84,14 +84,14 @@ run_backend() {
 }
 
 command -v jq >/dev/null 2>&1 || fail "jq is required to run the Jails backend tests"
-grep -F 'sysvmsg = 1' "$postgres_manifest" >/dev/null || \
+grep -F 'sysvmsg = "new"' "$postgres_manifest" >/dev/null || \
     fail "the PostgreSQL starter template should request a private System V message namespace"
-grep -F 'sysvsem = 1' "$postgres_manifest" >/dev/null || \
+grep -F 'sysvsem = "new"' "$postgres_manifest" >/dev/null || \
     fail "the PostgreSQL starter template should request a private System V semaphore namespace"
-grep -F 'sysvshm = 1' "$postgres_manifest" >/dev/null || \
+grep -F 'sysvshm = "new"' "$postgres_manifest" >/dev/null || \
     fail "the PostgreSQL starter template should request a private System V shared-memory namespace"
 pass "the PostgreSQL starter template declares its private IPC requirements"
-grep -F 'return storageConfirmation === (blackshipInfo.minimum_version || "0.5.1")' "$jails_qml" >/dev/null || \
+grep -F 'return storageConfirmation === (blackshipInfo.minimum_version || "0.6.2")' "$jails_qml" >/dev/null || \
     fail "the Blackship installer confirmation gate should match the pinned release"
 pass "Blackship installer confirmation matches the pinned release"
 grep -F 'candidate = presetId + "_" + suffix' "$jails_qml" >/dev/null || \
@@ -204,7 +204,7 @@ grep -F "console_command=\"\${privilege_prefix}blackship --config '\$blackship_m
     fail "Blackship consoles should start with the shared project manifest"
 grep -F "console_command=\"\$console_command --config '\$config_path'\"" "$backend" >/dev/null || \
     fail "Blackship consoles should include every per-jail manifest"
-pass "Blackship consoles delegate to Blackship 0.5.1"
+pass "Blackship consoles delegate to Blackship 0.6.2"
 [ "$(grep -Fc 'visible: root.selectedJail && root.selectedJail.backend === "bastille"' "$jails_qml")" -ge 2 ] || \
     fail "legacy simple-service controls should be hidden for Blackship jails"
 pass "legacy simple-service controls stay out of Blackship jail details"
@@ -701,13 +701,13 @@ pass "successful actions persist status for the next snapshot"
 blackship_snapshot="$test_root/blackship-snapshot.json"
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
-    '.schema_version == 2 and .blackship.available == true and .blackship.compatible == true and .blackship.version == "0.5.1" and .blackship.output_schema_version == 1' \
+    '.schema_version == 2 and .blackship.available == true and .blackship.compatible == true and .blackship.version == "0.6.2" and .blackship.output_schema_version == 1' \
     "schema-v2 snapshot should recognize compatible Blackship output schema 1"
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_VERSION=0.4.2 run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
     '.blackship.available == true and .blackship.compatible == false and .blackship.version == "0.4.2"' \
-    "Blackship versions older than 0.5.1 should remain visible but incompatible"
+    "Blackship versions older than 0.6.2 should remain visible but incompatible"
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA=2 run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
@@ -719,9 +719,9 @@ assert_json "$blackship_snapshot" \
     '.blackship.available == true and .blackship.compatible == false and .blackship.missing_operations == ["armada.up", "armada.up.dry_run"]' \
     "missing required command capabilities should disable the Blackship integration"
 
-BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_VERSION=0.6.0 run_backend snapshot >"$blackship_snapshot"
+BSDRUNNER_BLACKSHIP_FIXTURE_MODE=compatible BSDRUNNER_BLACKSHIP_FIXTURE_VERSION=0.7.0 run_backend snapshot >"$blackship_snapshot"
 assert_json "$blackship_snapshot" \
-    '.blackship.compatible == true and .blackship.version == "0.6.0"' \
+    '.blackship.compatible == true and .blackship.version == "0.7.0"' \
     "compatible newer Blackship versions should be accepted without downgrade"
 
 BSDRUNNER_BLACKSHIP_FIXTURE_MODE=malformed run_backend snapshot >"$blackship_snapshot"
@@ -1081,9 +1081,9 @@ assert_json "$test_root/blackship-postgres.json" \
     '.ok == true and (.details | contains("Database: appdb")) and (.details | contains("Password (shown once):"))' \
     "PostgreSQL starter should return one-time app credentials"
 grep -F '[jails.params]' "$blackship_fragments/database.toml" >/dev/null || fail "PostgreSQL should receive private System V IPC parameters"
-grep -F 'sysvmsg = 1' "$blackship_fragments/database.toml" >/dev/null || fail "PostgreSQL should receive a private System V message namespace"
-grep -F 'sysvsem = 1' "$blackship_fragments/database.toml" >/dev/null || fail "PostgreSQL should receive a private System V semaphore namespace"
-grep -F 'sysvshm = 1' "$blackship_fragments/database.toml" >/dev/null || fail "PostgreSQL should receive a private System V shared-memory namespace"
+grep -F 'sysvmsg = "new"' "$blackship_fragments/database.toml" >/dev/null || fail "PostgreSQL should receive a private System V message namespace"
+grep -F 'sysvsem = "new"' "$blackship_fragments/database.toml" >/dev/null || fail "PostgreSQL should receive a private System V semaphore namespace"
+grep -F 'sysvshm = "new"' "$blackship_fragments/database.toml" >/dev/null || fail "PostgreSQL should receive a private System V shared-memory namespace"
 generated_password="$(jq -r '.details | split("Password (shown once): ")[1] | split("\\n")[0]' "$test_root/blackship-postgres.json")"
 [ -n "$generated_password" ] && [ "$generated_password" != null ] || fail "PostgreSQL starter should generate a password"
 if grep -R -F "$generated_password" "$state_dir" >/dev/null 2>&1; then fail "generated database passwords must not persist in BSDRunner state"; fi
@@ -1165,13 +1165,13 @@ pass "Blackship monolith migration preserves and exposes per-jail manifests"
 
 bad_archive="$test_root/not-blackship.tar.gz"
 printf '%s\n' 'not a release archive' >"$bad_archive"
-if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_UNAME_MACHINE=arm64 BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.5.1 >"$test_root/blackship-arch.json"; then
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_UNAME_MACHINE=arm64 BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.6.2 >"$test_root/blackship-arch.json"; then
     fail "Blackship installer should reject the wrong architecture"
 fi
 assert_json "$test_root/blackship-arch.json" \
     '.ok == false and .message == "This Blackship build requires FreeBSD amd64."' \
     "wrong-architecture failures should happen before download or installation"
-if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.5.1 >"$test_root/blackship-checksum.json"; then
+if BSDRUNNER_BLACKSHIP_FIXTURE_MODE=missing BSDRUNNER_BLACKSHIP_INSTALL_ARCHIVE="$bad_archive" run_backend blackship-install 0.6.2 >"$test_root/blackship-checksum.json"; then
     fail "Blackship installer should reject a checksum mismatch"
 fi
 assert_json "$test_root/blackship-checksum.json" \
