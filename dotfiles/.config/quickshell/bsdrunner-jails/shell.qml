@@ -2794,7 +2794,7 @@ ShellRoot {
 
                             Row {
                                 width: parent.width
-                                height: 82
+                                height: 92
                                 spacing: 6
 
                                 Repeater {
@@ -2809,6 +2809,7 @@ ShellRoot {
                                         width: (parent.width - 12) / 3
                                         height: parent.height
                                         radius: 7
+                                        clip: true
                                         color: outboundPolicyMouse.containsMouse && root.actionAvailable(actionId) ? root.palette.cardHover : selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.panelBackground
                                         opacity: root.actionAvailable(actionId) ? 1.0 : 0.45
                                         border.width: 1
@@ -6535,7 +6536,7 @@ ShellRoot {
                                     Row {
                                         visible: root.wizardStep === 3
                                         width: parent.width
-                                        height: 76
+                                        height: 92
                                         spacing: 6
 
                                         Repeater {
@@ -6549,6 +6550,7 @@ ShellRoot {
                                                 width: (parent.width - 12) / 3
                                                 height: parent.height
                                                 radius: 7
+                                                clip: true
                                                 color: previewPolicyMouse.containsMouse ? root.palette.cardHover : selected ? Qt.alpha(root.palette.accent, 0.16) : root.palette.cardBackground
                                                 border.width: 1
                                                 border.color: selected ? root.palette.accent : root.palette.panelBorder
