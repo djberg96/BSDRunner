@@ -1,0 +1,117 @@
+\chapter{Generate the Catalog API}
+
+The catalog service will be a small Rails API rather than a full browser-facing
+application. Before generating it, we will preview the generator and create a
+dedicated Unix account. Keeping the application files out of \texttt{root}'s
+ownership makes later dependency and server commands safer and more
+predictable.
+
+\section{Exercise 6A: Preview the generator}
+
+From the catalog jail's root console, ask Rails to show what it would generate:
+
+\begin{lstlisting}[language=sh]
+rails new /usr/local/www/catalog \
+  --api \
+  --minimal \
+  --database=postgresql \
+  --skip-bundle \
+  --skip-git \
+  --skip-docker \
+  --skip-kamal \
+  --skip-solid \
+  --pretend
+\end{lstlisting}
+
+The \texttt{--pretend} flag runs the generator without writing anything. Check
+that the destination still does not exist:
+
+\begin{lstlisting}[language=sh]
+test ! -e /usr/local/www/catalog && \
+  echo "preview made no files"
+\end{lstlisting}
+
+The check should print \texttt{preview made no files}. The plain
+\texttt{rails} command selects the jail's installed Rails version; naming a
+specific patch version in every command would add noise without helping this
+integration exercise.
+
+\section{Exercise 6B: Create the application account}
+
+Create a local group and user for the catalog service, followed by an empty
+application directory owned by that account:
+
+\begin{lstlisting}[language=sh]
+pw groupadd catalog
+pw useradd catalog -g catalog -m -s /bin/sh \
+  -c "Catalog Rails application"
+install -d -o catalog -g catalog -m 0755 \
+  /usr/local/www/catalog
+\end{lstlisting}
+
+Verify both identities and the directory boundary:
+
+\begin{lstlisting}[language=sh]
+id catalog
+stat -f '%Su:%Sg %Sp %N' /usr/local/www/catalog
+\end{lstlisting}
+
+The first command should identify the \texttt{catalog} user and group. The
+second should begin with \texttt{catalog:catalog}, confirming that the service
+account---not \texttt{root}---will own the generated application.
+
+\section{Exercise 6C: Generate the application as its owner}
+
+The preview established what Rails intends to create. Now run the same
+generator as the service account, using \texttt{.} because the command starts
+inside the application directory:
+
+\begin{lstlisting}[language=sh]
+su -l catalog -c 'cd /usr/local/www/catalog && \
+  rails new . \
+    --api \
+    --minimal \
+    --database=postgresql \
+    --skip-bundle \
+    --skip-git \
+    --skip-docker \
+    --skip-kamal \
+    --skip-solid'
+\end{lstlisting}
+
+On FreeBSD, placing \texttt{-c} after the login name passes it to the user's
+shell. The login shell therefore executes the quoted command as
+\texttt{catalog}, rather than generating root-owned application files.
+
+The \texttt{--skip-bundle} flag deliberately separates source generation from
+dependency installation. Before Bundler changes anything, verify the generated
+boundary and inspect the two central database dependencies:
+
+\begin{lstlisting}[language=sh]
+stat -f '%Su:%Sg %Sp %N' \
+  /usr/local/www/catalog/Gemfile
+grep -E '^gem "(rails|pg)"' \
+  /usr/local/www/catalog/Gemfile
+\end{lstlisting}
+
+The \texttt{Gemfile} should still belong to \texttt{catalog:catalog}. Its Rails
+entry should select the installed Rails 8.1 line, and its PostgreSQL entry
+should use the \texttt{pg} adapter.
+
+\section{Exercise 6D: Complete the bundle}
+
+Install the two remaining direct dependencies from FreeBSD, then create a
+lockfile from the gems already present in this dedicated application jail:
+
+\begin{lstlisting}[language=sh]
+pkg install -y rubygem-puma rubygem-debug
+su -l catalog -c \
+  'cd /usr/local/www/catalog && bundle lock --local'
+su -l catalog -c \
+  'cd /usr/local/www/catalog && bundle check'
+\end{lstlisting}
+
+The exact patch versions are not important to this tutorial. The final command
+only needs to report that the bundle is satisfied. From here onward, the focus
+returns to the service boundary: configuring this application to use the
+PostgreSQL jail and exposing an API endpoint for the end-to-end test.
