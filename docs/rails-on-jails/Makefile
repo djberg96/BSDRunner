@@ -4,7 +4,8 @@ BUILD_DIR := build
 PDF := $(BUILD_DIR)/main.pdf
 CHAPTERS := chapters/01-introduction.tex \
 	chapters/02-inventory.tex \
-	chapters/03-database-jail.tex
+	chapters/03-database-jail.tex \
+	chapters/04-database-client.tex
 
 .PHONY: all pdf clean
 
