@@ -1,0 +1,171 @@
+\chapter{Call the Catalog API}
+
+The store can reach the catalog jail at the network layer, but its application
+code does not yet make that request. We will introduce the integration through
+a small client object. Calling it directly before adding a controller keeps
+the failure boundary narrow: any problem belongs to HTTP, JSON, or the catalog
+service rather than HTML rendering.
+
+\section{Exercise 13A: Write the catalog client}
+
+In the store jail, work as the application user:
+
+\begin{lstlisting}[language=sh]
+su -l store
+cd /usr/local/www/store
+mkdir -p app/services
+vi app/services/catalog_client.rb
+\end{lstlisting}
+
+Add the following class:
+
+\begin{lstlisting}[language=Ruby]
+require "json"
+require "net/http"
+require "uri"
+
+class CatalogClient
+  class Error < StandardError; end
+
+  DEFAULT_BASE_URL = "http://10.17.89.24:3000"
+
+  def initialize(base_url: ENV.fetch(
+    "CATALOG_URL", DEFAULT_BASE_URL
+  ))
+    @base_url = base_url
+  end
+
+  def products
+    uri = URI.join("#{@base_url}/", "products")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.open_timeout = 2
+    http.read_timeout = 3
+
+    response = http.get(uri.request_uri)
+    unless response.is_a?(Net::HTTPSuccess)
+      raise Error, "catalog returned HTTP #{response.code}"
+    end
+
+    JSON.parse(response.body)
+  rescue JSON::ParserError => error
+    raise Error, "catalog returned invalid JSON: #{error.message}"
+  rescue SocketError, SystemCallError,
+         Net::OpenTimeout, Net::ReadTimeout => error
+    raise Error, "catalog request failed: #{error.message}"
+  end
+end
+\end{lstlisting}
+
+The private address is a useful default for this fixed experiment. The
+\texttt{CATALOG\_URL} environment variable allows tests and later deployments
+to replace it without editing application code. Short timeouts also prevent a
+failed dependency from leaving the store request hanging indefinitely.
+
+\section{Exercise 13B: Probe the client directly}
+
+Make sure the catalog Rails server is running in the catalog jail:
+
+\begin{lstlisting}[language=sh]
+su -l catalog
+cd /usr/local/www/catalog
+bin/rails server --binding 10.17.89.24 --port 3000
+\end{lstlisting}
+
+Leave that process running. In the store jail, invoke the new client through
+the store's Rails environment:
+
+\begin{lstlisting}[language=sh]
+cd /usr/local/www/store
+bin/rails runner 'pp CatalogClient.new.products'
+\end{lstlisting}
+
+The command should print an array containing the catalog product created
+earlier, including SKU \texttt{BSD-001}. This proves that the store's Ruby
+process can perform the HTTP request and parse the catalog's JSON response.
+
+\section{Exercise 13C: Add the products page}
+
+Generate a controller and view without changing the routes automatically:
+
+\begin{lstlisting}[language=sh]
+bin/rails generate controller Products index \
+  --skip-routes
+\end{lstlisting}
+
+Replace \texttt{app/controllers/products\_controller.rb} with:
+
+\begin{lstlisting}[language=Ruby]
+class ProductsController < ApplicationController
+  def index
+    @products = CatalogClient.new.products
+  rescue CatalogClient::Error => error
+    @products = []
+    @catalog_error = error.message
+    render status: :bad_gateway
+  end
+end
+\end{lstlisting}
+
+Replace \texttt{app/views/products/index.html.erb} with:
+
+\begin{lstlisting}
+<h1>Products</h1>
+
+<% if @catalog_error %>
+  <p role="alert">
+    Catalog unavailable: <%= @catalog_error %>
+  </p>
+<% elsif @products.empty? %>
+  <p>No products are currently available.</p>
+<% else %>
+  <ul>
+    <% @products.each do |product| %>
+      <li>
+        <strong><%= product.fetch("name") %></strong>
+        (<%= product.fetch("sku") %>)
+        &mdash;
+        <%= number_to_currency(
+          product.fetch("price_cents") / 100.0
+        ) %>
+      </li>
+    <% end %>
+  </ul>
+<% end %>
+\end{lstlisting}
+
+Finally, open \texttt{config/routes.rb}. Add this line inside its existing
+routes block:
+
+\begin{lstlisting}[language=Ruby]
+root "products#index"
+\end{lstlisting}
+
+The controller knows only the catalog client's interface. It renders the
+returned products on success and an explicit \texttt{502 Bad Gateway} page
+when the dependency reports a controlled integration error.
+
+\section{Exercise 13D: Serve the integrated page}
+
+Keep the catalog server running. In the store jail, start its Rails server on
+the store jail's private address:
+
+\begin{lstlisting}[language=sh]
+cd /usr/local/www/store
+bin/rails server --binding 10.17.89.25 --port 3000
+\end{lstlisting}
+
+Leave the process running and request the page from the FreeBSD host:
+
+\begin{lstlisting}[language=sh]
+curl -i http://10.17.89.25:3000/
+\end{lstlisting}
+
+Expect \texttt{HTTP/1.1 200 OK} and HTML containing the FreeBSD Handbook. The
+request now crosses the store-to-catalog boundary while producing a
+browser-facing response.
+
+\section{Checkpoint}
+
+Stop after the host receives the rendered product page. The store and catalog
+are now integrated manually; the next chapter will turn that behavior into a
+repeatable automated test.
