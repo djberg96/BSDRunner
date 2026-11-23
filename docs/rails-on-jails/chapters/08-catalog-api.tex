@@ -1,0 +1,60 @@
+\chapter{Serve the Catalog API}
+
+Rails can now reach PostgreSQL across the private jail network. The next
+boundary is HTTP: the catalog must expose database-backed JSON that another
+application can consume.
+
+\section{Exercise 8A: Generate a small resource}
+
+From \texttt{/usr/local/www/catalog} as the \texttt{catalog} user, generate a
+product scaffold and migrate the development database:
+
+\begin{lstlisting}[language=sh]
+bin/rails generate scaffold Product \
+  sku:string name:string price_cents:integer
+bin/rails db:migrate
+bin/rails test
+\end{lstlisting}
+
+In an API-only application, the scaffold supplies a model, migration, JSON
+controller, routes, fixtures, and controller tests without browser views. The
+test suite must pass before starting a network server.
+
+\section{Exercise 8B: Add one visible product}
+
+Create a development record that will be easy to recognize in the HTTP
+response:
+
+\begin{lstlisting}[language=sh]
+bin/rails runner \
+  'Product.create!(sku: "BSD-001", \
+  name: "FreeBSD Handbook", price_cents: 4999)'
+\end{lstlisting}
+
+This record goes into the development database. Test fixtures remain isolated
+in the separate test database.
+
+\section{Exercise 8C: Listen only on the private jail address}
+
+Start Puma in the foreground:
+
+\begin{lstlisting}[language=sh]
+bin/rails server --binding 10.17.89.24 --port 3000
+\end{lstlisting}
+
+Leave that console open. From a host terminal, request the collection over the
+private Blackship bridge:
+
+\begin{lstlisting}[language=sh]
+curl --fail --silent --show-error \
+  http://10.17.89.24:3000/products
+\end{lstlisting}
+
+The response should be a JSON array containing \texttt{BSD-001}. No host port
+forward is involved: Puma is listening on the catalog jail's private address,
+and the host reaches it through the managed bridge. Stop the foreground server
+with \texttt{Ctrl-C} after the probe succeeds.
+
+This is intentionally not a permanent service definition yet. The next
+application will first prove that one jail can consume the catalog API; process
+supervision can then be added without obscuring the application boundary.

@@ -8,7 +8,8 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/04-database-client.tex \
 	chapters/05-catalog-toolchain.tex \
 	chapters/06-catalog-application.tex \
-	chapters/07-catalog-database.tex
+	chapters/07-catalog-database.tex \
+	chapters/08-catalog-api.tex
 
 .PHONY: all pdf clean
 
