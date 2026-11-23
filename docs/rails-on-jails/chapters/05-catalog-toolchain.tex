@@ -81,16 +81,19 @@ dependency.
 Install Rails directly through RubyGems:
 
 \begin{lstlisting}[language=sh]
-gem install rails
+gem install rails --no-document
 rails --version
 \end{lstlisting}
 
 The second command confirms the release selected by RubyGems. Installing the
 current release also picks up compatibility and security fixes in the Rails
-stack. RubyGems installs the framework and its direct dependencies, while the
-native Nokogiri extension already supplied by FreeBSD satisfies that part of
-the dependency graph. This avoids the graphics, browser, deployment, and
-desktop packages included by the operating system's full Rails meta-package.
+stack. The \texttt{--no-document} option skips local RI and RDoc generation,
+which is unnecessary inside an application jail and can fail after the gems
+themselves have installed successfully. RubyGems installs the framework and
+its direct dependencies, while the native Nokogiri extension already supplied
+by FreeBSD satisfies that part of the dependency graph. This avoids the
+graphics, browser, deployment, and desktop packages included by the operating
+system's full Rails meta-package.
 
 \section{Checkpoint}
 

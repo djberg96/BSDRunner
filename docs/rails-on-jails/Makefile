@@ -10,7 +10,8 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/06-catalog-application.tex \
 	chapters/07-catalog-database.tex \
 	chapters/08-catalog-api.tex \
-	chapters/09-store-jail.tex
+	chapters/09-store-jail.tex \
+	chapters/10-store-toolchain.tex
 
 .PHONY: all pdf clean
 
