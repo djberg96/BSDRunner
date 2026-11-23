@@ -8,12 +8,12 @@ been generated.
 
 \section{Choose the small package boundary}
 
-FreeBSD's repository offers individual Ruby components. It also provides a
-Rails 8.1 meta-package named \texttt{rubygem-rails81}. The meta-package is
-convenient for a general-purpose workstation, but it is a poor fit for this API
-jail. At the time of this exercise its dependency plan contains 319 packages
-and roughly 4~GiB, including image and video processors, X11 libraries,
-browser-test support, GCC, and LLVM.
+FreeBSD's repository offers individual Ruby components. It also provides
+versioned Rails meta-packages, such as \texttt{rubygem-rails81}. The
+meta-package is convenient for a general-purpose workstation, but it is a poor
+fit for this API jail. At the time of this exercise its dependency plan
+contains 319 packages and roughly 4~GiB, including image and video processors,
+X11 libraries, browser-test support, GCC, and LLVM.
 
 The API needs a much smaller base:
 
@@ -76,21 +76,21 @@ library 18, and Nokogiri 1.19. More important than the patch numbers is that
 all five commands exit successfully without compiling or downloading another
 dependency.
 
-\section{Exercise 5C: Install Rails without the meta-package}
+\section{Exercise 5C: Install the current Rails release}
 
-Install the Rails 8.1 line directly through RubyGems:
+Install Rails directly through RubyGems:
 
 \begin{lstlisting}[language=sh]
-gem install rails --version '~> 8.1' --no-document
+gem install rails
 rails --version
 \end{lstlisting}
 
-The second command should report Rails 8.1; its patch version may be newer than
-the one shown in this run. RubyGems installs the framework and its direct
-dependencies, while the native Nokogiri extension already supplied by FreeBSD
-satisfies that part of the dependency graph. This avoids the graphics, browser,
-deployment, and desktop packages included by the operating system's full Rails
-meta-package.
+The second command confirms the release selected by RubyGems. Installing the
+current release also picks up compatibility and security fixes in the Rails
+stack. RubyGems installs the framework and its direct dependencies, while the
+native Nokogiri extension already supplied by FreeBSD satisfies that part of
+the dependency graph. This avoids the graphics, browser, deployment, and
+desktop packages included by the operating system's full Rails meta-package.
 
 \section{Checkpoint}
 
@@ -101,7 +101,7 @@ This checkpoint is complete when:
   \item \texttt{ruby}, \texttt{gem}, and \texttt{bundle} report versions;
   \item Ruby loads \texttt{pg} and reports the PostgreSQL 18 client library;
   \item Ruby loads Nokogiri from the FreeBSD package; and
-  \item \texttt{rails --version} reports Rails 8.1.
+  \item \texttt{rails --version} reports the installed Rails release.
 \end{itemize}
 
 The next chapter will generate an API-only application without a JavaScript or

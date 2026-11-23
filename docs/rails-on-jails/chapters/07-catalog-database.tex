@@ -40,7 +40,7 @@ vi config/database.yml
 \end{lstlisting}
 
 \begin{lstlisting}
-development:
+development: &dev
   <<: *default
   host: 10.17.89.23
   port: 5432
@@ -51,8 +51,7 @@ development:
 \end{lstlisting}
 
 The network coordinates are ordinary configuration; only the password is kept
-in the protected file. Leave the generated test and production blocks alone
-for now.
+in the protected file.
 
 \section{Exercise 7C: Cross the boundary through Rails}
 
@@ -69,3 +68,38 @@ The returned hash should identify \texttt{appdb}, role \texttt{app}, client
 \texttt{psql} probe, this proves that the generated Rails application, its
 Bundler environment, the \texttt{pg} adapter, and the private jail network all
 work together. Run \texttt{exit} when finished to return to the root console.
+
+\section{Exercise 7D: Add an isolated test database}
+
+Rails tests create, migrate, and clear their database. They must not use the
+development database. Open the database jail's console and create a second
+database owned by the existing \texttt{app} role:
+
+\begin{lstlisting}[language=sh]
+su -l postgres -c 'createdb --owner=app appdb_test'
+\end{lstlisting}
+
+Return to the catalog jail, switch to the \texttt{catalog} account, and replace
+the generated \texttt{test} block in \texttt{config/database.yml} with:
+
+\begin{lstlisting}
+test:
+  <<: *dev
+  database: appdb_test
+\end{lstlisting}
+
+The \texttt{\&dev} anchor carries the shared server, role, and password-file
+settings into the test configuration. The explicit \texttt{database:
+appdb\_test} override is essential: without it, tests would inherit
+\texttt{appdb} and could erase development data.
+
+Prepare the test schema explicitly before running the suite:
+
+\begin{lstlisting}[language=sh]
+RAILS_ENV=test bin/rails db:prepare
+bin/rails test
+\end{lstlisting}
+
+Keeping \texttt{appdb} and \texttt{appdb\_test} separate allows development
+data to survive repeated test runs while both databases remain behind the same
+private PostgreSQL boundary.

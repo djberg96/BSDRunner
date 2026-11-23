@@ -32,9 +32,7 @@ test ! -e /usr/local/www/catalog && \
 \end{lstlisting}
 
 The check should print \texttt{preview made no files}. The plain
-\texttt{rails} command selects the jail's installed Rails version; naming a
-specific patch version in every command would add noise without helping this
-integration exercise.
+\texttt{rails} command selects the current release installed in the jail.
 
 \section{Exercise 6B: Create the application account}
 
@@ -95,7 +93,7 @@ grep -E '^gem "(rails|pg)"' \
 \end{lstlisting}
 
 The \texttt{Gemfile} should still belong to \texttt{catalog:catalog}. Its Rails
-entry should select the installed Rails 8.1 line, and its PostgreSQL entry
+entry should select the installed Rails release, and its PostgreSQL entry
 should use the \texttt{pg} adapter.
 
 \section{Exercise 6D: Complete the bundle}
@@ -111,7 +109,7 @@ su -l catalog -c \
   'cd /usr/local/www/catalog && bundle check'
 \end{lstlisting}
 
-The exact patch versions are not important to this tutorial. The final command
+The exact gem versions are not important to this tutorial. The final command
 only needs to report that the bundle is satisfied. From here onward, the focus
 returns to the service boundary: configuring this application to use the
 PostgreSQL jail and exposing an API endpoint for the end-to-end test.
