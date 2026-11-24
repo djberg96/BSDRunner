@@ -1,0 +1,106 @@
+\chapter{Proxy the Store Through nginx}
+
+nginx is healthy on its private address, and the store page works when called
+directly. We can now join those boundaries. This exercise replaces the starter
+welcome page with a reverse proxy, validates the nginx configuration before
+reload, and tests the complete private request path before publishing it.
+
+\section{Exercise 16A: Keep both Rails services running}
+
+The proxy path needs both Rails applications. In the catalog jail, run:
+
+\begin{lstlisting}[language=sh]
+su -l catalog
+cd /usr/local/www/catalog
+bin/rails server --binding 10.17.89.24 --port 3000
+\end{lstlisting}
+
+In the store jail, run:
+
+\begin{lstlisting}[language=sh]
+su -l store
+cd /usr/local/www/store
+bin/rails server --binding 10.17.89.25 --port 3000
+\end{lstlisting}
+
+Leave both processes running in their consoles.
+
+\section{Exercise 16B: Configure the reverse proxy}
+
+Open the web jail console as \texttt{root}. Preserve the starter configuration
+before editing it:
+
+\begin{lstlisting}[language=sh]
+cp /usr/local/etc/nginx/nginx.conf \
+  /usr/local/etc/nginx/nginx.conf.orig
+vi /usr/local/etc/nginx/nginx.conf
+\end{lstlisting}
+
+Replace the file with this small configuration:
+
+\begin{lstlisting}
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    keepalive_timeout 65;
+
+    upstream store_app {
+        server 10.17.89.25:3000;
+    }
+
+    server {
+        listen 80;
+        server_name _;
+
+        location / {
+            proxy_pass http://store_app;
+            proxy_http_version 1.1;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For
+                $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}
+\end{lstlisting}
+
+The upstream is the store jail's private Puma endpoint. The forwarded headers
+preserve the original request identity and scheme for Rails without exposing
+the catalog or database services.
+
+Validate the file before changing the running server:
+
+\begin{lstlisting}[language=sh]
+nginx -t
+service nginx reload
+\end{lstlisting}
+
+Do not reload if \texttt{nginx -t} reports an error. Correct the named line and
+test again; the already-running starter configuration remains available until
+a valid configuration is reloaded.
+
+\section{Exercise 16C: Verify the private proxy path}
+
+From the FreeBSD host, request nginx at its private address:
+
+\begin{lstlisting}[language=sh]
+curl -i http://10.17.89.26/
+\end{lstlisting}
+
+Expect \texttt{HTTP/1.1 200 OK} and HTML containing \texttt{FreeBSD Handbook}
+and \texttt{\$49.99}. The request now travels through nginx, store, catalog,
+and PostgreSQL.
+
+\section{Checkpoint}
+
+Stop after the private proxy returns the product page. Keep the web jail's
+port-forward list empty. The next exercise will publish host port 8080 only
+after the entire private chain has been verified.

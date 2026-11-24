@@ -1,0 +1,64 @@
+\chapter{Create the Web Jail}
+
+The two Rails services now work together and have a live integration test. We
+can add the system's public edge: an nginx jail named \texttt{web}. It will be
+the only service given an inbound host port, but we will not publish that port
+until nginx has been verified privately and configured to proxy the store.
+
+\section{The proposed service}
+
+Use the following values:
+
+\begin{description}
+  \item[starter] nginx;
+  \item[jail name] \texttt{web};
+  \item[FreeBSD release] \texttt{15.1-RELEASE};
+  \item[private address] \texttt{10.17.89.26/24};
+  \item[outbound policy] Internet only;
+  \item[starts at boot] disabled; and
+  \item[inbound exposure] none during creation.
+\end{description}
+
+BSDRunner's current read-only snapshot recommends \texttt{10.17.89.26/24} as
+the next unused address. The managed jail network still provides the private
+path to the store; the outbound policy does not publish nginx to the host's
+external interface.
+
+\section{Exercise 15A: Create the nginx jail}
+
+Open BSDRunner Jails and choose \textbf{Create a Service Jail}. Select the
+\textbf{nginx web server} starter and review the plan:
+
+\begin{enumerate}
+  \item reuse the existing Blackship project and ZFS storage;
+  \item select \texttt{15.1-RELEASE};
+  \item keep the recommended address \texttt{10.17.89.26/24};
+  \item name the jail \texttt{web}, select \textbf{Internet only}, and leave
+    \textbf{Start at boot} disabled; and
+  \item confirm that nginx listens on private port 80 but no host port forward
+    will be created yet.
+\end{enumerate}
+
+Type \texttt{web} into the confirmation field and create the jail. Wait for the
+operation to finish, then confirm that the jail is running and its nginx health
+check becomes healthy.
+
+\section{Exercise 15B: Verify nginx privately}
+
+Before changing its configuration, request the starter page directly from the
+FreeBSD host:
+
+\begin{lstlisting}[language=sh]
+curl -i http://10.17.89.26/
+\end{lstlisting}
+
+Expect \texttt{HTTP/1.1 200 OK} and the BSDRunner nginx welcome page. This
+proves the new jail, nginx process, private address, and port 80 independently
+of the Rails upstream.
+
+\section{Checkpoint}
+
+Stop after the private nginx request succeeds. Leave the port-forward list
+empty. The next exercise will replace the welcome page with a reverse proxy to
+\texttt{10.17.89.25:3000}; only after that private path works will we expose a
+host port.
