@@ -1,0 +1,79 @@
+\chapter{Automate the Cross-Jail Integration}
+
+The manual browser check proved the feature once. We now want a repeatable
+test that boots the store in its test environment, dispatches a request through
+its Rails stack, calls the real catalog jail, and asserts the rendered result.
+
+This is deliberately a \emph{live integration test}. It crosses from the store
+jail to the catalog service and its database, but it dispatches the incoming
+store request in-process through Rails. A later external runner will enter
+through the web jail and complete the full edge-to-edge path.
+
+\section{Exercise 14A: Replace the generated controller test}
+
+Keep the catalog server running. The store Puma process is not required for
+this focused test because Rails' integration-test harness dispatches the store
+request in-process.
+
+In the store jail, open the controller test generated in the previous chapter:
+
+\begin{lstlisting}[language=sh]
+su -l store
+cd /usr/local/www/store
+vi test/controllers/products_controller_test.rb
+\end{lstlisting}
+
+Replace its contents with:
+
+\begin{lstlisting}[language=Ruby]
+require "test_helper"
+
+class ProductsControllerTest < ActionDispatch::IntegrationTest
+  test "renders products from the live catalog" do
+    skip "set LIVE_CATALOG=1 to run" unless
+      ENV["LIVE_CATALOG"] == "1"
+
+    get root_url
+
+    assert_response :success
+    assert_select "h1", "Products"
+    assert_select "li", text: /FreeBSD Handbook/
+    assert_select "li", text: /BSD-001/
+    assert_select "li", text: /\$49\.99/
+  end
+end
+\end{lstlisting}
+
+The environment-variable gate keeps an ordinary unit-test run deterministic
+when the catalog service is intentionally stopped. Enabling the gate makes the
+external dependency part of the test contract.
+
+\section{Exercise 14B: Run the live test}
+
+Run only this test with the live-catalog gate enabled:
+
+\begin{lstlisting}[language=sh]
+LIVE_CATALOG=1 bin/rails test \
+  test/controllers/products_controller_test.rb
+\end{lstlisting}
+
+Expect one passing test. Its assertions prove that the store received a
+successful response from the live catalog and converted the returned product
+data into the expected HTML.
+
+Now run the ordinary suite without opting into external services:
+
+\begin{lstlisting}[language=sh]
+bin/rails test
+\end{lstlisting}
+
+The live test should be reported as skipped rather than failing because a
+dependency was not requested. This separation lets fast local tests and live
+cross-jail tests coexist in the same application.
+
+\section{Checkpoint}
+
+Stop after the gated test passes and the ordinary suite skips it cleanly. We
+now have a repeatable store-to-catalog integration check. The remaining
+infrastructure work is to place the web jail in front of the store and run a
+black-box test from outside both Rails applications.

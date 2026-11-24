@@ -14,7 +14,8 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/10-store-toolchain.tex \
 	chapters/11-store-application.tex \
 	chapters/12-store-database.tex \
-	chapters/13-store-catalog-client.tex
+	chapters/13-store-catalog-client.tex \
+	chapters/14-live-integration-test.tex
 
 .PHONY: all pdf clean
 
