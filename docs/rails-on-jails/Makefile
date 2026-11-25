@@ -20,7 +20,11 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/16-web-proxy.tex \
 	chapters/17-publish-web.tex \
 	chapters/18-catalog-service.tex \
-	chapters/19-store-service.tex
+	chapters/19-store-service.tex \
+	chapters/20-service-graph.tex \
+	chapters/21-test-jail.tex \
+	chapters/22-black-box-test.tex \
+	chapters/23-failure-injection.tex
 
 .PHONY: all pdf clean
 

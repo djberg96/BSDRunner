@@ -1,0 +1,96 @@
+\chapter{Write the Black-Box Test}
+
+The manual request proved that the test jail can observe the rendered product
+through nginx. We will now make that contract executable with Ruby and
+Minitest. The runner does not need Rails: Rails is part of the system under
+test, while the test itself is an ordinary HTTP client.
+
+\section{Exercise 22A: Install the test toolchain}
+
+In the test jail, install FreeBSD's Ruby and Minitest packages:
+
+\begin{lstlisting}[language=sh]
+pkg install -y ruby rubygem-minitest
+\end{lstlisting}
+
+Verify both pieces without creating any files:
+
+\begin{lstlisting}[language=sh]
+ruby --version
+ruby -rminitest -e 'puts Minitest::VERSION'
+\end{lstlisting}
+
+Exact patch versions may advance with the package repository. Both commands
+must exit successfully; no Rails, database client, compiler, or browser driver
+is needed in this jail.
+
+\section{Exercise 22B: Express the external contract}
+
+Create a directory and test file:
+
+\begin{lstlisting}[language=sh]
+mkdir -p /usr/local/tests
+vi /usr/local/tests/store_e2e_test.rb
+\end{lstlisting}
+
+Enter:
+
+\begin{lstlisting}[language=Ruby]
+require "minitest/autorun"
+require "net/http"
+require "uri"
+
+class StoreEndToEndTest < Minitest::Test
+  URL = ENV.fetch("STORE_URL", "http://10.17.89.26/")
+
+  def test_product_is_visible_through_the_web_edge
+    uri = URI(URL)
+    response = Net::HTTP.start(
+      uri.host,
+      uri.port,
+      open_timeout: 2,
+      read_timeout: 5
+    ) do |http|
+      http.get(uri.request_uri)
+    end
+
+    assert_equal "200", response.code
+    assert_includes response.body, "FreeBSD Handbook"
+    assert_includes response.body, "$49.99"
+  end
+end
+\end{lstlisting}
+
+The default endpoint is nginx, not store's Puma port. The assertions therefore
+cross nginx, store, catalog, and PostgreSQL. \texttt{STORE\_URL} keeps the test
+portable: another environment can point the same contract at a different web
+edge without editing the test.
+
+\section{Exercise 22C: Run the test}
+
+Execute it directly with Ruby:
+
+\begin{lstlisting}[language=sh]
+ruby /usr/local/tests/store_e2e_test.rb
+\end{lstlisting}
+
+Expect one run, no failures, and no errors. Minitest may count more assertions
+than the three method calls because \texttt{assert\_includes} checks both the
+container and its content.
+
+Run it once more with the endpoint made explicit:
+
+\begin{lstlisting}[language=sh]
+STORE_URL=http://10.17.89.26/ \
+  ruby /usr/local/tests/store_e2e_test.rb
+\end{lstlisting}
+
+This second run should produce the same result and demonstrates the input a CI
+job would supply.
+
+\section{Checkpoint}
+
+Stop after both invocations pass. We now have an automated black-box test over
+the complete application stack. The next exercise will deliberately break one
+dependency and confirm that the test fails for an observable reason rather
+than passing accidentally.

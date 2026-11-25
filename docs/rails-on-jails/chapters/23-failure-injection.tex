@@ -1,0 +1,66 @@
+\chapter{Prove That the Test Detects Failure}
+
+A passing test is meaningful only if the broken system makes it fail. We will
+stop the catalog service while leaving its jail and every other component
+running. This isolates one integration boundary, exercises the store's error
+handling, and makes recovery a single command.
+
+Do not stop the catalog jail through Blackship for this exercise. Catalog now
+has dependents, so a dependency-aware jail shutdown can also stop higher-level
+services, including the test runner. We want a service-level fault inside one
+otherwise-running jail.
+
+\section{Exercise 23A: Remove the catalog API}
+
+Open the catalog console as \texttt{root} and stop only its rc.d service:
+
+\begin{lstlisting}[language=sh]
+service catalog onestop
+service catalog onestatus
+\end{lstlisting}
+
+The status command should report that catalog is not running and may exit
+nonzero. Leave the catalog jail itself running.
+
+\section{Exercise 23B: Observe the black-box failure}
+
+Return to the test jail and run the unchanged test:
+
+\begin{lstlisting}[language=sh]
+ruby /usr/local/tests/store_e2e_test.rb
+\end{lstlisting}
+
+Expect a failure: the test wanted HTTP 200 but received HTTP 502. The request
+still crossed nginx and store. Store caught the failed catalog connection and
+rendered its deliberate \texttt{Bad Gateway} response, so the failure describes
+the unavailable integration rather than crashing the test process.
+
+This is the important control experiment. A test that still passed would be
+using cached, stubbed, or otherwise disconnected data instead of traversing the
+live catalog boundary.
+
+\section{Exercise 23C: Restore and retest}
+
+In the catalog console, start the service again and verify its status:
+
+\begin{lstlisting}[language=sh]
+service catalog onestart
+service catalog onestatus
+\end{lstlisting}
+
+Run the same black-box test again from the test jail:
+
+\begin{lstlisting}[language=sh]
+ruby /usr/local/tests/store_e2e_test.rb
+\end{lstlisting}
+
+Expect one run, five assertions, no failures, and no errors. No test code or
+endpoint changed between the failing and passing runs; only the real catalog
+service state changed.
+
+\section{Checkpoint}
+
+Stop after the catalog outage produces a 502 test failure and restoring catalog
+makes the same test pass. The experiment now demonstrates both sides of an
+end-to-end contract: the deployed system succeeds when every boundary works and
+the external test detects a real dependency outage when one boundary fails.
