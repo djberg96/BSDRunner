@@ -24,7 +24,8 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/20-service-graph.tex \
 	chapters/21-test-jail.tex \
 	chapters/22-black-box-test.tex \
-	chapters/23-failure-injection.tex
+	chapters/23-failure-injection.tex \
+	chapters/24-host-test-command.tex
 
 .PHONY: all pdf clean
 

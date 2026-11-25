@@ -1,0 +1,117 @@
+\chapter{Run the Test from the Host}
+
+The test is useful, but running it still requires opening a jail console and
+remembering which services must already be available. We will put that
+workflow behind one host-side command. Blackship will start the dependency
+graph, the script will wait for the web edge, and the test jail will execute
+the same Minitest file as before.
+
+\section{Exercise 24A: Create the host runner}
+
+On the FreeBSD host, become \texttt{root} and create
+\texttt{/usr/local/sbin/rails-on-jails-test}:
+
+\begin{lstlisting}[language=sh]
+vi /usr/local/sbin/rails-on-jails-test
+\end{lstlisting}
+
+Enter:
+
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "rails-on-jails-test must run as root" >&2
+  exit 1
+fi
+
+blackship=/usr/local/bin/blackship
+config_root=/usr/local/etc/bsdrunner
+web_url=http://10.17.89.26/
+test_file=/usr/local/tests/store_e2e_test.rb
+
+set -- --config "${config_root}/blackship.toml"
+for fragment in "${config_root}"/blackship.d/*.toml; do
+  [ -f "${fragment}" ] || continue
+  set -- "$@" --config "${fragment}"
+done
+
+"${blackship}" "$@" --non-interactive up test
+
+attempt=1
+while ! "${blackship}" "$@" --non-interactive exec test -- \
+    /usr/bin/fetch -qo /dev/null "${web_url}" \
+    >/dev/null 2>&1; do
+  if [ "${attempt}" -ge 30 ]; then
+    echo "web edge did not become ready within 60 seconds" >&2
+    exit 1
+  fi
+  sleep 2
+  attempt=$((attempt + 1))
+done
+
+exec "${blackship}" "$@" --non-interactive exec test -- \
+  /usr/local/bin/ruby "${test_file}"
+\end{lstlisting}
+
+The \texttt{set --} loop builds a positional-argument list containing the
+shared manifest followed by every per-jail manifest. Quoting \texttt{"\$@"}
+passes those arguments to each Blackship invocation without flattening paths
+into one string.
+
+The readiness loop is separate from the test. Transient startup time can cause
+retries, but once nginx returns a successful response, Minitest runs exactly
+once. The final shell \texttt{exec} also makes the wrapper return Blackship's
+test status unchanged, which is the behavior a CI job needs.
+
+\section{Exercise 24B: Validate the script}
+
+Make the runner executable and ask the shell to parse it without executing it:
+
+\begin{lstlisting}[language=sh]
+chmod 0555 /usr/local/sbin/rails-on-jails-test
+sh -n /usr/local/sbin/rails-on-jails-test
+\end{lstlisting}
+
+No output from \texttt{sh -n} means the shell found no syntax errors. It does
+not start jails or run the test.
+
+\section{Exercise 24C: Run the complete workflow}
+
+From a normal host account, use \texttt{mdo} to run the root-owned workflow:
+
+\begin{lstlisting}[language=sh]
+mdo /usr/local/sbin/rails-on-jails-test
+\end{lstlisting}
+
+If the current shell is already running as \texttt{root}, omit \texttt{mdo}.
+Blackship may report that some or all jails are already running. That is
+expected: \texttt{up test} starts only missing members of the declared
+dependency graph. After the readiness check, expect one Minitest run, five
+assertions, no failures, and no errors.
+
+The command deliberately leaves the jails running. Automatically stopping the
+graph would risk shutting down services that were active before the test began.
+A CI environment that owns its entire host can add explicit teardown later.
+
+\section{Exercise 24D: Restore a missing runner}
+
+Use BSDRunner to stop only the \texttt{test} jail. It is the leaf of the
+dependency graph, so this does not stop the application jails. Then invoke the
+same host command again:
+
+\begin{lstlisting}[language=sh]
+mdo /usr/local/sbin/rails-on-jails-test
+\end{lstlisting}
+
+This time Blackship should report that the four application jails are already
+running, start the \texttt{test} jail, and produce the same passing Minitest
+result. No manual console or separate start action should be necessary.
+
+\section{Checkpoint}
+
+Stop after the command passes both with the complete graph already running and
+with the test jail initially stopped. The manual console procedure is now a
+repeatable command with a meaningful process exit status, ready to be called
+by a scheduler or CI system.
