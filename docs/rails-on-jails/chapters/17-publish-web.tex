@@ -59,6 +59,6 @@ LAN client -> host PF -> web -> store -> catalog -> database
 \section{Checkpoint}
 
 Stop after the external request succeeds. Confirm that \texttt{web} is the only
-jail with an inbound port forward. The next exercise will place the black-box
-assertions in a repeatable test runner rather than relying on manual browser or
-\texttt{curl} inspection.
+jail with an inbound port forward. The next exercise will replace the catalog's
+foreground Rails process with a FreeBSD service whose lifecycle is declared in
+its Blackship manifest.
