@@ -18,7 +18,7 @@ case "$args" in
             printf '%s\n' '{not-json'
             exit 0
         fi
-        version="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.5.0}"
+        version="${BSDRUNNER_BLACKSHIP_FIXTURE_VERSION:-0.6.2}"
         schema="${BSDRUNNER_BLACKSHIP_FIXTURE_SCHEMA:-1}"
         operations='[{"operation":"ps.host"},{"operation":"armada.up"},{"operation":"armada.up.dry_run"}]'
         if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_CAPABILITIES_PARTIAL:-0}" = 1 ]; then
@@ -67,11 +67,20 @@ case "$args" in
         printf '%s\n' '{"schema_version":1,"ok":true,"data":[]}'
         ;;
     *" eva "*)
+        if printf '%s\n' "$args" | grep -F ' --format json ' >/dev/null &&
+            ! printf '%s\n' "$args" | grep -F ' --dry-run ' >/dev/null; then
+            printf '%s\n' '{"schema_version":1,"ok":false,"error":{"code":"unsupported_output_format","message":"the selected command does not support JSON output"}}'
+            exit 1
+        fi
         if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_EVA_FAIL:-0}" = 1 ] && ! printf '%s\n' "$args" | grep -F ' --dry-run ' >/dev/null; then
             printf '%s\n' '{"schema_version":1,"ok":false,"error":{"code":"fixture_failure","message":"simulated Eva failure"}}'
             exit 1
         fi
-        printf '%s\n' '{"schema_version":1,"ok":true,"data":{"operation":"eva","applied":true}}'
+        if printf '%s\n' "$args" | grep -F ' --dry-run ' >/dev/null; then
+            printf '%s\n' '{"schema_version":1,"ok":true,"data":{"operation":"eva","applied":true}}'
+        else
+            printf '%s\n' 'Eva applied the requested changes.'
+        fi
         ;;
     *" rm "*)
         if [ "${BSDRUNNER_BLACKSHIP_FIXTURE_RM_FAIL:-0}" = 1 ]; then

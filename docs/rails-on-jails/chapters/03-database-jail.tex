@@ -1,0 +1,157 @@
+\chapter{Establish the Database Boundary}
+
+The database is our first real service boundary. We will create it before either
+Rails application so that later exercises can distinguish database readiness
+from application setup problems.
+
+This exercise makes the first persistent change to the jail environment. The
+read-only preview comes first, and BSDRunner still requires an exact typed
+confirmation before it creates anything.
+
+\section{The proposed service}
+
+We will use the following values throughout the tutorial:
+
+\begin{description}
+  \item[starter] PostgreSQL;
+  \item[jail name] \texttt{database};
+  \item[FreeBSD release] \texttt{15.1-RELEASE};
+  \item[private address] \texttt{10.17.89.23/24};
+  \item[outbound policy] Internet only;
+  \item[starts at boot] disabled; and
+  \item[inbound exposure] none.
+\end{description}
+
+Disabling autostart is useful while assembling the lab: every lifecycle change
+will be deliberate and visible. Internet-only outbound access allows package
+installation and updates but does not grant access to private LAN addresses.
+PostgreSQL port 5432 is reachable on the managed jail network; it is not
+forwarded to the host's LAN interface.
+
+PostgreSQL also needs System V shared memory. BSDRunner gives this jail private
+message, semaphore, and shared-memory namespaces by setting
+\texttt{sysvmsg}, \texttt{sysvsem}, and \texttt{sysvshm} to FreeBSD's
+\texttt{JAIL\_SYS\_NEW} value. Blackship 0.6.2 translates the readable TOML
+value \texttt{"new"} to the native integer expected by \texttt{jail\_set(2)}. Private
+namespaces supply the required kernel features without exposing the host's IPC
+objects to the jail. The older
+\texttt{allow.sysvipc} setting is deliberately not used because it makes the
+jail inherit the host namespace.
+
+\section{Exercise 3A: Preview without changing the host}
+
+From the BSDRunner repository, run the same preview used by the graphical
+wizard:
+
+\begin{lstlisting}[language=sh]
+sh dotfiles/.config/bsdrunner/scripts/\
+bsdrunner-jails-backend.sh \
+  blackship-preset-preview postgres database \
+  15.1-RELEASE 10.17.89.23/24 no internet-only | jq .
+\end{lstlisting}
+
+Verify these fields before opening the creation workflow:
+
+\begin{itemize}
+  \item \texttt{mutates} is \texttt{false};
+  \item \texttt{ready} is \texttt{true};
+  \item the selected package is \texttt{postgresql18-server};
+  \item the expected private service port is \texttt{5432/tcp};
+  \item \texttt{private\_by\_default} is \texttt{true}; and
+  \item autostart is \texttt{no}.
+\end{itemize}
+
+The listed Blackship operations are the reviewed plan. The preview validates a
+temporary Jailfile and manifest and asks Blackship for a dry run. It does not
+install PostgreSQL, reserve the address, or create a jail.
+
+\section{Exercise 3B: Create the jail through BSDRunner}
+
+Launch the installed Jails application:
+
+\begin{lstlisting}[language=sh]
+sh ~/.config/bsdrunner/scripts/bsdrunner-jails.sh
+\end{lstlisting}
+
+The creation screen makes the five reviewed concepts visible before it enables
+the final action:
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]
+    {assets/screenshots/create-service-jail.png}
+  \caption{The service-jail wizard begins by confirming Blackship storage,
+  then proceeds through userland, network, configuration, and lifecycle.}
+  \label{fig:create-service-jail}
+\end{figure}
+
+Choose \textbf{Create a Service Jail}, then select the \textbf{PostgreSQL}
+starter. Walk through the five visible concepts and keep the reviewed values:
+
+\begin{enumerate}
+  \item \textbf{Storage}: confirm that the existing Blackship project uses
+    \texttt{zroot/bsdrunner/blackship}. Continue without creating another
+    project.
+  \item \textbf{Userland}: select \texttt{15.1-RELEASE}. Blackship will use an
+    isolated jail root for the service. Thick and thin are Bastille creation
+    modes, so BSDRunner does not ask for that unrelated choice in a Blackship
+    service starter.
+  \item \textbf{Network}: keep \texttt{10.17.89.23/24}. The network definition
+    already exists; BSDRunner will restore its runtime bridge as part of the
+    guarded creation path.
+  \item \textbf{Config}: change the generated name to \texttt{database}, keep
+    \textbf{Internet only}, and leave \textbf{Start at boot} disabled.
+  \item \textbf{Lifecycle}: wait for \textbf{READY TO CREATE}. Compare the
+    displayed package, address, policy, and port with Exercise 3A.
+\end{enumerate}
+
+Only after the plan matches, type \texttt{database} into the confirmation field
+and choose \textbf{Create Jail}. Building the jail may download a FreeBSD
+release or packages and can take several minutes.
+
+\section{Capture the one-time credential}
+
+After PostgreSQL starts, BSDRunner creates a database named \texttt{appdb} and a
+login role named \texttt{app}. Its generated password is displayed once and is
+not persisted in BSDRunner state.
+
+Copy that password into a password manager or another private temporary record.
+Do not put it in this repository, the LaTeX source, a screenshot, shell history,
+or a commit. If it is lost, the jail detail view offers a guarded
+\textbf{Reset database password} action.
+
+The \texttt{appdb}/\texttt{app} pair is a starter smoke-test credential, not the
+final application design. A later exercise will create separate databases and
+roles for \texttt{store} and \texttt{catalog}, preserving the ownership boundary
+defined in Chapter 1.
+
+\section{Checkpoint}
+
+Refresh the Jails view after creation. The new service should be running at
+\texttt{10.17.89.23}; its health check may briefly be pending during the
+30-second start period before becoming healthy.
+
+The following read-only command provides the same focused runtime view:
+
+\begin{lstlisting}[language=sh]
+blackship \
+  --config /usr/local/etc/bsdrunner/blackship.toml \
+  --format json ps --host | \
+jq '.data.jails[] | select(.service_name == "database") | {
+  service_name, state, ip, autostart, health
+}'
+\end{lstlisting}
+
+The checkpoint is complete when:
+
+\begin{itemize}
+  \item the service name is \texttt{database};
+  \item its state is \texttt{Running};
+  \item its address is \texttt{10.17.89.23};
+  \item autostart remains \texttt{false};
+  \item the PostgreSQL health check becomes healthy; and
+  \item BSDRunner shows no inbound port forward for the jail.
+\end{itemize}
+
+Stop after this checkpoint. The next exercise will test the database from a
+separate jail rather than trusting a successful local service start.

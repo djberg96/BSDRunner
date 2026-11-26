@@ -1,0 +1,5 @@
+[jails.params]
+# Blackship translates these jail.conf-style values to FreeBSD JAIL_SYS_NEW.
+sysvmsg = "new"
+sysvsem = "new"
+sysvshm = "new"

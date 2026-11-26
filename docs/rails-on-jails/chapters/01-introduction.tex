@@ -1,0 +1,116 @@
+\chapter{A Small System with Real Boundaries}
+
+Rails applications are easy to test when every dependency lives in the same
+process or on the same development machine. Production systems are less tidy.
+They cross network boundaries, wait for other services to become ready, and
+must behave sensibly when a dependency is unavailable.
+
+In this tutorial we will build a small multi-service Rails system on FreeBSD.
+Each service will run in a BSD jail managed through BSDRunner and Blackship.
+The finished system will let us exercise a complete request across real
+operating-system and network boundaries.
+
+\section{How BSDRunner fits}
+
+This is a BSDRunner-first tutorial. The graphical Jails application is the
+reader's primary interface for creating jails, reviewing changes, editing
+per-jail manifests, publishing ports, and controlling lifecycle. Blackship is
+the state engine underneath that interface: it validates the manifests and
+performs the dependency-aware jail operations.
+
+The screenshots show the real application used to complete this tutorial,
+not a separate mockup. The finished lab is pictured here, so it contains more
+services and controls than the reader will see in the early chapters:
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{assets/screenshots/jail-detail.png}
+  \caption{A completed jail detail view, with lifecycle actions, network
+  policy, dependencies, and the per-jail manifest link in one place. This is
+  the author's temporary lab; jail names and addresses in another environment
+  will differ.}
+  \label{fig:jail-detail}
+\end{figure}
+
+Readers are expected to have BSDRunner installed on the FreeBSD host and a
+compatible Blackship available; Chapter 2 checks the exact requirements before
+anything is created. The tutorial also shows the relevant TOML and read-only
+commands so the UI never becomes unexplained magic. Appendix A maps the main
+BSDRunner actions to raw Blackship concepts for readers adapting the design to
+another workflow, but it is not a second set of provisioning instructions.
+
+\section{The system we will build}
+
+Our initial topology has four service jails:
+
+\begin{description}
+  \item[web] An HTTP reverse proxy and the only service intended for inbound
+    access from the host.
+  \item[store] The primary Rails application. It renders the user-facing
+    workflow and calls the catalog API over HTTP.
+  \item[catalog] A Rails API that owns product and availability data.
+  \item[database] PostgreSQL, with separate logical databases and credentials
+    for the two Rails applications.
+\end{description}
+
+The first end-to-end test will enter through the reverse proxy, visit a page in
+the store, and verify that data obtained from the catalog API appears in the
+response. Later, we will stop the catalog jail deliberately and test the
+store's failure behavior.
+
+\begin{lstlisting}
+test -> web -> store -> catalog
+                 |         |
+                 +----+----+
+                      |
+                  database
+\end{lstlisting}
+
+The diagram is deliberately a destination, not our first task. We will add one
+boundary at a time and keep the system runnable after every chapter.
+
+\section{What this tutorial emphasizes}
+
+The goal is not merely to make Rails boot inside a jail. We will use the
+project to learn how a small distributed system is assembled and tested:
+
+\begin{itemize}
+  \item repeatable jail creation and service configuration;
+  \item private addressing and explicit exposure through the proxy;
+  \item database ownership, migrations, and credentials;
+  \item dependency ordering and readiness rather than arbitrary delays;
+  \item end-to-end tests that cross service boundaries; and
+  \item observable, intentional failure when a dependency disappears.
+\end{itemize}
+
+Unless a chapter says otherwise, commands are run on the FreeBSD host. Actions
+that change the host or a jail will be identified before they are performed.
+The examples favor small, inspectable configuration over hidden automation.
+
+\section{Exercise 1: Build this handbook}
+
+Before changing the jail environment, verify that the tutorial source can
+produce a PDF. From the BSDRunner repository, run:
+
+\begin{lstlisting}[language=sh]
+cd docs/rails-on-jails
+make
+\end{lstlisting}
+
+The command should finish successfully and create \texttt{build/main.pdf}.
+Open the file and confirm that this chapter and its topology diagram are
+present.
+
+\subsection*{Checkpoint}
+
+Do not provision a jail yet. At the end of this exercise you should have only:
+
+\begin{itemize}
+  \item a successfully generated PDF;
+  \item a shared picture of the four-service topology; and
+  \item no changes to the running FreeBSD jail environment.
+\end{itemize}
+
+The next exercise will inventory the host, Blackship, ZFS storage, and the
+BSDRunner private network. That evidence will determine the exact provisioning
+steps instead of assuming that every FreeBSD host begins in the same state.

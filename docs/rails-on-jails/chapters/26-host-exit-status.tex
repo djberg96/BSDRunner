@@ -1,0 +1,85 @@
+\chapter{Make Failure Visible to Automation}
+
+Human-readable test output is useful at a terminal, but a scheduler or CI job
+decides success from the command's exit status. We have observed the wrapper's
+successful path. We will now break one real dependency and confirm that the
+same host command reports failure without manual interpretation.
+
+\section{Exercise 26A: Stop only the catalog process}
+
+Open the catalog jail's root console and stop its Rails service while leaving
+the jail running:
+
+\begin{lstlisting}[language=sh]
+service catalog onestop
+service catalog onestatus
+\end{lstlisting}
+
+The status check should report that catalog is not running. As in the earlier
+failure-injection exercise, do not stop the jail: Blackship would account for
+its dependents, while this experiment needs the graph to remain present with
+one unhealthy application process.
+
+\section{Exercise 26B: Observe the host failure status}
+
+From the host, run the wrapper inside an explicit POSIX shell that records its
+status immediately:
+
+\begin{lstlisting}[language=sh]
+sh -c '
+  mdo /usr/local/sbin/rails-on-jails-test
+  code=$?
+  echo "exit status: $code"
+  exit "$code"
+'
+\end{lstlisting}
+
+Blackship will find the catalog jail already running, so \texttt{up} does not
+replace the deliberately stopped process. Store consequently returns HTTP 502
+through nginx. The readiness loop retries for about one minute, then prints:
+
+\begin{lstlisting}
+web edge did not become ready within 60 seconds
+\end{lstlisting}
+
+Expect \texttt{exit status: 1}. Capturing \texttt{\$?} before running
+\texttt{echo} is important because every subsequent command replaces the
+shell's previous status. The explicit \texttt{sh -c} also makes this command
+independent of the syntax used by the interactive host shell. Its final
+\texttt{exit} preserves the same nonzero result for a calling automation
+system.
+
+No test product needs cleanup in this path. The wrapper waits for a successful
+web response before starting Minitest, so fixture creation never begins while
+the deployed graph is unhealthy.
+
+\section{Exercise 26C: Restore the passing status}
+
+Return to the catalog jail and restore its Rails service:
+
+\begin{lstlisting}[language=sh]
+service catalog onestart
+service catalog onestatus
+\end{lstlisting}
+
+Run the unchanged host command again with the same status wrapper:
+
+\begin{lstlisting}[language=sh]
+sh -c '
+  mdo /usr/local/sbin/rails-on-jails-test
+  code=$?
+  echo "exit status: $code"
+  exit "$code"
+'
+\end{lstlisting}
+
+Expect the nine-assertion Minitest pass followed by \texttt{exit status: 0}.
+The wrapper now demonstrates both outcomes required by automation: a broken
+live dependency produces nonzero, and the restored end-to-end path produces
+zero.
+
+\section{Checkpoint}
+
+Stop after recording status \texttt{1} with catalog stopped and status
+\texttt{0} after catalog is restored. The implementation work is complete;
+the final chapter will summarize the system, its guarantees, and its cleanup.

@@ -1,0 +1,169 @@
+\chapter{Manage Store as a Service}
+
+Catalog now starts and stops through its Blackship lifecycle without a
+foreground console. We will apply the proven pattern to store. Its health check
+requests the rendered product page, so one check crosses store, catalog, and
+the database.
+
+\section{Exercise 19A: Create the store launcher}
+
+In the store console, stop the foreground server with \texttt{Ctrl-C}. If the
+prompt belongs to the \texttt{store} user, return to \texttt{root}:
+
+\begin{lstlisting}[language=sh]
+exit
+\end{lstlisting}
+
+Create \texttt{/usr/local/sbin/store-server}:
+
+\begin{lstlisting}[language=sh]
+vi /usr/local/sbin/store-server
+\end{lstlisting}
+
+Enter:
+
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+set -eu
+
+cd /usr/local/www/store
+exec /usr/local/bin/ruby bin/rails server \
+  --environment development \
+  --binding 10.17.89.25 \
+  --port 3000
+\end{lstlisting}
+
+Make the launcher executable and ask the shell to parse it without running it:
+
+\begin{lstlisting}[language=sh]
+chmod 0555 /usr/local/sbin/store-server
+sh -n /usr/local/sbin/store-server
+\end{lstlisting}
+
+Expect no output from \texttt{sh -n}.
+
+\section{Exercise 19B: Add the store service}
+
+Create \texttt{/usr/local/etc/rc.d/store}:
+
+\begin{lstlisting}[language=sh]
+vi /usr/local/etc/rc.d/store
+\end{lstlisting}
+
+Enter:
+
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+
+# PROVIDE: store
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="store"
+desc="Rails store application"
+rcvar="store_enable"
+
+load_rc_config "$name"
+
+: ${store_enable:="NO"}
+: ${store_logfile:="/var/log/store.log"}
+
+pidfile="/var/run/${name}.pid"
+required_files="/usr/local/sbin/store-server"
+command="/usr/sbin/daemon"
+procname="/usr/sbin/daemon"
+command_args="-f -r -P ${pidfile} -u store \
+  -o ${store_logfile} \
+  /usr/local/sbin/store-server"
+
+run_rc_command "$1"
+\end{lstlisting}
+
+The \texttt{-f} option closes descriptors inherited from the Blackship hook
+before \texttt{daemon} connects the service to its log. Without it, Puma can be
+healthy while the hook waits indefinitely for its captured output pipes to
+close.
+
+Validate and start the service once:
+
+\begin{lstlisting}[language=sh]
+chmod 0555 /usr/local/etc/rc.d/store
+sh -n /usr/local/etc/rc.d/store
+service store onestart
+service store onestatus
+sockstat -4 -l | grep ':3000'
+tail -n 20 /var/log/store.log
+\end{lstlisting}
+
+From the FreeBSD host, verify the page directly:
+
+\begin{lstlisting}[language=sh]
+fetch -qo - http://10.17.89.25:3000/ | \
+  grep 'FreeBSD Handbook'
+\end{lstlisting}
+
+\section{Exercise 19C: Declare the store lifecycle}
+
+Open the \texttt{store} jail's \textbf{Manifest} editor in BSDRunner. Add this
+line with its top-level jail settings, before \texttt{[jails.network]}:
+
+\begin{lstlisting}
+depends_on = ["catalog"]
+\end{lstlisting}
+
+Append:
+
+\begin{lstlisting}
+[jails.healthcheck]
+enabled = true
+
+[[jails.healthcheck.checks]]
+name = "store-page"
+command = "fetch -qo /dev/null http://10.17.89.25:3000/"
+target = "jail"
+start_period = 30
+interval = 30
+timeout = 5
+retries = 3
+
+[[jails.hooks]]
+phase = "post_start"
+target = "jail"
+command = "/usr/sbin/service"
+args = ["store", "onestart"]
+on_failure = "abort"
+
+[[jails.hooks]]
+phase = "pre_stop"
+target = "jail"
+command = "/usr/sbin/service"
+args = ["store", "onestop"]
+on_failure = "continue"
+\end{lstlisting}
+
+Run \textbf{Dry run}, review the dependency, health check, and hooks, then
+choose \textbf{Apply}. Restart store through BSDRunner. If the Restart action
+is unavailable, use Stop followed by Start; both paths execute the same
+pre-stop and post-start hooks.
+
+After store returns to the running state, verify its private entry point from
+the FreeBSD host:
+
+\begin{lstlisting}[language=sh]
+fetch -qo - http://10.17.89.25:3000/ | \
+  grep 'FreeBSD Handbook'
+\end{lstlisting}
+
+Then reload \texttt{http://HOST\_LAN\_IP:8080/} from another device on the
+LAN. Use the host port selected when publishing the web edge if port 8080 was
+already occupied. A request originating on the FreeBSD host does not prove the
+external-interface PF redirect.
+
+\section{Checkpoint}
+
+Stop after the store page passes its Blackship health check and remains
+available through nginx following the managed restart. Both Rails consoles can
+now remain closed. The next exercise will turn the external request into a
+repeatable black-box test.

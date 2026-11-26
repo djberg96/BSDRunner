@@ -1,0 +1,110 @@
+\chapter{Connect the Store to PostgreSQL}
+
+The store needs its own schema lifecycle even though it shares the PostgreSQL
+jail with the catalog. We will reuse the experiment's existing \texttt{app}
+role and password, but create separate development and test databases. This
+prevents either Rails application from migrating or clearing the other's data.
+
+\section{Exercise 12A: Create the store databases}
+
+Open the database jail console and create two databases owned by the existing
+\texttt{app} role:
+
+\begin{lstlisting}[language=sh]
+su -l postgres -c \
+  'createdb --owner=app store_development'
+su -l postgres -c \
+  'createdb --owner=app store_test'
+\end{lstlisting}
+
+The first database is for interactive development. The second is disposable:
+Rails may create, migrate, and clear it while running tests.
+
+\section{Exercise 12B: Protect the shared password}
+
+Return to the store jail's root console. Create a password file readable by the
+store service account:
+
+\begin{lstlisting}[language=sh]
+install -o root -g store -m 0640 /dev/null \
+  /usr/local/etc/store-db-password
+vi /usr/local/etc/store-db-password
+\end{lstlisting}
+
+Paste the same experiment-only \texttt{app} password used by the catalog, with
+no surrounding quotes. Save the file and verify its ownership and mode:
+
+\begin{lstlisting}[language=sh]
+stat -f '%Su:%Sg %Sp %N' \
+  /usr/local/etc/store-db-password
+\end{lstlisting}
+
+The result should begin with \texttt{root:store -rw-r-----}.
+
+\section{Exercise 12C: Configure both Rails environments}
+
+Edit the generated database configuration as the application user:
+
+\begin{lstlisting}[language=sh]
+su -l store
+cd /usr/local/www/store
+vi config/database.yml
+\end{lstlisting}
+
+Replace the generated development and test blocks with:
+
+\begin{lstlisting}
+development: &dev
+  <<: *default
+  host: 10.17.89.23
+  port: 5432
+  database: store_development
+  username: app
+  password: <%= File.read(
+    "/usr/local/etc/store-db-password").strip %>
+
+test:
+  <<: *dev
+  database: store_test
+\end{lstlisting}
+
+The YAML anchor shares the server, role, and protected password between the
+two environments while the explicit test override preserves database
+isolation.
+
+\section{Exercise 12D: Verify development and test connections}
+
+Ask Active Record to report the development connection across the jail
+boundary:
+
+\begin{lstlisting}[language=sh]
+bin/rails runner 'p ActiveRecord::Base.connection.\
+select_one("SELECT current_database(), current_user, \
+inet_client_addr(), inet_server_addr()")'
+\end{lstlisting}
+
+The result should identify:
+
+\begin{itemize}
+  \item database \texttt{store\_development};
+  \item role \texttt{app};
+  \item client \texttt{10.17.89.25}; and
+  \item server \texttt{10.17.89.23}.
+\end{itemize}
+
+Prepare the isolated test database and run the generated test suite:
+
+\begin{lstlisting}[language=sh]
+RAILS_ENV=test bin/rails db:prepare
+bin/rails test
+\end{lstlisting}
+
+The minimal application may report zero tests at this stage; success means
+both commands finish without a database connection or configuration error.
+
+\section{Checkpoint}
+
+Stop after both Rails environments connect successfully. The store now has a
+working database boundary but no product page. Next we will make its first
+application feature call the catalog API rather than reading catalog data
+directly from PostgreSQL.

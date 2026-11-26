@@ -1,0 +1,111 @@
+\chapter{Prepare the Catalog Rails Toolchain}
+
+The catalog jail now has a verified database path but no Ruby runtime. Before
+installing Rails, we will make the language and native database dependencies
+explicit. This keeps the next failure domain small: by the end of this exercise
+Ruby can load both the PostgreSQL and XML extensions, but no application has
+been generated.
+
+\section{Choose the small package boundary}
+
+FreeBSD's repository offers individual Ruby components. It also provides
+versioned Rails meta-packages, such as \texttt{rubygem-rails81}. The
+meta-package is convenient for a general-purpose workstation, but it is a poor
+fit for this API jail. At the time of this exercise its dependency plan
+contains 319 packages and roughly 4~GiB, including image and video processors,
+X11 libraries, browser-test support, GCC, and LLVM.
+
+The API needs a much smaller base:
+
+\begin{description}
+  \item[\texttt{ruby}] FreeBSD's default supported Ruby, currently 3.4;
+  \item[\texttt{rubygem-bundler}] application dependency resolution;
+  \item[\texttt{rubygem-pg}] the native PostgreSQL adapter; and
+  \item[\texttt{rubygem-nokogiri}] a prebuilt native dependency used by the
+    Rails stack.
+\end{description}
+
+Rails itself will be pinned through RubyGems in the next exercise. Installing
+the two native gems from FreeBSD packages avoids compiling their C extensions
+inside the jail and keeps them aligned with the jail's system libraries.
+
+\section{Exercise 5A: Preview the package transaction}
+
+Reopen the catalog console and ask \texttt{pkg} for a dry run:
+
+\begin{lstlisting}[language=sh]
+pkg install -n ruby rubygem-bundler rubygem-pg \
+  rubygem-nokogiri
+\end{lstlisting}
+
+The \texttt{-n} flag answers ``no'' before installation, so this command may
+return a nonzero status after printing a valid plan. It must not list the full
+Rails meta-package, compilers, graphics stacks, or desktop libraries. In the
+repository used for this tutorial, the plan contains 13 packages and requires
+about 71~MiB.
+
+Read the plan before continuing. A substantially larger transaction is a
+reason to stop and identify which package introduced it.
+
+\section{Exercise 5B: Install and verify the toolchain}
+
+Run the same transaction without the dry-run flag:
+
+\begin{lstlisting}[language=sh]
+pkg install -y ruby rubygem-bundler rubygem-pg \
+  rubygem-nokogiri
+\end{lstlisting}
+
+Then inspect each layer independently:
+
+\begin{lstlisting}[language=sh]
+ruby --version
+gem --version
+bundle --version
+ruby -rpg -e 'puts PG::VERSION; puts PG.library_version'
+ruby -rnokogiri -e 'puts Nokogiri::VERSION'
+\end{lstlisting}
+
+Use straight ASCII single quotes in these commands. Typographic curly quotes
+copied from formatted prose are different characters and will make Ruby parse
+the command incorrectly.
+
+The exact package revision can advance with the FreeBSD repository. For this
+run, expect Ruby 3.4, Bundler 4, the \texttt{pg} gem at 1.6, PostgreSQL client
+library 18, and Nokogiri 1.19. More important than the patch numbers is that
+all five commands exit successfully without compiling or downloading another
+dependency.
+
+\section{Exercise 5C: Install the current Rails release}
+
+Install Rails directly through RubyGems:
+
+\begin{lstlisting}[language=sh]
+gem install rails --no-document
+rails --version
+\end{lstlisting}
+
+The second command confirms the release selected by RubyGems. Installing the
+current release also picks up compatibility and security fixes in the Rails
+stack. The \texttt{--no-document} option skips local RI and RDoc generation,
+which is unnecessary inside an application jail and can fail after the gems
+themselves have installed successfully. RubyGems installs the framework and
+its direct dependencies, while the native Nokogiri extension already supplied
+by FreeBSD satisfies that part of the dependency graph. This avoids the
+graphics, browser, deployment, and desktop packages included by the operating
+system's full Rails meta-package.
+
+\section{Checkpoint}
+
+This checkpoint is complete when:
+
+\begin{itemize}
+  \item the package transaction remained close to the reviewed 71~MiB plan;
+  \item \texttt{ruby}, \texttt{gem}, and \texttt{bundle} report versions;
+  \item Ruby loads \texttt{pg} and reports the PostgreSQL 18 client library;
+  \item Ruby loads Nokogiri from the FreeBSD package; and
+  \item \texttt{rails --version} reports the installed Rails release.
+\end{itemize}
+
+The next chapter will generate an API-only application without a JavaScript or
+asset toolchain and connect its development environment to the database jail.

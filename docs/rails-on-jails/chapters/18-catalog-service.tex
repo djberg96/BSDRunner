@@ -1,0 +1,195 @@
+\chapter{Manage Catalog as a Service}
+
+The end-to-end path works, but the catalog still depends on a terminal running
+\texttt{bin/rails server}. We will put that same Puma-backed Rails process
+behind FreeBSD's service interface, then tell Blackship when to start and stop
+it. The service remains disabled in \texttt{rc.conf}: Blackship is the one
+lifecycle owner.
+
+This exercise changes only catalog. Keeping store in its foreground console
+lets us prove the service pattern at one boundary before repeating it.
+
+\section{Exercise 18A: Create the catalog launcher}
+
+In the catalog console, stop the foreground server with \texttt{Ctrl-C}. If the
+prompt belongs to the \texttt{catalog} user, return to \texttt{root}:
+
+\begin{lstlisting}[language=sh]
+exit
+\end{lstlisting}
+
+Create \texttt{/usr/local/sbin/catalog-server}:
+
+\begin{lstlisting}[language=sh]
+vi /usr/local/sbin/catalog-server
+\end{lstlisting}
+
+Enter:
+
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+set -eu
+
+cd /usr/local/www/catalog
+exec /usr/local/bin/ruby bin/rails server \
+  --environment development \
+  --binding 10.17.89.24 \
+  --port 3000
+\end{lstlisting}
+
+Make it executable and validate its shell syntax:
+
+\begin{lstlisting}[language=sh]
+chmod 0555 /usr/local/sbin/catalog-server
+sh -n /usr/local/sbin/catalog-server
+\end{lstlisting}
+
+The launcher deliberately uses the application's \texttt{bin/rails}; that
+script loads the application's bundle and starts Puma. Running it through
+FreeBSD's \texttt{daemon(8)} in the next step supplies detachment, supervision,
+logging, and a stable supervisor PID.
+
+\section{Exercise 18B: Add an rc.d service}
+
+Create \texttt{/usr/local/etc/rc.d/catalog}:
+
+\begin{lstlisting}[language=sh]
+vi /usr/local/etc/rc.d/catalog
+\end{lstlisting}
+
+Enter:
+
+\begin{lstlisting}[language=sh]
+#!/bin/sh
+
+# PROVIDE: catalog
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="catalog"
+desc="Rails catalog API"
+rcvar="catalog_enable"
+
+load_rc_config "$name"
+
+: ${catalog_enable:="NO"}
+: ${catalog_logfile:="/var/log/catalog.log"}
+
+pidfile="/var/run/${name}.pid"
+required_files="/usr/local/sbin/catalog-server"
+command="/usr/sbin/daemon"
+procname="/usr/sbin/daemon"
+command_args="-f -r -P ${pidfile} -u catalog \
+  -o ${catalog_logfile} \
+  /usr/local/sbin/catalog-server"
+
+run_rc_command "$1"
+\end{lstlisting}
+
+Validate and install its executable mode:
+
+\begin{lstlisting}[language=sh]
+sh -n /usr/local/etc/rc.d/catalog
+chmod 0555 /usr/local/etc/rc.d/catalog
+\end{lstlisting}
+
+Do not run \texttt{sysrc catalog\_enable=YES}. The manifest hook will use the
+explicit \texttt{onestart} and \texttt{onestop} actions, which allow Blackship
+to own the process lifecycle without also asking \texttt{/etc/rc} to start it.
+
+Start the new service once and inspect it:
+
+\begin{lstlisting}[language=sh]
+service catalog onestart
+service catalog onestatus
+sockstat -4 -l | grep ':3000'
+tail -n 20 /var/log/catalog.log
+\end{lstlisting}
+
+Expect the status command to report that catalog is running and
+\texttt{sockstat} to show Ruby listening on \texttt{10.17.89.24:3000}.
+
+From the FreeBSD host, confirm that the API still responds:
+
+\begin{lstlisting}[language=sh]
+fetch -qo - http://10.17.89.24:3000/products
+\end{lstlisting}
+
+\section{Exercise 18C: Declare the lifecycle in Blackship}
+
+Open the \texttt{catalog} jail's \textbf{Manifest} editor in BSDRunner. Add this
+line alongside its existing \texttt{name}, \texttt{release}, and \texttt{build}
+settings:
+
+\begin{lstlisting}
+depends_on = ["database"]
+\end{lstlisting}
+
+Append the following tables to the fragment:
+
+\begin{lstlisting}
+[jails.healthcheck]
+enabled = true
+
+[[jails.healthcheck.checks]]
+name = "catalog-api"
+command = "fetch -qo /dev/null http://10.17.89.24:3000/products"
+target = "jail"
+start_period = 30
+interval = 30
+timeout = 5
+retries = 3
+
+[[jails.hooks]]
+phase = "post_start"
+target = "jail"
+command = "/usr/sbin/service"
+args = ["catalog", "onestart"]
+on_failure = "abort"
+
+[[jails.hooks]]
+phase = "pre_stop"
+target = "jail"
+command = "/usr/sbin/service"
+args = ["catalog", "onestop"]
+on_failure = "continue"
+\end{lstlisting}
+
+The completed fragment should resemble Figure~\ref{fig:manifest-editor}. The
+editor operates on \texttt{catalog.toml}, not the shared project manifest, and
+keeps \textbf{Apply} separate from the non-mutating \textbf{Dry Run} action.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]
+    {assets/screenshots/manifest-editor.png}
+  \caption{The per-jail manifest editor showing catalog's dependency, private
+  address, health check, and service hook configuration.}
+  \label{fig:manifest-editor}
+\end{figure}
+
+Run \textbf{Dry run} first. Review the dependency, health-check, and hook
+changes, then choose \textbf{Apply}. Applying the manifest records the desired
+lifecycle but does not replay a \texttt{post\_start} hook against an already
+running jail.
+
+Use BSDRunner to restart \texttt{catalog}. Blackship should run the pre-stop
+hook, restart the jail, and run the post-start hook. Wait for the catalog health
+check to become healthy, then repeat the host request:
+
+\begin{lstlisting}[language=sh]
+fetch -qo - http://10.17.89.24:3000/products
+\end{lstlisting}
+
+Finally, reload the externally published store page. It should still show
+\texttt{FreeBSD Handbook} and \texttt{\$49.99} even though no terminal owns the
+catalog process now.
+
+\section{Checkpoint}
+
+Stop after catalog becomes healthy following the Blackship restart and both
+requests succeed. The catalog console may now be closed. The next exercise will
+apply the same service pattern to store, then the whole application can survive
+managed jail restarts without foreground Rails consoles.

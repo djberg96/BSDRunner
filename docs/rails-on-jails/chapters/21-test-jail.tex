@@ -1,0 +1,72 @@
+\chapter{Create the Test Runner Jail}
+
+The application stack is now managed independently of any terminal. We can add
+one final jail whose only job is to observe the system through nginx. The test
+runner will know the web URL and expected page content, but nothing about the
+store controller, catalog API, or database schema.
+
+This runner enters through nginx's private address. Chapter 17 separately
+proved the host PF boundary from another LAN machine; keeping the automated
+runner on the managed network makes the test repeatable without depending on a
+particular host LAN address or forwarded host port.
+
+\section{Exercise 21A: Create the blank test jail}
+
+Open BSDRunner Jails and choose \textbf{Create a Service Jail}. Use:
+
+\begin{description}
+  \item[starter] Blank FreeBSD;
+  \item[jail name] \texttt{test};
+  \item[FreeBSD release] \texttt{15.1-RELEASE};
+  \item[private address] \texttt{10.17.89.27/24};
+  \item[outbound policy] LAN + Internet;
+  \item[starts at boot] disabled; and
+  \item[inbound exposure] none.
+\end{description}
+
+The broader outbound policy is deliberate. Internet access lets the jail
+install the Ruby test toolchain; private-network access lets it reach nginx at
+\texttt{10.17.89.26}. It still receives no inbound host port.
+
+Review the plan, type \texttt{test} into the confirmation field, and create the
+jail. Wait until it is running.
+
+\section{Exercise 21B: Probe the black-box boundary}
+
+Open the test jail console and request the page using only FreeBSD's base
+tools:
+
+\begin{lstlisting}[language=sh]
+fetch -qo - http://10.17.89.26/ | \
+  grep 'FreeBSD Handbook'
+\end{lstlisting}
+
+Expect the rendered product line. This request originates outside all three
+service jails and crosses nginx, store, catalog, and PostgreSQL.
+
+\section{Exercise 21C: Declare the test dependency}
+
+Open the \texttt{test} jail's \textbf{Manifest} editor. Add this line with its
+top-level jail settings:
+
+\begin{lstlisting}
+depends_on = ["web"]
+\end{lstlisting}
+
+Run \textbf{Dry run}, review the dependency change, then choose
+\textbf{Apply}. The complete declared graph is now:
+
+\begin{lstlisting}
+test -> web -> store -> catalog -> database
+\end{lstlisting}
+
+Bringing up \texttt{test} can therefore bring up every missing dependency in
+order. The test itself remains an ordinary client request rather than gaining
+special access to those services.
+
+\section{Checkpoint}
+
+Stop after the request from the test jail finds \texttt{FreeBSD Handbook} and
+the manifest records its dependency on web. Leave the console open. The next
+exercise will install Ruby and express the same observation as executable
+Minitest assertions.

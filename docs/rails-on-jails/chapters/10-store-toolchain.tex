@@ -1,0 +1,38 @@
+\chapter{Prepare the Store Rails Toolchain}
+
+The blank store jail can reach the catalog API. We can now add Ruby and Rails
+without confusing an application dependency failure with a jail-networking
+failure. The store uses the same small package boundary already proven in the
+catalog jail.
+
+\section{Exercise 10A: Install Ruby and Rails}
+
+Run the following commands as \texttt{root} in the store jail:
+
+\begin{lstlisting}[language=sh]
+pkg install -y ruby rubygem-bundler rubygem-pg \
+  rubygem-nokogiri
+gem install rails --no-document
+\end{lstlisting}
+
+FreeBSD supplies Ruby and Bundler. It also supplies the native PostgreSQL and
+Nokogiri extensions. Rails comes from RubyGems. The \texttt{--no-document}
+option avoids generating unneeded RI and RDoc files inside the jail. Exact
+patch versions are deliberately not part of this exercise; the goal is a
+working application stack, not matching the catalog jail gem for gem.
+
+Verify the two capabilities the store application needs:
+
+\begin{lstlisting}[language=sh]
+rails --version
+ruby -rpg -e 'puts PG.library_version'
+\end{lstlisting}
+
+The first command should print the installed Rails release. The second should
+print a PostgreSQL client-library version without raising an exception.
+
+\section{Checkpoint}
+
+Stop when both verification commands succeed. Do not generate the application
+yet. The next exercise will create a dedicated \texttt{store} account and a
+browser-facing Rails application owned by that account.

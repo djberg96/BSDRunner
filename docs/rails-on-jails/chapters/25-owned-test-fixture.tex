@@ -1,0 +1,137 @@
+\chapter{Let the Test Own Its Product}
+
+The black-box test currently depends on the FreeBSD Handbook record that we
+created by hand. That is useful while learning the path through the system,
+but it is weak test isolation: deleting or renaming that old record would make
+an otherwise-correct deployment fail.
+
+We will make the test create a unique product through the real catalog API,
+observe it through nginx and store, and delete it afterward. The fixture will
+therefore use the same database and HTTP boundaries as the application rather
+than reaching directly into PostgreSQL.
+
+\section{Exercise 25A: Replace the static fixture}
+
+Open a root console in the \texttt{test} jail and edit the existing test:
+
+\begin{lstlisting}[language=sh]
+vi /usr/local/tests/store_e2e_test.rb
+\end{lstlisting}
+
+Replace its contents with:
+
+\begin{lstlisting}[language=Ruby]
+require "json"
+require "minitest/autorun"
+require "net/http"
+require "uri"
+
+class StoreEndToEndTest < Minitest::Test
+  STORE_URL = ENV.fetch(
+    "STORE_URL", "http://10.17.89.26/"
+  )
+  CATALOG_URL = ENV.fetch(
+    "CATALOG_URL", "http://10.17.89.24:3000"
+  )
+
+  def setup
+    token = [
+      Process.pid, Time.now.to_i, rand(1_000_000)
+    ].join("-")
+    @sku = "E2E-#{token}"
+    @name = "End-to-End Product #{token}"
+
+    uri = URI.join("#{CATALOG_URL}/", "products")
+    request = Net::HTTP::Post.new(uri)
+    request["Content-Type"] = "application/json"
+    request.body = JSON.generate(
+      product: {
+        sku: @sku,
+        name: @name,
+        price_cents: 12_345
+      }
+    )
+
+    response = perform(uri, request)
+    assert_equal "201", response.code, response.body
+    @product_id = JSON.parse(response.body).fetch("id")
+  end
+
+  def teardown
+    return unless @product_id
+
+    uri = URI.join(
+      "#{CATALOG_URL}/", "products/#{@product_id}"
+    )
+    response = perform(uri, Net::HTTP::Delete.new(uri))
+    assert_equal "204", response.code, response.body
+  end
+
+  def test_product_is_visible_through_the_web_edge
+    uri = URI(STORE_URL)
+    response = perform(uri, Net::HTTP::Get.new(uri))
+
+    assert_equal "200", response.code, response.body
+    assert_includes response.body, @name
+    assert_includes response.body, @sku
+    assert_includes response.body, "$123.45"
+  end
+
+  private
+
+  def perform(uri, request)
+    Net::HTTP.start(
+      uri.host,
+      uri.port,
+      open_timeout: 2,
+      read_timeout: 5
+    ) do |http|
+      http.request(request)
+    end
+  end
+end
+\end{lstlisting}
+
+The process ID, current time, and random suffix make the name and SKU distinct
+for each invocation. The exact values do not matter; the test remembers them
+and looks for those values in the final HTML.
+
+The catalog request belongs in \texttt{setup} because the product must exist
+before store renders the page. Minitest runs \texttt{teardown} after the test
+even when an assertion fails, so the corresponding API deletion is the best
+place for normal cleanup. If creation fails before an ID is returned, the
+guard prevents a meaningless delete request.
+
+\section{Exercise 25B: Check the Ruby syntax}
+
+Inside the test jail, ask Ruby to parse the file without running it:
+
+\begin{lstlisting}[language=sh]
+ruby -c /usr/local/tests/store_e2e_test.rb
+\end{lstlisting}
+
+Expect \texttt{Syntax OK}. This catches copying mistakes without creating a
+catalog product or making a request through nginx.
+
+\section{Exercise 25C: Run the owned-fixture test}
+
+Leave the jail console and invoke the host runner:
+
+\begin{lstlisting}[language=sh]
+mdo /usr/local/sbin/rails-on-jails-test
+\end{lstlisting}
+
+The runner starts any missing jails before executing the updated file. Expect
+one run, nine assertions, no failures, and no errors. Those assertions cover
+catalog creation, the rendered response, and catalog deletion.
+
+Run the same command a second time. It should pass with a different generated
+name and SKU. This demonstrates that the test does not depend on a record left
+by its previous run.
+
+\section{Checkpoint}
+
+Stop after two consecutive host-runner invocations pass. The test now owns the
+data that determines its result and cleans up through the public catalog API.
+The original FreeBSD Handbook can remain as demonstration data, but it is no
+longer part of the automated test contract.

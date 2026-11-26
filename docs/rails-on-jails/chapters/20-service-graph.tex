@@ -1,0 +1,64 @@
+\chapter{Complete the Service Graph}
+
+Catalog now depends on the database, and store depends on catalog. The last
+undeclared edge is nginx's dependency on store. Adding it gives Blackship the
+complete startup order and lets the web jail's health check validate rendered
+application content rather than only the nginx process.
+
+\section{Exercise 20A: Declare the web dependency}
+
+Open the \texttt{web} jail's \textbf{Manifest} editor. Add this line with its
+top-level jail settings, before the network table:
+
+\begin{lstlisting}
+depends_on = ["store"]
+\end{lstlisting}
+
+Keep the existing \texttt{nginx} process check. Append a second check:
+
+\begin{lstlisting}
+[[jails.healthcheck.checks]]
+name = "web-page"
+command = "fetch -qo - http://10.17.89.26/ | grep -q 'FreeBSD Handbook'"
+target = "jail"
+start_period = 30
+interval = 30
+timeout = 5
+retries = 3
+\end{lstlisting}
+
+The first check distinguishes a stopped nginx process from other failures. The
+second crosses nginx, store, catalog, and PostgreSQL and fails unless the final
+HTML contains the expected product.
+
+Run \textbf{Dry run}, review the dependency and health-check changes, then
+choose \textbf{Apply}. Restart web through BSDRunner. If the Restart action is
+unavailable, use Stop followed by Start.
+
+\section{Exercise 20B: Verify both boundaries}
+
+From the FreeBSD host, verify the private nginx endpoint:
+
+\begin{lstlisting}[language=sh]
+fetch -qo - http://10.17.89.26/ | \
+  grep 'FreeBSD Handbook'
+\end{lstlisting}
+
+From another device on the LAN, reload the published URL from Chapter 17. It
+should still show \texttt{FreeBSD Handbook} for \texttt{\$49.99}.
+
+Blackship now knows the complete dependency chain:
+
+\begin{lstlisting}
+web -> store -> catalog -> database
+\end{lstlisting}
+
+Starting \texttt{web} can start missing dependencies in order. Stopping a
+lower-level service can also account for its dependents rather than leaving
+the public edge pointed at an unavailable application.
+
+\section{Checkpoint}
+
+Stop after the private and published requests both succeed following the
+managed web restart. The next exercise will create an isolated test runner that
+treats nginx as a black box and asserts the externally observable result.

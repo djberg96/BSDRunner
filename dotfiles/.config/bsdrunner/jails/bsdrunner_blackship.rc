@@ -11,15 +11,24 @@ command="/usr/local/bin/blackship"
 start_cmd="bsdrunner_blackship_start"
 stop_cmd="bsdrunner_blackship_stop"
 
+bsdrunner_blackship_run()
+{
+    for config_path in $(ls -1r /usr/local/etc/bsdrunner/blackship.d/*.toml 2>/dev/null); do
+        set -- --config "$config_path" "$@"
+    done
+    set -- --config /usr/local/etc/bsdrunner/blackship.toml "$@"
+    /usr/local/bin/blackship "$@"
+}
+
 bsdrunner_blackship_start()
 {
-    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive setup || return 1
-    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive autostart
+    bsdrunner_blackship_run --non-interactive setup || return 1
+    bsdrunner_blackship_run --non-interactive autostart
 }
 
 bsdrunner_blackship_stop()
 {
-    /usr/local/bin/blackship --config /usr/local/etc/bsdrunner/blackship.toml --non-interactive down --all
+    bsdrunner_blackship_run --non-interactive down --all
 }
 
 load_rc_config "$name"

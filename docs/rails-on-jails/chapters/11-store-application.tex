@@ -1,0 +1,78 @@
+\chapter{Generate the Store Application}
+
+The store will render HTML for a browser, so it is not an API-only Rails
+application. We will still use Rails' minimal preset: it retains controllers,
+views, Active Record, and the asset pipeline while omitting JavaScript,
+Hotwire, mail, jobs, deployment tooling, and most developer extras this
+experiment does not need.
+
+\section{Exercise 11A: Create the application account}
+
+From the store jail's root console, create a dedicated group, user, and
+application directory:
+
+\begin{lstlisting}[language=sh]
+pw groupadd store
+pw useradd store -g store -m -s /bin/sh \
+  -c "Store Rails application"
+install -d -o store -g store -m 0755 \
+  /usr/local/www/store
+\end{lstlisting}
+
+Confirm the ownership boundary before generating files:
+
+\begin{lstlisting}[language=sh]
+id store
+stat -f '%Su:%Sg %Sp %N' /usr/local/www/store
+\end{lstlisting}
+
+The directory should belong to \texttt{store:store}.
+
+\section{Exercise 11B: Generate a minimal full-stack application}
+
+Run the generator as the application user:
+
+\begin{lstlisting}[language=sh]
+su -l store -c 'cd /usr/local/www/store && \
+  rails new . \
+    --minimal \
+    --database=postgresql \
+    --skip-bundle \
+    --skip-git'
+\end{lstlisting}
+
+Unlike the catalog generator, this command does not use \texttt{--api}.
+The store therefore keeps Action View and can render HTML. The
+\texttt{--minimal} preset implies the skips for JavaScript, Hotwire, Docker,
+Kamal, Solid Queue, and several other optional subsystems.
+
+Verify that the generated files still belong to the service account:
+
+\begin{lstlisting}[language=sh]
+stat -f '%Su:%Sg %Sp %N' \
+  /usr/local/www/store/Gemfile
+\end{lstlisting}
+
+\section{Exercise 11C: Satisfy the generated bundle}
+
+The minimal full-stack application adds Puma and Propshaft. Its generated
+development and test group also retains the Debug gem. Install all three as
+prebuilt FreeBSD gems, then resolve the lockfile without downloading or
+compiling anything:
+
+\begin{lstlisting}[language=sh]
+pkg install -y rubygem-puma rubygem-propshaft \
+  rubygem-debug
+su -l store -c \
+  'cd /usr/local/www/store && bundle lock --local'
+su -l store -c \
+  'cd /usr/local/www/store && bundle check'
+\end{lstlisting}
+
+The final command should report that the bundle is satisfied.
+
+\section{Checkpoint}
+
+Stop when \texttt{bundle check} succeeds. The store application exists but is
+not yet connected to PostgreSQL or the catalog service. Those integrations
+will be added separately so each boundary can be tested on its own.

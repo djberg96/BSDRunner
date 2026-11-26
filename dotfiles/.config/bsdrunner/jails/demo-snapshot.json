@@ -61,8 +61,8 @@
   "blackship": {
     "available": true,
     "compatible": true,
-    "minimum_version": "0.5.0",
-    "version": "0.5.0",
+    "minimum_version": "0.6.2",
+    "version": "0.6.2",
     "output_schema_version": 1,
     "configured": true,
     "rctl_enabled": true,

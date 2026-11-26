@@ -1,0 +1,84 @@
+\chapter{Create the Store Jail}
+
+The catalog API is now reachable on its private address. We can introduce the
+caller: a user-facing Rails application named \texttt{store}. It receives no
+inbound host port because the future \texttt{web} jail will be the system's
+only external entry point.
+
+\section{The proposed service}
+
+Use the following values:
+
+\begin{description}
+  \item[starter] Blank;
+  \item[jail name] \texttt{store};
+  \item[FreeBSD release] \texttt{15.1-RELEASE};
+  \item[private address] \texttt{10.17.89.25/24};
+  \item[outbound policy] Internet only;
+  \item[starts at boot] disabled; and
+  \item[inbound exposure] none.
+\end{description}
+
+The address is the next unused recommendation after \texttt{database} and
+\texttt{catalog}. Internet access is temporary support for package and gem
+installation, not permission for inbound traffic.
+
+\section{Exercise 9A: Create the blank jail}
+
+Open BSDRunner Jails and choose \textbf{Create a Service Jail}, then select the
+\textbf{Blank} starter. Review the familiar five concepts:
+
+\begin{enumerate}
+  \item reuse the existing Blackship project and ZFS storage;
+  \item select \texttt{15.1-RELEASE};
+  \item use \texttt{10.17.89.25/24};
+  \item name the jail \texttt{store}, select \textbf{Internet only}, and leave
+    \textbf{Start at boot} disabled; and
+  \item verify that the plan contains no inbound port forward.
+\end{enumerate}
+
+Type \texttt{store} into the confirmation field and create the jail. Once the
+operation completes, start it and open its console.
+
+\section{Checkpoint: The blank jail}
+
+Stop after confirming that the store jail is running at
+\texttt{10.17.89.25}. Do not install Rails yet. The next exercise will first
+probe the catalog service from this otherwise blank jail, proving the private
+application-to-application route before adding another Ruby stack.
+
+\section{Exercise 9B: Call the catalog from the store jail}
+
+The catalog server must be running while we perform the probe. In the catalog
+jail console, become the application user and start Puma on the jail's private
+address:
+
+\begin{lstlisting}[language=sh]
+su -l catalog
+cd /usr/local/www/catalog
+bin/rails server --binding 10.17.89.24 --port 3000
+\end{lstlisting}
+
+Leave that console open. In the store jail console, first confirm that the TCP
+port is reachable:
+
+\begin{lstlisting}[language=sh]
+nc -vz -w 3 10.17.89.24 3000
+\end{lstlisting}
+
+Then make an HTTP request with \texttt{fetch}, which is part of the FreeBSD
+base system:
+
+\begin{lstlisting}[language=sh]
+fetch -qo - http://10.17.89.24:3000/products
+\end{lstlisting}
+
+The first command should report a successful TCP connection. The second should
+print the catalog's JSON product array. Together they prove that the store jail
+can route to the catalog jail and that the Rails API answers over HTTP.
+
+\section{Checkpoint: The private API route}
+
+Keep the store console open, but stop here before installing its Rails
+application. The next exercise will build the user-facing application only
+after its dependency has been observed from inside the correct caller jail.

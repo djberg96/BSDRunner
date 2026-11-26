@@ -73,6 +73,16 @@ grep -Fx 'service pf reload' "$command_log" >/dev/null || fail "policy apply sho
 grep -Fx 'pfctl -k 10.0.0.20' "$command_log" >/dev/null || fail "policy apply should clear existing jail states"
 pass "PF backend persists, renders, reloads, and activates a jail policy"
 
+printf '%s\n' '# stale output from an older renderer' >>"$config_file"
+reloads_before="$(grep -Fc 'service pf reload' "$command_log")"
+run_backend apply >"$test_root/renderer-drift.json"
+reloads_after="$(grep -Fc 'service pf reload' "$command_log")"
+if grep -Fq '# stale output from an older renderer' "$config_file"; then
+    fail "apply should replace managed PF output when renderer behavior changes"
+fi
+[ "$reloads_after" -gt "$reloads_before" ] || fail "renderer changes should reload PF even when friendly settings are unchanged"
+pass "PF backend reapplies changed renderer output"
+
 invalid_output="$test_root/invalid.json"
 if run_backend jail-policy web 10.0.0.20 unrestricted 192.168.1.254 >"$invalid_output"; then
     fail "invalid policies should be rejected"

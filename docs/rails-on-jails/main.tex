@@ -1,0 +1,94 @@
+\documentclass[11pt,oneside]{book}
+
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\definecolor{codebackground}{RGB}{245,247,250}
+\definecolor{codeframe}{RGB}{205,211,220}
+\definecolor{coverpaper}{RGB}{248,221,186}
+\definecolor{coverink}{RGB}{35,54,61}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebackground},
+  frame=single,
+  rulecolor=\color{codeframe},
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false
+}
+
+\title{Rails on Jails\\[0.5em]\large End-to-End Testing on FreeBSD}
+\author{The BSDRunner Project}
+\date{\today}
+
+\begin{document}
+
+\frontmatter
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+  \pagecolor{coverpaper}
+  \color{coverink}
+  \centering
+  \vspace*{0.35in}
+
+  {\fontsize{35.83}{42}\selectfont\bfseries Rails on Jails\par}
+  \vspace{0.25em}
+  {\Large End-to-End Testing on FreeBSD\par}
+  \vspace{0.3in}
+
+  \includegraphics[
+    width=0.92\textwidth,
+    height=0.66\textheight,
+    keepaspectratio,
+    trim=0 0 0 340,
+    clip
+  ]{assets/rails-on-jails-cover.png}
+
+  \vfill
+  {\large The BSDRunner Project\par}
+  \vspace{0.35em}
+  {\normalsize \today\par}
+\end{titlepage}
+\nopagecolor
+\color{black}
+\hypersetup{pageanchor=true}
+\tableofcontents
+
+\mainmatter
+\include{chapters/01-introduction}
+\include{chapters/02-inventory}
+\include{chapters/03-database-jail}
+\include{chapters/04-database-client}
+\include{chapters/05-catalog-toolchain}
+\include{chapters/06-catalog-application}
+\include{chapters/07-catalog-database}
+\include{chapters/08-catalog-api}
+\include{chapters/09-store-jail}
+\include{chapters/10-store-toolchain}
+\include{chapters/11-store-application}
+\include{chapters/12-store-database}
+\include{chapters/13-store-catalog-client}
+\include{chapters/14-live-integration-test}
+\include{chapters/15-web-jail}
+\include{chapters/16-web-proxy}
+\include{chapters/17-publish-web}
+\include{chapters/18-catalog-service}
+\include{chapters/19-store-service}
+\include{chapters/20-service-graph}
+\include{chapters/21-test-jail}
+\include{chapters/22-black-box-test}
+\include{chapters/23-failure-injection}
+\include{chapters/24-host-test-command}
+\include{chapters/25-owned-test-fixture}
+\include{chapters/26-host-exit-status}
+\include{chapters/27-conclusion}
+
+\appendix
+\include{appendices/01-without-bsdrunner}
+
+\end{document}

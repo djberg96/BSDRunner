@@ -1,0 +1,78 @@
+\chapter{Adapting the Workflow without BSDRunner}
+
+The Rails, PostgreSQL, nginx, and Minitest boundaries in this book do not
+depend on a graphical interface. The provisioning exercises do. BSDRunner
+adds guarded workflows around Blackship and the host firewall; removing it
+means accepting responsibility for those workflows rather than merely changing
+the spelling of a few commands.
+
+This appendix is a translation guide, not a parallel tutorial. A reader using
+raw Blackship should first create an equivalent private network and five jail
+definitions, then resume the application exercises only after the addresses,
+outbound policies, and dependency graph match the book.
+
+\section{Action-to-concept mapping}
+
+\begin{description}
+  \item[Create a Service Jail] Write and validate a jail definition, build its
+    root, and run \texttt{blackship up NAME}. BSDRunner's starter also installs
+    packages, applies service-specific settings, and guards generated
+    credentials.
+  \item[Manifest editor] Edit the appropriate per-jail TOML fragment. The
+    shared manifest owns project storage and network definitions; a fragment
+    owns one jail's desired state.
+  \item[Dry Run] Use \texttt{blackship eva --dry-run NAME} to classify the
+    difference between the installed definition and a running jail before
+    applying a hot update or restart.
+  \item[Apply] Validate and install the candidate TOML, then use
+    \texttt{blackship eva NAME} for supported live changes. Restart-required
+    changes must go through the dependency-aware restart path.
+  \item[Start, stop, restart] Use \texttt{blackship up},
+    \texttt{blackship down}, and \texttt{blackship restart}. Blackship expands
+    dependencies and dependents; do not substitute unrelated \texttt{jail(8)}
+    commands and expect the same graph behavior.
+  \item[Console and logs] Use \texttt{blackship console NAME} and
+    \texttt{blackship logs NAME}. The Rails rc.d services also keep their own
+    application logs inside the catalog and store jails.
+  \item[Health] Use \texttt{blackship health NAME} for a one-shot result or
+    add \texttt{--watch} for continuous monitoring.
+  \item[Port forwarding] Use \texttt{blackship expose} only after deciding
+    which host interface and port should be reachable. BSDRunner additionally
+    renders, validates, installs, and rolls back its managed PF profile.
+\end{description}
+
+\section{Loading the split manifest}
+
+Blackship accepts repeated \texttt{--config} arguments. A POSIX shell can
+assemble the shared manifest and every jail fragment without relying on shell
+arrays:
+
+\begin{lstlisting}[language=sh]
+set -- --config /usr/local/etc/bsdrunner/blackship.toml
+for fragment in /usr/local/etc/bsdrunner/blackship.d/*.toml; do
+  [ -f "$fragment" ] || continue
+  set -- "$@" --config "$fragment"
+done
+
+blackship "$@" check
+blackship "$@" eva --dry-run catalog
+blackship "$@" health catalog
+\end{lstlisting}
+
+The paths retain BSDRunner's project layout because that is the layout built
+in this book. A standalone Blackship project may use different paths, but the
+ordering rule is the same: load the shared configuration first and the
+per-jail fragments afterward.
+
+\section{What must be replaced deliberately}
+
+Without BSDRunner, provide your own equivalent for typed destructive-action
+confirmation, atomic manifest installation, PF validation and rollback,
+one-time credential handling, address-collision checks, and readable operation
+logs. Those protections are part of the tutorial's operating assumptions, not
+cosmetic UI details.
+
+Once an equivalent jail graph is healthy, Chapters 5 through 14 apply directly
+to the two Rails applications, Chapters 16 through 20 apply to the web and
+service boundaries, and Chapters 22 through 26 apply to the external test and
+its automation contract.

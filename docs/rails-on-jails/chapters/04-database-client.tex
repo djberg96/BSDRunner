@@ -1,0 +1,160 @@
+\chapter{Prove the Database Boundary from Another Jail}
+
+The database health check proves that PostgreSQL is alive inside its own jail.
+It does not prove that another service can route to it, reach port 5432, resolve
+package repositories, authenticate, or complete a query. This chapter adds the
+future catalog service as a blank client jail and checks those layers one at a
+time.
+
+The catalog jail is deliberately not a Rails application yet. Keeping it small
+lets us diagnose the network and database boundary before Ruby, Bundler, Rails,
+and application configuration add more possible causes of failure.
+
+\section{The proposed client}
+
+Use these values for the second jail:
+
+\begin{description}
+  \item[starter] Blank;
+  \item[jail name] \texttt{catalog};
+  \item[FreeBSD release] \texttt{15.1-RELEASE};
+  \item[private address] \texttt{10.17.89.24/24};
+  \item[outbound policy] Internet only;
+  \item[starts at boot] disabled; and
+  \item[inbound exposure] none.
+\end{description}
+
+Internet-only access is needed temporarily to install the PostgreSQL client and,
+in the next chapter, the Ruby toolchain. It does not create an inbound port
+forward. The catalog and database jails share BSDRunner's managed Blackship
+network, so the catalog can address PostgreSQL directly at
+\texttt{10.17.89.23:5432}.
+
+\section{Exercise 4A: Create the blank catalog jail}
+
+Open BSDRunner Jails and choose \textbf{Create a Service Jail}, then select the
+\textbf{Blank} starter. Review the same five concepts used for the database
+jail:
+
+\begin{enumerate}
+  \item reuse the existing Blackship project and ZFS storage;
+  \item select \texttt{15.1-RELEASE};
+  \item keep the proposed address \texttt{10.17.89.24/24};
+  \item name the jail \texttt{catalog}, select \textbf{Internet only}, and
+    leave \textbf{Start at boot} disabled; and
+  \item confirm that the plan has no inbound port forward before creating it.
+\end{enumerate}
+
+If the jail already exists from an earlier session, do not create a duplicate.
+Open its detail view, confirm the same address and policy, start it if necessary,
+and open its console.
+
+\section{Exercise 4B: Test only the PostgreSQL port}
+
+From the catalog jail's console, make a bounded TCP connection attempt:
+
+\begin{lstlisting}[language=sh]
+nc -vz -w 3 10.17.89.23 5432
+\end{lstlisting}
+
+The expected result ends with:
+
+\begin{lstlisting}
+Connection to 10.17.89.23 5432 port [tcp/postgresql] succeeded!
+\end{lstlisting}
+
+This result proves three things: the catalog jail has a route to the database
+jail, PostgreSQL is listening on its private address, and no intervening filter
+rejects the connection. It does not test a database name, user, password, or
+SQL query.
+
+Stop here if the connection times out or is refused. Check that both jails are
+running and still have the addresses assigned in this tutorial before changing
+PostgreSQL authentication or installing application software.
+
+\section{Exercise 4C: Install a database client}
+
+Still inside the catalog jail, verify DNS before asking the package manager to
+bootstrap or download anything:
+
+\begin{lstlisting}[language=sh]
+drill pkg.FreeBSD.org
+\end{lstlisting}
+
+The response should contain \texttt{rcode: NOERROR} and identify the upstream
+resolver selected by BSDRunner. In this lab that resolver is
+\texttt{192.168.1.254}; it is not a DNS service running inside the jail.
+
+Install only the PostgreSQL client tools:
+
+\begin{lstlisting}[language=sh]
+pkg install -y postgresql18-client
+\end{lstlisting}
+
+This is an exploratory installation. Once the catalog application shape is
+known, its packages and gems will move into a repeatable build definition.
+
+If package bootstrap reports a resolver failure, do not replace the host's DNS
+configuration. Inspect the jail first:
+
+\begin{lstlisting}[language=sh]
+cat /etc/resolv.conf
+route -n get default
+\end{lstlisting}
+
+The resolver should match the one selected by BSDRunner and the default gateway
+should be \texttt{10.17.89.1}. On the host, the read-only command
+\texttt{ifconfig blackship0 inet} should show that gateway with the
+\texttt{/24} prefix. A guarded jail start runs \texttt{blackship setup}, which
+reconciles an existing bridge as well as creating a missing one.
+
+\section{Exercise 4D: Authenticate and identify both endpoints}
+
+Connect from the catalog jail with the temporary starter credential captured
+in Chapter 3:
+
+\begin{lstlisting}[language=sh]
+psql -h 10.17.89.23 -U app -d appdb
+\end{lstlisting}
+
+Enter the password at the prompt. Do not put it on the command line or in this
+book. At the \texttt{appdb=>} prompt, run:
+
+\begin{lstlisting}[language=SQL]
+SELECT
+  current_database(),
+  current_user,
+  inet_client_addr(),
+  inet_server_addr();
+\end{lstlisting}
+
+Verify the four returned values:
+
+\begin{description}
+  \item[database] \texttt{appdb};
+  \item[user] \texttt{app};
+  \item[client address] \texttt{10.17.89.24}; and
+  \item[server address] \texttt{10.17.89.23}.
+\end{description}
+
+Exit with \texttt{\textbackslash q}. The endpoint addresses are important:
+they demonstrate that the authenticated session crossed directly from the
+catalog jail to PostgreSQL over the managed private network rather than through
+an inbound host port forward.
+
+\section{Checkpoint}
+
+The database boundary is ready for application work when:
+
+\begin{itemize}
+  \item the catalog jail is running at \texttt{10.17.89.24};
+  \item neither catalog nor database has an inbound port forward;
+  \item a bounded TCP probe reaches database port 5432;
+  \item the catalog jail can resolve and download FreeBSD packages; and
+  \item PostgreSQL reports the expected database, user, client address, and
+    server address.
+\end{itemize}
+
+These checks prove the infrastructure boundary, not the application. The next
+chapter will install a Ruby toolchain and turn the blank catalog jail into a
+minimal Rails API while keeping its database ownership explicit.

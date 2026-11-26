@@ -1,0 +1,64 @@
+\chapter{Publish the Web Edge}
+
+The complete application chain works on the managed private network. We can
+now make one deliberate inbound opening: host TCP port 8080 will forward to
+port 80 in the web jail. The store, catalog, and database remain unpublished.
+
+\section{Exercise 17A: Review the exposure}
+
+In BSDRunner Jails, select \texttt{web} and open its \textbf{Port forwarding}
+section. Before adding anything, confirm that no existing rule uses host TCP
+port 8080. Port-forward pairs must be unique across all managed jails.
+
+Enter:
+
+\begin{description}
+  \item[protocol] TCP;
+  \item[host port] 8080; and
+  \item[jail port] 80.
+\end{description}
+
+Choose \textbf{Add port forward}. Review the warning that this exposes the
+service on the host's external interface, then confirm the operation. BSDRunner
+will render and validate the PF profile before reloading it; a validation or
+reload failure restores the previous profile.
+
+The detail view should now show a mapping equivalent to:
+
+\begin{lstlisting}
+8080/TCP -> 10.17.89.26:80
+\end{lstlisting}
+
+\section{Exercise 17B: Test from outside the host}
+
+The redirect is attached to the host's external interface. A request to
+\texttt{localhost} does not test that path. Determine the host's LAN address:
+
+\begin{lstlisting}[language=sh]
+route -n get default | awk '/interface:/ {print $2}'
+ifconfig INTERFACE inet
+\end{lstlisting}
+
+Replace \texttt{INTERFACE} with the first command's result. From another device
+on the same LAN, request:
+
+\begin{lstlisting}[language=sh]
+curl -i http://HOST_LAN_IP:8080/
+\end{lstlisting}
+
+If the client device has no \texttt{curl}, open the same URL in its browser.
+Expect a successful response containing \texttt{FreeBSD Handbook} and
+\texttt{\$49.99}.
+
+This request crosses every deployed boundary:
+
+\begin{lstlisting}
+LAN client -> host PF -> web -> store -> catalog -> database
+\end{lstlisting}
+
+\section{Checkpoint}
+
+Stop after the external request succeeds. Confirm that \texttt{web} is the only
+jail with an inbound port forward. The next exercise will replace the catalog's
+foreground Rails process with a FreeBSD service whose lifecycle is declared in
+its Blackship manifest.

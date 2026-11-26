@@ -1,0 +1,105 @@
+\chapter{Connect Rails to the Database Jail}
+
+The catalog application and PostgreSQL have already been tested independently.
+Now we will make the Rails process cross the jail boundary. To keep the tutorial
+moving, this first application boot uses the starter \texttt{appdb}/\texttt{app}
+credential proven in Chapter 4. More specialized roles can be introduced when
+the applications need distinct ownership or test data lifecycles.
+
+\section{Exercise 7A: Store the database password outside the application}
+
+As \texttt{root} in the catalog jail, create a password file readable by the
+service account:
+
+\begin{lstlisting}[language=sh]
+install -o root -g catalog -m 0640 /dev/null \
+  /usr/local/etc/catalog-db-password
+vi /usr/local/etc/catalog-db-password
+\end{lstlisting}
+
+Paste only the starter database password, save the file, and verify its
+boundary:
+
+\begin{lstlisting}[language=sh]
+stat -f '%Su:%Sg %Sp %N' \
+  /usr/local/etc/catalog-db-password
+\end{lstlisting}
+
+The result should begin with \texttt{root:catalog -rw-r-----}. The password is
+not stored in the Rails tree, its command history, or this tutorial.
+
+\section{Exercise 7B: Configure the development connection}
+
+Open \texttt{/usr/local/www/catalog/config/database.yml} as the application
+owner. Replace its generated \texttt{development} block with:
+
+\begin{lstlisting}[language=sh]
+su -l catalog
+cd /usr/local/www/catalog
+vi config/database.yml
+\end{lstlisting}
+
+\begin{lstlisting}
+development: &dev
+  <<: *default
+  host: 10.17.89.23
+  port: 5432
+  database: appdb
+  username: app
+  password: <%= File.read(
+    "/usr/local/etc/catalog-db-password").strip %>
+\end{lstlisting}
+
+The network coordinates are ordinary configuration; only the password is kept
+in the protected file.
+
+\section{Exercise 7C: Cross the boundary through Rails}
+
+Run one query through Active Record as the service account:
+
+\begin{lstlisting}[language=sh]
+bin/rails runner 'p ActiveRecord::Base.connection.\
+select_one("SELECT current_database(), current_user, \
+inet_client_addr(), inet_server_addr()")'
+\end{lstlisting}
+
+The returned hash should identify \texttt{appdb}, role \texttt{app}, client
+\texttt{10.17.89.24}, and server \texttt{10.17.89.23}. Unlike the earlier
+\texttt{psql} probe, this proves that the generated Rails application, its
+Bundler environment, the \texttt{pg} adapter, and the private jail network all
+work together. Run \texttt{exit} when finished to return to the root console.
+
+\section{Exercise 7D: Add an isolated test database}
+
+Rails tests create, migrate, and clear their database. They must not use the
+development database. Open the database jail's console and create a second
+database owned by the existing \texttt{app} role:
+
+\begin{lstlisting}[language=sh]
+su -l postgres -c 'createdb --owner=app appdb_test'
+\end{lstlisting}
+
+Return to the catalog jail, switch to the \texttt{catalog} account, and replace
+the generated \texttt{test} block in \texttt{config/database.yml} with:
+
+\begin{lstlisting}
+test:
+  <<: *dev
+  database: appdb_test
+\end{lstlisting}
+
+The \texttt{\&dev} anchor carries the shared server, role, and password-file
+settings into the test configuration. The explicit \texttt{database:
+appdb\_test} override is essential: without it, tests would inherit
+\texttt{appdb} and could erase development data.
+
+Prepare the test schema explicitly before running the suite:
+
+\begin{lstlisting}[language=sh]
+RAILS_ENV=test bin/rails db:prepare
+bin/rails test
+\end{lstlisting}
+
+Keeping \texttt{appdb} and \texttt{appdb\_test} separate allows development
+data to survive repeated test runs while both databases remain behind the same
+private PostgreSQL boundary.
