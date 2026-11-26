@@ -27,7 +27,8 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/23-failure-injection.tex \
 	chapters/24-host-test-command.tex \
 	chapters/25-owned-test-fixture.tex \
-	chapters/26-host-exit-status.tex
+	chapters/26-host-exit-status.tex \
+	chapters/27-conclusion.tex
 
 .PHONY: all pdf clean
 

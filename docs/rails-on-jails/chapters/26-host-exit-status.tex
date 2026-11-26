@@ -22,10 +22,16 @@ one unhealthy application process.
 
 \section{Exercise 26B: Observe the host failure status}
 
-From the host, run the normal wrapper:
+From the host, run the wrapper inside an explicit POSIX shell that records its
+status immediately:
 
 \begin{lstlisting}[language=sh]
-mdo /usr/local/sbin/rails-on-jails-test
+sh -c '
+  mdo /usr/local/sbin/rails-on-jails-test
+  code=$?
+  echo "exit status: $code"
+  exit "$code"
+'
 \end{lstlisting}
 
 Blackship will find the catalog jail already running, so \texttt{up} does not
@@ -36,15 +42,12 @@ through nginx. The readiness loop retries for about one minute, then prints:
 web edge did not become ready within 60 seconds
 \end{lstlisting}
 
-At the next \texttt{tcsh} prompt, inspect the preceding command's status:
-
-\begin{lstlisting}[language=sh]
-echo $status
-\end{lstlisting}
-
-Expect \texttt{1}. In a Bourne-compatible shell such as \texttt{sh}, the
-equivalent variable is \texttt{\$?}. The nonzero result is the signal that
-causes an automated job to fail.
+Expect \texttt{exit status: 1}. Capturing \texttt{\$?} before running
+\texttt{echo} is important because every subsequent command replaces the
+shell's previous status. The explicit \texttt{sh -c} also makes this command
+independent of the syntax used by the interactive host shell. Its final
+\texttt{exit} preserves the same nonzero result for a calling automation
+system.
 
 No test product needs cleanup in this path. The wrapper waits for a successful
 web response before starting Minitest, so fixture creation never begins while
@@ -59,16 +62,21 @@ service catalog onestart
 service catalog onestatus
 \end{lstlisting}
 
-Run the unchanged host command again, then inspect its status immediately:
+Run the unchanged host command again with the same status wrapper:
 
 \begin{lstlisting}[language=sh]
-mdo /usr/local/sbin/rails-on-jails-test
-echo $status
+sh -c '
+  mdo /usr/local/sbin/rails-on-jails-test
+  code=$?
+  echo "exit status: $code"
+  exit "$code"
+'
 \end{lstlisting}
 
-Expect the nine-assertion Minitest pass followed by status \texttt{0}. The
-wrapper now demonstrates both outcomes required by automation: a broken live
-dependency produces nonzero, and the restored end-to-end path produces zero.
+Expect the nine-assertion Minitest pass followed by \texttt{exit status: 0}.
+The wrapper now demonstrates both outcomes required by automation: a broken
+live dependency produces nonzero, and the restored end-to-end path produces
+zero.
 
 \section{Checkpoint}
 

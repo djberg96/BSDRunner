@@ -23,7 +23,8 @@ make clean
 
 ## Tutorial approach
 
-The tutorial grows along with the working system. Each chapter introduces one
-small concept, asks the reader to complete an exercise, and gives an observable
-result to check before continuing. Later chapters will be added only as the
-corresponding part of the jail environment is built and verified.
+The tutorial was developed alongside the working system. Each chapter
+introduces one small concept, asks the reader to complete an exercise, and
+gives an observable result to check before continuing. The final workflow
+creates its own catalog fixture, verifies it through the public web edge,
+cleans it up, and returns an automation-friendly process status.

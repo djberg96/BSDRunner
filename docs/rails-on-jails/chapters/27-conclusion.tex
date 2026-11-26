@@ -1,0 +1,113 @@
+\chapter{Review and Clean Up}
+
+We began with an empty topology and finished with a testable system of five
+jails. Each boundary has a distinct responsibility, and Blackship knows the
+dependency order between them:
+
+\begin{lstlisting}
+test -> web -> store -> catalog -> database
+\end{lstlisting}
+
+The web jail is the only application component with a published inbound port.
+The Rails applications and PostgreSQL communicate over the private BSDRunner
+network, while the test jail behaves as an external client of the private web
+edge.
+
+\section{What the final test proves}
+
+One invocation of \texttt{rails-on-jails-test} now performs a compact but real
+distributed-system check:
+
+\begin{enumerate}
+  \item Blackship starts any missing jails in dependency order.
+  \item The readiness loop waits until nginx can return a successful page.
+  \item The test jail creates a unique product through catalog's HTTP API.
+  \item Catalog persists that product in PostgreSQL.
+  \item A request enters through nginx and reaches the store Rails app.
+  \item Store calls catalog over HTTP and renders the returned product.
+  \item The test observes its unique name, SKU, and formatted price in HTML.
+  \item The fixture is deleted through the catalog API.
+  \item The host receives status zero on success and nonzero when the deployed
+    graph cannot become ready.
+\end{enumerate}
+
+This is stronger than a collection of isolated unit tests because the result
+depends on live processes, routing, configuration, serialization, persistence,
+and presentation all agreeing. It does not replace unit tests: those remain
+the faster place to cover application edge cases.
+
+\section{What remains outside the test}
+
+The experiment intentionally does not claim to test TLS, authentication,
+JavaScript in a browser, concurrent writers, backup restoration, rolling
+deployments, or high availability. It also uses fixed private addresses and a
+single FreeBSD host. Those are reasonable future exercises, not hidden
+properties of the test we built.
+
+The self-owned fixture makes repeated runs independent, but an abrupt process
+termination between creation and teardown could still leave a product behind.
+A production suite can add a run identifier and a separate stale-fixture
+cleanup policy without weakening the normal teardown path.
+
+\section{Exercise 27A: Record the final checkpoint}
+
+With every service restored, run the host command one final time and capture
+its status in an explicit shell:
+
+\begin{lstlisting}[language=sh]
+sh -c '
+  mdo /usr/local/sbin/rails-on-jails-test
+  code=$?
+  echo "exit status: $code"
+  exit "$code"
+'
+\end{lstlisting}
+
+The completed checkpoint is one run, nine assertions, no failures or errors,
+and \texttt{exit status: 0}. Keep that output with any notes about the host's
+FreeBSD and Blackship versions; generated credentials do not belong in the
+record.
+
+\section{Exercise 27B: Choose a final state}
+
+No cleanup is required to finish the tutorial. Choose one of these states
+deliberately:
+
+\begin{description}
+  \item[Keep running] Leave the graph available for more experiments.
+  \item[Stop and preserve] Stop \texttt{database} through BSDRunner and accept
+    its dependency-aware plan to stop the higher-level jails first. The jail
+    filesystems and manifests remain available for a later start.
+  \item[Remove permanently] First remove the web jail's host port forward.
+    Then delete the jails through BSDRunner in this order: \texttt{test},
+    \texttt{web}, \texttt{store}, \texttt{catalog}, and \texttt{database}.
+    Review every deletion target before confirming it; deleting database also
+    deletes the PostgreSQL data created by this experiment.
+\end{description}
+
+If the graph is removed permanently, also remove the host runner:
+
+\begin{lstlisting}
+/usr/local/sbin/rails-on-jails-test
+\end{lstlisting}
+
+Destroy the private temporary record that held the PostgreSQL password as
+well. Do this only after deciding that the database will not be reused. The
+tutorial source and generated PDF contain no credential and can be retained.
+
+\section{Where to go next}
+
+Useful extensions include placing TLS at the web edge, authenticating catalog
+writes, assigning a per-run namespace for parallel tests, collecting service
+logs as failure artifacts, or invoking the host runner from a CI agent that
+owns this FreeBSD environment. None requires changing the central testing
+idea: arrange the real boundaries, create the test's data through a supported
+interface, observe behavior at the edge, and return a truthful process status.
+
+\section{Final checkpoint}
+
+The tutorial is complete when the final host invocation returns zero and a
+deliberately unavailable catalog makes the same workflow return nonzero. At
+that point we have not merely run Rails in jails; we have built an inspectable,
+failure-aware end-to-end test across Ruby, Rails, PostgreSQL, nginx, Blackship,
+and FreeBSD.
