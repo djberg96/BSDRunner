@@ -2,7 +2,10 @@ LATEXMK ?= latexmk
 MAIN := main.tex
 BUILD_DIR := build
 PDF := $(BUILD_DIR)/main.pdf
-ASSETS := assets/rails-on-jails-cover.png
+ASSETS := assets/rails-on-jails-cover.png \
+	assets/screenshots/create-service-jail.png \
+	assets/screenshots/jail-detail.png \
+	assets/screenshots/manifest-editor.png
 CHAPTERS := chapters/01-introduction.tex \
 	chapters/02-inventory.tex \
 	chapters/03-database-jail.tex \
@@ -29,7 +32,8 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/24-host-test-command.tex \
 	chapters/25-owned-test-fixture.tex \
 	chapters/26-host-exit-status.tex \
-	chapters/27-conclusion.tex
+	chapters/27-conclusion.tex \
+	appendices/01-without-bsdrunner.tex
 
 .PHONY: all pdf clean
 
@@ -38,7 +42,7 @@ all: pdf
 pdf: $(PDF)
 
 $(PDF): $(MAIN) $(CHAPTERS) $(ASSETS)
-	mkdir -p $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/chapters $(BUILD_DIR)/appendices
 	$(LATEXMK) -pdf -interaction=nonstopmode -halt-on-error \
 		-outdir=$(BUILD_DIR) $(MAIN)
 

@@ -157,6 +157,19 @@ args = ["catalog", "onestop"]
 on_failure = "continue"
 \end{lstlisting}
 
+The completed fragment should resemble Figure~\ref{fig:manifest-editor}. The
+editor operates on \texttt{catalog.toml}, not the shared project manifest, and
+keeps \textbf{Apply} separate from the non-mutating \textbf{Dry Run} action.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]
+    {assets/screenshots/manifest-editor.png}
+  \caption{The per-jail manifest editor showing catalog's dependency, private
+  address, health check, and service hook configuration.}
+  \label{fig:manifest-editor}
+\end{figure}
+
 Run \textbf{Dry run} first. Review the dependency, health-check, and hook
 changes, then choose \textbf{Apply}. Applying the manifest records the desired
 lifecycle but does not replay a \texttt{post\_start} hook against an already

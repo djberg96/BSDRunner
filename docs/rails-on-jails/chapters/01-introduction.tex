@@ -10,6 +10,35 @@ Each service will run in a BSD jail managed through BSDRunner and Blackship.
 The finished system will let us exercise a complete request across real
 operating-system and network boundaries.
 
+\section{How BSDRunner fits}
+
+This is a BSDRunner-first tutorial. The graphical Jails application is the
+reader's primary interface for creating jails, reviewing changes, editing
+per-jail manifests, publishing ports, and controlling lifecycle. Blackship is
+the state engine underneath that interface: it validates the manifests and
+performs the dependency-aware jail operations.
+
+The screenshots show the real application used to complete this tutorial,
+not a separate mockup. The finished lab is pictured here, so it contains more
+services and controls than the reader will see in the early chapters:
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{assets/screenshots/jail-detail.png}
+  \caption{A completed jail detail view, with lifecycle actions, network
+  policy, dependencies, and the per-jail manifest link in one place. This is
+  the author's temporary lab; jail names and addresses in another environment
+  will differ.}
+  \label{fig:jail-detail}
+\end{figure}
+
+Readers are expected to have BSDRunner installed on the FreeBSD host and a
+compatible Blackship available; Chapter 2 checks the exact requirements before
+anything is created. The tutorial also shows the relevant TOML and read-only
+commands so the UI never becomes unexplained magic. Appendix A maps the main
+BSDRunner actions to raw Blackship concepts for readers adapting the design to
+another workflow, but it is not a second set of provisioning instructions.
+
 \section{The system we will build}
 
 Our initial topology has four service jails:
