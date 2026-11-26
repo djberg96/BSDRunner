@@ -2,6 +2,7 @@ LATEXMK ?= latexmk
 MAIN := main.tex
 BUILD_DIR := build
 PDF := $(BUILD_DIR)/main.pdf
+ASSETS := assets/rails-on-jails-cover.png
 CHAPTERS := chapters/01-introduction.tex \
 	chapters/02-inventory.tex \
 	chapters/03-database-jail.tex \
@@ -36,7 +37,7 @@ all: pdf
 
 pdf: $(PDF)
 
-$(PDF): $(MAIN) $(CHAPTERS)
+$(PDF): $(MAIN) $(CHAPTERS) $(ASSETS)
 	mkdir -p $(BUILD_DIR)
 	$(LATEXMK) -pdf -interaction=nonstopmode -halt-on-error \
 		-outdir=$(BUILD_DIR) $(MAIN)

@@ -2,12 +2,15 @@
 
 \usepackage[T1]{fontenc}
 \usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
 \usepackage{listings}
 
 \definecolor{codebackground}{RGB}{245,247,250}
 \definecolor{codeframe}{RGB}{205,211,220}
+\definecolor{coverpaper}{RGB}{248,221,186}
+\definecolor{coverink}{RGB}{35,54,61}
 
 \lstset{
   basicstyle=\ttfamily\small,
@@ -27,7 +30,32 @@
 
 \frontmatter
 \hypersetup{pageanchor=false}
-\maketitle
+\begin{titlepage}
+  \pagecolor{coverpaper}
+  \color{coverink}
+  \centering
+  \vspace*{0.35in}
+
+  {\fontsize{35.83}{42}\selectfont\bfseries Rails on Jails\par}
+  \vspace{0.25em}
+  {\Large End-to-End Testing on FreeBSD\par}
+  \vspace{0.3in}
+
+  \includegraphics[
+    width=0.92\textwidth,
+    height=0.66\textheight,
+    keepaspectratio,
+    trim=0 0 0 340,
+    clip
+  ]{assets/rails-on-jails-cover.png}
+
+  \vfill
+  {\large The BSDRunner Project\par}
+  \vspace{0.35em}
+  {\normalsize \today\par}
+\end{titlepage}
+\nopagecolor
+\color{black}
 \hypersetup{pageanchor=true}
 \tableofcontents
 
