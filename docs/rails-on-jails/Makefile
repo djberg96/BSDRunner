@@ -25,7 +25,9 @@ CHAPTERS := chapters/01-introduction.tex \
 	chapters/21-test-jail.tex \
 	chapters/22-black-box-test.tex \
 	chapters/23-failure-injection.tex \
-	chapters/24-host-test-command.tex
+	chapters/24-host-test-command.tex \
+	chapters/25-owned-test-fixture.tex \
+	chapters/26-host-exit-status.tex
 
 .PHONY: all pdf clean
 
