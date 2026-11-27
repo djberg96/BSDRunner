@@ -11,7 +11,23 @@ Column {
     signal back()
     property var shortcuts: []
     property string statusText: ""
+    readonly property var keyLabels: {
+        try {
+            var labels = JSON.parse(keyLabelFile.text())
+            return labels && typeof labels === "object" && !Array.isArray(labels) ? labels : ({})
+        } catch (error) {
+            return ({})
+        }
+    }
     spacing: 12
+
+    FileView {
+        id: keyLabelFile
+        path: root.homeDir + "/.config/bsdrunner/shortcut-key-labels.json"
+        blockLoading: true
+        watchChanges: true
+        onFileChanged: this.reload()
+    }
 
     function refresh() {
         if (!bindingsProcess.running) {
@@ -32,7 +48,8 @@ Column {
         if (mask & 128) result.push("Mod5")
         var mediaKeys = { XF86AudioMute: "Volume Mute", XF86AudioLowerVolume: "Volume Down",
             XF86AudioRaiseVolume: "Volume Up" }
-        result.push(mediaKeys[binding.key] || binding.key || (binding.keycode ? "Keycode " + binding.keycode : "Unknown key"))
+        var customLabel = root.keyLabels[binding.key]
+        result.push((typeof customLabel === "string" && customLabel.trim() ? customLabel : "") || mediaKeys[binding.key] || binding.key || (binding.keycode ? "Keycode " + binding.keycode : "Unknown key"))
         return result.join(" + ")
     }
     function action(binding) {

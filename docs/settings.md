@@ -49,3 +49,19 @@ for Hyprland 0.56 and later) or the legacy bindings file
 (`~/.config/hypr/conf/keybindings.conf`) in your default application. Save
 your changes and reload Hyprland if needed. Custom bindings may also be defined
 in other sourced files, which you can edit separately.
+
+Media keys can send the same key symbol from different physical keys on
+different keyboards. To label them for your machine, create
+`~/.config/bsdrunner/shortcut-key-labels.json` with a mapping from Hyprland key
+symbols to the labels printed on your keys, for example:
+
+```json
+{
+  "XF86AudioMute": "F1",
+  "XF86AudioLowerVolume": "F2",
+  "XF86AudioRaiseVolume": "F3"
+}
+```
+
+These labels affect the Settings list only; they do not change the bindings.
+Fn Lock and external keyboards may change which physical key sends a symbol.
