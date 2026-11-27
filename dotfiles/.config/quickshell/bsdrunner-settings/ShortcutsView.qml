@@ -19,11 +19,32 @@ Column {
             return ({})
         }
     }
+    readonly property var localShortcuts: {
+        try {
+            var items = JSON.parse(localShortcutFile.text())
+            if (!Array.isArray(items)) return []
+            return items.filter(function(item) {
+                return item && typeof item.key === "string" && item.key.length > 0 &&
+                    typeof item.description === "string" && item.description.length > 0
+            }).map(function(item) {
+                return { key: item.key, modmask: 0, description: item.description + " (local hotkey)" }
+            })
+        } catch (error) {
+            return []
+        }
+    }
     spacing: 12
 
     FileView {
         id: keyLabelFile
         path: root.homeDir + "/.config/bsdrunner/shortcut-key-labels.json"
+        blockLoading: true
+        watchChanges: true
+        onFileChanged: this.reload()
+    }
+    FileView {
+        id: localShortcutFile
+        path: root.homeDir + "/.config/bsdrunner/shortcut-local-bindings.json"
         blockLoading: true
         watchChanges: true
         onFileChanged: this.reload()
@@ -76,8 +97,8 @@ Column {
                 try {
                     var result = JSON.parse(text)
                     if (!Array.isArray(result)) throw new Error("Invalid response")
-                    root.shortcuts = result
-                    root.statusText = result.length ? "" : "No shortcuts reported by Hyprland."
+                    root.shortcuts = result.concat(root.localShortcuts)
+                    root.statusText = root.shortcuts.length ? "" : "No shortcuts reported by Hyprland."
                 } catch (error) {
                     root.shortcuts = []
                     root.statusText = "Could not read shortcuts from Hyprland."
@@ -104,7 +125,7 @@ Column {
     }
     Text {
         width: parent.width
-        text: "Active Hyprland bindings, including custom shortcuts. Add descriptions to Lua bindings for clearer labels."
+        text: "Hyprland bindings and configured local hotkeys. Add descriptions to Lua bindings for clearer labels."
         color: root.colors.mutedText; font.pixelSize: 12; wrapMode: Text.WordWrap
     }
     Row {

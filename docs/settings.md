@@ -81,6 +81,10 @@ symbols to the labels printed on your keys, for example:
 
 These labels affect the Settings list only; they do not change the bindings.
 Fn Lock and external keyboards may change which physical key sends a symbol.
+Keys handled outside Hyprland can be listed in
+`~/.config/bsdrunner/shortcut-local-bindings.json` as an array of objects with
+`key` and `description` strings. They appear as local hotkeys; the file only
+describes them and does not configure or verify their behavior.
 
 On FreeBSD, the brightness media keys adjust the panel backlight in steps of
 five percentage points, with a minimum of 5%. The hardware may round the
@@ -92,3 +96,11 @@ keyboard shortcut. `bsdrunner-thinkpad-mic-watch.sh` can be started from a
 local Hyprland configuration for machines where that key has been verified to
 send IBM event `0x1b`. It toggles the default microphone source. Event codes
 can differ by model, so the watcher is not enabled automatically.
+
+The opt-in `bsdrunner-thinkpad-wireless-watch.sh` handles IBM event `0x05`
+on machines where it has been verified as the wireless key. It brings down
+enabled Wi-Fi interfaces and turns off the ThinkPad Bluetooth switch, then
+restores their previous states on the next press. It saves recovery state in
+`~/.local/state/bsdrunner/wireless-toggle/` (or under `$XDG_STATE_HOME`),
+and reports failures in a desktop notification. This controls Wi-Fi interfaces
+and the ThinkPad Bluetooth switch; it does not verify every possible radio.
