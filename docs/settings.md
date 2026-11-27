@@ -67,6 +67,11 @@ symbols to the labels printed on your keys, for example:
 These labels affect the Settings list only; they do not change the bindings.
 Fn Lock and external keyboards may change which physical key sends a symbol.
 
+On FreeBSD, the brightness media keys adjust the panel backlight in steps of
+five percentage points, with a minimum of 5%. The hardware may round the
+reported brightness. On other systems, the keys use `brightnessctl` when it
+is available.
+
 On some ThinkPads, the microphone key sends an ACPI event instead of a
 keyboard shortcut. `bsdrunner-thinkpad-mic-watch.sh` can be started from a
 local Hyprland configuration for machines where that key has been verified to
