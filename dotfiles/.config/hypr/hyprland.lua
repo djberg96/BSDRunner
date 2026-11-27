@@ -168,6 +168,7 @@ hl.bind("XF86AudioNext", hl.dsp.exec_cmd("playerctl next"), { description = "Nex
 hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { description = "Play or pause media", locked = true })
 hl.bind("XF86AudioPlay", hl.dsp.exec_cmd("playerctl play-pause"), { description = "Play or pause media", locked = true })
 hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { description = "Previous track", locked = true })
+hl.bind("XF86NotificationCenter", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-notifications.sh"), { description = "Open or close notifications" })
 
 hl.bind("Print", hl.dsp.exec_cmd([=[grim ~/Pictures/$(date +%Y-%m-%d_%H-%M-%S).png && paplay /usr/local/share/sounds/freedesktop/stereo/camera-shutter.oga && hyprctl notify 1 3000 "rgb(a6e3a1)" "Screenshot saved to ~/Pictures"]=]), { description = "Save screenshot of entire screen" })
 hl.bind("SHIFT + Print", hl.dsp.exec_cmd([=[grim -g "$(slurp)" ~/Pictures/$(date +%Y-%m-%d_%H-%M-%S).png && paplay /usr/local/share/sounds/freedesktop/stereo/camera-shutter.oga && hyprctl notify 1 3000 "rgb(a6e3a1)" "Region screenshot saved to ~/Pictures"]=]), { description = "Save screenshot of selected region" })

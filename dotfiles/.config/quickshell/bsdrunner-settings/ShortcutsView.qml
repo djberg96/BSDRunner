@@ -67,7 +67,7 @@ Column {
         if (mask & 16) result.push("Mod2")
         if (mask & 32) result.push("Mod3")
         if (mask & 128) result.push("Mod5")
-        var mediaKeys = { XF86MonBrightnessDown: "Brightness Down", XF86MonBrightnessUp: "Brightness Up",
+        var mediaKeys = { XF86NotificationCenter: "Notification Center", XF86MonBrightnessDown: "Brightness Down", XF86MonBrightnessUp: "Brightness Up",
             XF86AudioMicMute: "Microphone Mute", XF86AudioMute: "Volume Mute", XF86AudioLowerVolume: "Volume Down",
             XF86AudioRaiseVolume: "Volume Up" }
         var customLabel = root.keyLabels[binding.key]

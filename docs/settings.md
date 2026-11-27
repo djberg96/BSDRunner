@@ -104,3 +104,16 @@ restores their previous states on the next press. It saves recovery state in
 `~/.local/state/bsdrunner/wireless-toggle/` (or under `$XDG_STATE_HOME`),
 and reports failures in a desktop notification. This controls Wi-Fi interfaces
 and the ThinkPad Bluetooth switch; it does not verify every possible radio.
+
+## Notifications
+
+The notification-center key opens or closes BSDRunner Notifications. It
+shows active and recent notifications held by Mako and refreshes while open.
+Mako's history is session-limited; Hyprland's own built-in popups and
+notifications from other daemons are not included. The panel displays
+notification text but does not invoke notification actions.
+
+On ThinkPads where the notification key has been verified as IBM ACPI event
+`0x17`, the opt-in `bsdrunner-thinkpad-notifications-watch.sh` can handle the
+key. It does not open the panel while Hyprlock is running. Other keyboards can
+use the `XF86NotificationCenter` binding directly.

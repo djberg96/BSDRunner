@@ -32,6 +32,9 @@ dotfiles/.config/quickshell/bsdrunner-settings/AppearanceView.qml
 dotfiles/.config/quickshell/bsdrunner-settings/ShortcutsView.qml
 dotfiles/.config/quickshell/bsdrunner-settings/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-settings/ThemePalette.qml
+dotfiles/.config/quickshell/bsdrunner-notifications/shell.qml
+dotfiles/.config/quickshell/bsdrunner-notifications/ThemeLoader.qml
+dotfiles/.config/quickshell/bsdrunner-notifications/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-welcome/shell.qml
 dotfiles/.config/quickshell/bsdrunner-welcome/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-welcome/ThemePalette.qml
