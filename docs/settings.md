@@ -117,3 +117,17 @@ On ThinkPads where the notification key has been verified as IBM ACPI event
 `0x17`, the opt-in `bsdrunner-thinkpad-notifications-watch.sh` can handle the
 key. It does not open the panel while Hyprlock is running. Other keyboards can
 use the `XF86NotificationCenter` binding directly.
+
+## Clipboard history
+
+F12 opens or closes the clipboard history. Search or select an item to copy it
+back to the clipboard, then paste normally. Individual items can be removed,
+and **Clear history** removes the stored history without clearing the current
+clipboard. The manager uses `cliphist` and `wl-clipboard`; both must be
+installed. BSDRunner starts text and image watchers when the session starts.
+
+History is limited to 100 entries in a private directory under
+`$XDG_RUNTIME_DIR`; it lasts until that runtime directory is cleared. Copies
+marked sensitive by the source application and copies made while Hyprlock is
+running are skipped. Some applications do not mark secrets as sensitive, so
+their copied contents can still enter the history.

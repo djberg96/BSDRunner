@@ -35,6 +35,8 @@ sudo pkg install \
   pipewire \
   wireplumber \
   pavucontrol \
+  cliphist \
+  wl-clipboard \
   playerctl
 ```
 
