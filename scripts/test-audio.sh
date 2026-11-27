@@ -32,6 +32,7 @@ for required in \
     "$scripts_dir/bsdrunner-audio-popup.sh" \
     "$scripts_dir/bsdrunner-audio-state.sh" \
     "$scripts_dir/bsdrunner-audio-set.sh" \
+    "$scripts_dir/bsdrunner-audio-step.sh" \
     "$scripts_dir/bsdrunner-audio-mute.sh" \
     "$audio_qml"; do
     [ -f "$required" ] || fail "missing audio component: $required"
@@ -106,6 +107,18 @@ if audio_env sh "$scripts_dir/bsdrunner-audio-set.sh" invalid >/dev/null 2>&1; t
     fail "volume setter accepted an invalid value"
 fi
 pass "audio setter updates and validates the master volume"
+
+audio_env sh "$scripts_dir/bsdrunner-audio-step.sh" up
+grep -Fx 'volume=47' "$cache_dir/audio-state" >/dev/null || fail "volume up did not increase volume by five"
+audio_env sh "$scripts_dir/bsdrunner-audio-step.sh" down
+grep -Fx 'volume=42' "$cache_dir/audio-state" >/dev/null || fail "volume down did not decrease volume by five"
+audio_env sh "$scripts_dir/bsdrunner-audio-set.sh" 99
+audio_env sh "$scripts_dir/bsdrunner-audio-step.sh" up
+grep -Fx 'volume=100' "$cache_dir/audio-state" >/dev/null || fail "volume up did not clamp at 100"
+audio_env sh "$scripts_dir/bsdrunner-audio-set.sh" 2
+audio_env sh "$scripts_dir/bsdrunner-audio-step.sh" down
+grep -Fx 'volume=0' "$cache_dir/audio-state" >/dev/null || fail "volume down did not clamp at zero"
+pass "volume keys adjust the master sink and respect its limits"
 
 cat > "$mock_bin/mixer" <<'EOF'
 #!/bin/sh

@@ -158,9 +158,9 @@ hl.bind(mainMod .. " + mouse_up", hl.dsp.focus({ workspace = "e-1" }), { descrip
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { description = "Drag window with left mouse button", mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { description = "Resize window with right mouse button", mouse = true })
 
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { description = "Raise volume", locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"), { description = "Lower volume", locked = true, repeating = true })
-hl.bind("XF86AudioMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), { description = "Toggle sound mute", locked = true, repeating = true })
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-audio-step.sh up"), { description = "Raise volume", locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-audio-step.sh down"), { description = "Lower volume", locked = true, repeating = true })
+hl.bind("XF86AudioMute", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-audio-mute.sh"), { description = "Toggle sound mute", locked = true, repeating = true })
 hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { description = "Toggle microphone mute", locked = true, repeating = true })
 hl.bind("XF86MonBrightnessUp", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { description = "Increase screen brightness", locked = true, repeating = true })
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { description = "Decrease screen brightness", locked = true, repeating = true })

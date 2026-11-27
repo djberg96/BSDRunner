@@ -30,7 +30,9 @@ Column {
         if (mask & 16) result.push("Mod2")
         if (mask & 32) result.push("Mod3")
         if (mask & 128) result.push("Mod5")
-        result.push(binding.key || (binding.keycode ? "Keycode " + binding.keycode : "Unknown key"))
+        var mediaKeys = { XF86AudioMute: "Volume Mute", XF86AudioLowerVolume: "Volume Down",
+            XF86AudioRaiseVolume: "Volume Up" }
+        result.push(mediaKeys[binding.key] || binding.key || (binding.keycode ? "Keycode " + binding.keycode : "Unknown key"))
         return result.join(" + ")
     }
     function action(binding) {
