@@ -38,6 +38,8 @@ the same tested backends as their standalone entry points.
 
 **Keyboard Shortcuts** shows the bindings reported by the running Hyprland
 session, including custom bindings. Select **Refresh** after making changes.
+Press **Super+Z** to maximize or restore the active window while keeping the
+desktop bars and gaps visible.
 BSDRunner's Lua bindings include descriptions so the list can explain what each
 shortcut does. For custom Lua bindings, add `description = "..."` to the
 `hl.bind` options to show a useful label. Without a description, Hyprland may
