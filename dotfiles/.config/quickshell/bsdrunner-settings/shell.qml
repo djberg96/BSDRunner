@@ -14,6 +14,7 @@ ShellRoot {
     property string searchText: ""
     property bool showingShortcuts: false
     property bool showingAppearance: false
+    property bool showingSystemInfo: false
     readonly property var categories: [
         {
             "action": "appearance",
@@ -96,6 +97,14 @@ ShellRoot {
             "tone": "accent"
         },
         {
+            "action": "systeminfo",
+            "icon": "INFO",
+            "title": "System Info",
+            "detail": "Hardware, software, and storage",
+            "keywords": "system info computer cpu processor memory ram disk gpu display kernel uptime version",
+            "tone": "accent"
+        },
+        {
             "action": "battery",
             "icon": "BATT",
             "title": "Battery",
@@ -144,6 +153,11 @@ ShellRoot {
     }
 
     function openCategory(action) {
+        if (action === "systeminfo") {
+            showingSystemInfo = true
+            systemInfoView.refresh()
+            return
+        }
         if (action === "appearance") {
             showingAppearance = true
             appearanceView.refresh()
@@ -192,7 +206,7 @@ ShellRoot {
                 border.color: root.palette.panelBorder
 
                 Column {
-                    visible: !root.showingShortcuts && !root.showingAppearance
+                    visible: !root.showingShortcuts && !root.showingAppearance && !root.showingSystemInfo
                     anchors.fill: parent
                     anchors.margins: 24
                     spacing: 14
@@ -449,6 +463,16 @@ ShellRoot {
                         }
                     }
                 }
+                SystemInfoView {
+                    id: systemInfoView
+                    anchors.fill: parent
+                    anchors.margins: 24
+                    visible: root.showingSystemInfo
+                    colors: root.palette
+                    homeDir: themeLoader.homeDir
+                    onBack: root.showingSystemInfo = false
+                }
+
                 AppearanceView {
                     id: appearanceView
                     anchors.fill: parent

@@ -18,7 +18,7 @@ for required in "$launcher" "$shell_qml" "$desktop_entry"; do
 done
 printf 'ok - settings hub components are present\n'
 
-for action in appearance shortcuts network power firewall dns software zfs jails time battery; do
+for action in appearance shortcuts systeminfo network power firewall dns software zfs jails time battery; do
     grep -Eq "(case|action ===) \"$action\"" "$shell_qml" || fail "settings hub is missing the $action route"
 done
 printf 'ok - settings hub routes every category\n'
@@ -28,6 +28,11 @@ appearance_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-settings/Appear
 grep -Fq 'bsdrunner-theme-menu.sh' "$appearance_qml" || fail "appearance does not expose the theme picker"
 grep -Fq 'bsdrunner-brightness.sh' "$appearance_qml" || fail "appearance does not expose brightness control"
 printf 'ok - appearance exposes themes and brightness\n'
+
+systeminfo_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-settings/SystemInfoView.qml"
+[ -f "$systeminfo_qml" ] || fail "missing system info view"
+grep -Fq 'bsdrunner-system-info.sh' "$systeminfo_qml" || fail "system info view does not load the system snapshot"
+printf 'ok - system info view loads its snapshot\n'
 
 shortcuts_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-settings/ShortcutsView.qml"
 [ -f "$shortcuts_qml" ] || fail "missing shortcuts view"

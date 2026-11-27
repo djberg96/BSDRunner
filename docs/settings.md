@@ -18,6 +18,7 @@ implement the freedesktop application menu also list **BSDRunner Settings**.
 
 ## Categories
 
+- System Info
 - Appearance
 - Keyboard Shortcuts
 - Network
@@ -30,9 +31,17 @@ implement the freedesktop application menu also list **BSDRunner Settings**.
 - Date & Time
 - Battery
 
-Each category delegates to the existing BSDRunner panel or menu. Closing a
-category returns to the still-open settings hub, and changes continue to use
-the same tested backends as their standalone entry points.
+Some categories open within the hub; others launch an existing BSDRunner panel
+or menu. Closing a separate panel returns to the still-open settings hub.
+
+## System Info
+
+**System Info** shows available operating system, hardware, display, storage,
+and uptime details. The panel uses Fastfetch’s JSON output when available,
+with FreeBSD system utilities and Hyprland as a fallback for missing
+information or when Fastfetch is not installed. Refresh updates the data.
+Fields are omitted when neither source can report them. Root storage refers
+to the filesystem containing `/`, not all disks or ZFS pools.
 
 ## Appearance
 
