@@ -84,7 +84,7 @@ Column {
     }
     Text {
         width: parent.width
-        text: "Active Hyprland bindings, including custom shortcuts. Lua bindings may show only the action type."
+        text: "Active Hyprland bindings, including custom shortcuts. Add descriptions to Lua bindings for clearer labels."
         color: root.colors.mutedText; font.pixelSize: 12; wrapMode: Text.WordWrap
     }
     Row {

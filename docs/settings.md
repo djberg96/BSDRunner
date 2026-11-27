@@ -38,8 +38,10 @@ the same tested backends as their standalone entry points.
 
 **Keyboard Shortcuts** shows the bindings reported by the running Hyprland
 session, including custom bindings. Select **Refresh** after making changes.
-Hyprland's Lua bindings may report only an action type rather than the command
-or target; consult the configuration for those details.
+BSDRunner's Lua bindings include descriptions so the list can explain what each
+shortcut does. For custom Lua bindings, add `description = "..."` to the
+`hl.bind` options to show a useful label. Without a description, Hyprland may
+report only an action type rather than the command or target.
 The edit buttons open the Lua configuration (`~/.config/hypr/hyprland.lua`,
 for Hyprland 0.56 and later) or the legacy bindings file
 (`~/.config/hypr/conf/keybindings.conf`) in your default application. Save
