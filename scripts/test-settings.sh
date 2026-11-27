@@ -23,6 +23,12 @@ for action in appearance shortcuts network power firewall dns software zfs jails
 done
 printf 'ok - settings hub routes every category\n'
 
+appearance_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-settings/AppearanceView.qml"
+[ -f "$appearance_qml" ] || fail "missing appearance view"
+grep -Fq 'bsdrunner-theme-menu.sh' "$appearance_qml" || fail "appearance does not expose the theme picker"
+grep -Fq 'bsdrunner-brightness.sh' "$appearance_qml" || fail "appearance does not expose brightness control"
+printf 'ok - appearance exposes themes and brightness\n'
+
 shortcuts_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-settings/ShortcutsView.qml"
 [ -f "$shortcuts_qml" ] || fail "missing shortcuts view"
 grep -Fq '"hyprctl", "-j", "binds"' "$shortcuts_qml" || fail "shortcuts view does not read active bindings"

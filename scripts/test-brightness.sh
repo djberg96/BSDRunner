@@ -40,4 +40,18 @@ assert_level 5
 if run_helper invalid >/dev/null 2>&1; then
     printf 'invalid brightness action accepted\n' >&2; exit 1
 fi
+panel_helper="$repo_root/dotfiles/.config/bsdrunner/scripts/bsdrunner-brightness.sh"
+run_panel() {
+    env PATH="$test_root/bin:/usr/bin:/bin" BRIGHTNESS_TEST_STATE="$test_root/state" sh "$panel_helper" "$@"
+}
+printf '32\n' > "$test_root/state"
+[ "$(run_panel get)" = 32 ] || { printf 'brightness panel did not read the backlight\n' >&2; exit 1; }
+run_panel set 58
+assert_level 58
+for invalid in 0 4 101 text ''; do
+    if run_panel set "$invalid" >/dev/null 2>&1; then
+        printf 'brightness panel accepted invalid value: %s\n' "$invalid" >&2; exit 1
+    fi
+done
+
 printf 'Brightness control tests passed.\n'

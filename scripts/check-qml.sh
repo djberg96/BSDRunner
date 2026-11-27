@@ -27,6 +27,7 @@ dotfiles/.config/quickshell/bsdrunner-power/shell.qml
 dotfiles/.config/quickshell/bsdrunner-power/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-power/ThemePalette.qml
 dotfiles/.config/quickshell/bsdrunner-settings/shell.qml
+dotfiles/.config/quickshell/bsdrunner-settings/AppearanceView.qml
 dotfiles/.config/quickshell/bsdrunner-settings/ShortcutsView.qml
 dotfiles/.config/quickshell/bsdrunner-settings/ThemeLoader.qml
 dotfiles/.config/quickshell/bsdrunner-settings/ThemePalette.qml

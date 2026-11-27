@@ -34,6 +34,12 @@ Each category delegates to the existing BSDRunner panel or menu. Closing a
 category returns to the still-open settings hub, and changes continue to use
 the same tested backends as their standalone entry points.
 
+## Appearance
+
+Open **Appearance** to choose a desktop theme or adjust the screen brightness.
+The slider reads the active backlight and reflects changes made with the
+brightness keys. It is unavailable if no supported backlight is accessible.
+
 ## Keyboard shortcuts
 
 **Keyboard Shortcuts** shows the bindings reported by the running Hyprland

@@ -13,13 +13,14 @@ ShellRoot {
     readonly property var palette: themeLoader.palette
     property string searchText: ""
     property bool showingShortcuts: false
+    property bool showingAppearance: false
     readonly property var categories: [
         {
             "action": "appearance",
             "icon": "LOOK",
             "title": "Appearance",
-            "detail": "Themes, colors, and wallpaper style",
-            "keywords": "theme colors wallpaper desktop look",
+            "detail": "Themes, colors, and screen brightness",
+            "keywords": "theme colors wallpaper desktop look brightness backlight display",
             "tone": "accent"
         },
         {
@@ -143,6 +144,11 @@ ShellRoot {
     }
 
     function openCategory(action) {
+        if (action === "appearance") {
+            showingAppearance = true
+            appearanceView.refresh()
+            return
+        }
         if (action === "shortcuts") {
             showingShortcuts = true
             shortcutsView.refresh()
@@ -186,7 +192,7 @@ ShellRoot {
                 border.color: root.palette.panelBorder
 
                 Column {
-                    visible: !root.showingShortcuts
+                    visible: !root.showingShortcuts && !root.showingAppearance
                     anchors.fill: parent
                     anchors.margins: 24
                     spacing: 14
@@ -443,6 +449,16 @@ ShellRoot {
                         }
                     }
                 }
+                AppearanceView {
+                    id: appearanceView
+                    anchors.fill: parent
+                    anchors.margins: 24
+                    visible: root.showingAppearance
+                    colors: root.palette
+                    homeDir: themeLoader.homeDir
+                    onBack: root.showingAppearance = false
+                }
+
                 ShortcutsView {
                     id: shortcutsView
                     anchors.fill: parent
