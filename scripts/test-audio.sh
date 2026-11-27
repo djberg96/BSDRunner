@@ -34,6 +34,8 @@ for required in \
     "$scripts_dir/bsdrunner-audio-set.sh" \
     "$scripts_dir/bsdrunner-audio-step.sh" \
     "$scripts_dir/bsdrunner-audio-mute.sh" \
+    "$scripts_dir/bsdrunner-microphone-mute.sh" \
+    "$scripts_dir/bsdrunner-thinkpad-mic-watch.sh" \
     "$audio_qml"; do
     [ -f "$required" ] || fail "missing audio component: $required"
 done
@@ -81,6 +83,10 @@ case "${1:-}" in
         muted="$(sed -n 's/^muted=//p' "$BSDRUNNER_TEST_AUDIO_STATE")"
         if [ "$muted" = "yes" ]; then muted=no; else muted=yes; fi
         printf 'volume=%s\nmuted=%s\n' "$volume" "$muted" > "$BSDRUNNER_TEST_AUDIO_STATE"
+        ;;
+    set-source-mute)
+        [ "$2" = "@DEFAULT_SOURCE@" ] && [ "$3" = "toggle" ] || exit 2
+        printf 'toggled\n' > "$BSDRUNNER_TEST_AUDIO_STATE.source"
         ;;
     *) exit 2 ;;
 esac
@@ -145,5 +151,25 @@ audio_env sh "$scripts_dir/bsdrunner-audio-mute.sh"
 grep -Fx 'volume=73' "$cache_dir/audio-state" >/dev/null || fail "mute toggle changed the volume"
 grep -Fx 'muted=1' "$cache_dir/audio-state" >/dev/null || fail "mute toggle did not refresh slider state"
 pass "audio mute toggles the master sink"
+
+audio_env sh "$scripts_dir/bsdrunner-microphone-mute.sh"
+grep -Fx 'toggled' "$audio_state.source" >/dev/null || fail "microphone mute did not target the default source"
+grep -Fx 'muted=yes' "$audio_state" >/dev/null || fail "microphone mute changed the output mute state"
+pass "microphone mute targets the default source, independently of output"
+
+cat > "$mock_bin/mic-toggle" <<'MOCK'
+#!/bin/sh
+printf 'toggle\n' >> "$BSDRUNNER_TEST_AUDIO_STATE.events"
+MOCK
+chmod 755 "$mock_bin/mic-toggle"
+printf '%s\n' \
+    '!system=ACPI subsystem=IBM type=HKEY notify=0x1b' \
+    '!system=ACPI subsystem=IBM type=HKEY notify=0x1c' \
+    '!system=ACPI subsystem=OTHER type=HKEY notify=0x1b' \
+    '!system=OTHER subsystem=IBM type=HKEY notify=0x1b' | \
+    audio_env env BSDRUNNER_MIC_MUTE_SCRIPT="$mock_bin/mic-toggle" \
+        sh "$scripts_dir/bsdrunner-thinkpad-mic-watch.sh" --events
+[ "$(wc -l < "$audio_state.events" | tr -d ' ')" = 1 ] || fail "ThinkPad watcher matched the wrong ACPI events"
+pass "ThinkPad microphone watcher filters the observed ACPI event"
 
 printf 'All audio tests passed.\n'

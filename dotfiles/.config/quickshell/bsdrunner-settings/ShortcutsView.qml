@@ -46,7 +46,7 @@ Column {
         if (mask & 16) result.push("Mod2")
         if (mask & 32) result.push("Mod3")
         if (mask & 128) result.push("Mod5")
-        var mediaKeys = { XF86AudioMute: "Volume Mute", XF86AudioLowerVolume: "Volume Down",
+        var mediaKeys = { XF86AudioMicMute: "Microphone Mute", XF86AudioMute: "Volume Mute", XF86AudioLowerVolume: "Volume Down",
             XF86AudioRaiseVolume: "Volume Up" }
         var customLabel = root.keyLabels[binding.key]
         result.push((typeof customLabel === "string" && customLabel.trim() ? customLabel : "") || mediaKeys[binding.key] || binding.key || (binding.keycode ? "Keycode " + binding.keycode : "Unknown key"))

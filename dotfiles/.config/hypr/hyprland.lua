@@ -161,7 +161,7 @@ hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { description = "Resi
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-audio-step.sh up"), { description = "Raise volume", locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-audio-step.sh down"), { description = "Lower volume", locked = true, repeating = true })
 hl.bind("XF86AudioMute", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-audio-mute.sh"), { description = "Toggle sound mute", locked = true, repeating = true })
-hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { description = "Toggle microphone mute", locked = true, repeating = true })
+hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("sh ~/.config/bsdrunner/scripts/bsdrunner-microphone-mute.sh"), { description = "Toggle microphone mute", locked = true })
 hl.bind("XF86MonBrightnessUp", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { description = "Increase screen brightness", locked = true, repeating = true })
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { description = "Decrease screen brightness", locked = true, repeating = true })
 hl.bind("XF86AudioNext", hl.dsp.exec_cmd("playerctl next"), { description = "Next track", locked = true })

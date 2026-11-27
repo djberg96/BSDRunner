@@ -59,9 +59,16 @@ symbols to the labels printed on your keys, for example:
 {
   "XF86AudioMute": "F1",
   "XF86AudioLowerVolume": "F2",
-  "XF86AudioRaiseVolume": "F3"
+  "XF86AudioRaiseVolume": "F3",
+  "XF86AudioMicMute": "F4"
 }
 ```
 
 These labels affect the Settings list only; they do not change the bindings.
 Fn Lock and external keyboards may change which physical key sends a symbol.
+
+On some ThinkPads, the microphone key sends an ACPI event instead of a
+keyboard shortcut. `bsdrunner-thinkpad-mic-watch.sh` can be started from a
+local Hyprland configuration for machines where that key has been verified to
+send IBM event `0x1b`. It toggles the default microphone source. Event codes
+can differ by model, so the watcher is not enabled automatically.
