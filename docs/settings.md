@@ -19,6 +19,7 @@ implement the freedesktop application menu also list **BSDRunner Settings**.
 ## Categories
 
 - Appearance
+- Keyboard Shortcuts
 - Network
 - Power & Lock
 - Firewall
@@ -32,3 +33,15 @@ implement the freedesktop application menu also list **BSDRunner Settings**.
 Each category delegates to the existing BSDRunner panel or menu. Closing a
 category returns to the still-open settings hub, and changes continue to use
 the same tested backends as their standalone entry points.
+
+## Keyboard shortcuts
+
+**Keyboard Shortcuts** shows the bindings reported by the running Hyprland
+session, including custom bindings. Select **Refresh** after making changes.
+Hyprland's Lua bindings may report only an action type rather than the command
+or target; consult the configuration for those details.
+The edit buttons open the Lua configuration (`~/.config/hypr/hyprland.lua`,
+for Hyprland 0.56 and later) or the legacy bindings file
+(`~/.config/hypr/conf/keybindings.conf`) in your default application. Save
+your changes and reload Hyprland if needed. Custom bindings may also be defined
+in other sourced files, which you can edit separately.

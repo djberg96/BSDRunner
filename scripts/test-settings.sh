@@ -18,10 +18,17 @@ for required in "$launcher" "$shell_qml" "$desktop_entry"; do
 done
 printf 'ok - settings hub components are present\n'
 
-for action in appearance network power firewall dns software zfs jails time battery; do
-    grep -Fq "case \"$action\"" "$shell_qml" || fail "settings hub is missing the $action route"
+for action in appearance shortcuts network power firewall dns software zfs jails time battery; do
+    grep -Eq "(case|action ===) \"$action\"" "$shell_qml" || fail "settings hub is missing the $action route"
 done
 printf 'ok - settings hub routes every category\n'
+
+shortcuts_qml="$repo_root/dotfiles/.config/quickshell/bsdrunner-settings/ShortcutsView.qml"
+[ -f "$shortcuts_qml" ] || fail "missing shortcuts view"
+grep -Fq '"hyprctl", "-j", "binds"' "$shortcuts_qml" || fail "shortcuts view does not read active bindings"
+grep -Fq '/.config/hypr/hyprland.lua' "$shortcuts_qml" || fail "shortcuts view does not expose Lua config"
+grep -Fq '/.config/hypr/conf/keybindings.conf' "$shortcuts_qml" || fail "shortcuts view does not expose legacy config"
+printf 'ok - shortcuts view reads active bindings and exposes both config formats\n'
 
 jq -e '.[0]["modules-left"] | index("custom/settings") != null' "$waybar_config" >/dev/null || \
     fail "Waybar does not expose the settings launcher"

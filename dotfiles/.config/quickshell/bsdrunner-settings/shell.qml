@@ -12,6 +12,7 @@ ShellRoot {
 
     readonly property var palette: themeLoader.palette
     property string searchText: ""
+    property bool showingShortcuts: false
     readonly property var categories: [
         {
             "action": "appearance",
@@ -19,6 +20,14 @@ ShellRoot {
             "title": "Appearance",
             "detail": "Themes, colors, and wallpaper style",
             "keywords": "theme colors wallpaper desktop look",
+            "tone": "accent"
+        },
+        {
+            "action": "shortcuts",
+            "icon": "KEYS",
+            "title": "Keyboard Shortcuts",
+            "detail": "View and edit Hyprland bindings",
+            "keywords": "keyboard shortcuts keys bindings hotkeys hyprland",
             "tone": "accent"
         },
         {
@@ -134,6 +143,11 @@ ShellRoot {
     }
 
     function openCategory(action) {
+        if (action === "shortcuts") {
+            showingShortcuts = true
+            shortcutsView.refresh()
+            return
+        }
         var command = commandFor(action)
         if (command.length > 0)
             Quickshell.execDetached(command)
@@ -172,6 +186,7 @@ ShellRoot {
                 border.color: root.palette.panelBorder
 
                 Column {
+                    visible: !root.showingShortcuts
                     anchors.fill: parent
                     anchors.margins: 24
                     spacing: 14
@@ -427,6 +442,15 @@ ShellRoot {
                             font.pixelSize: 11
                         }
                     }
+                }
+                ShortcutsView {
+                    id: shortcutsView
+                    anchors.fill: parent
+                    anchors.margins: 24
+                    visible: root.showingShortcuts
+                    colors: root.palette
+                    homeDir: themeLoader.homeDir
+                    onBack: root.showingShortcuts = false
                 }
             }
         }
