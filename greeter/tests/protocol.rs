@@ -62,7 +62,10 @@ fn completes_secret_authentication_and_starts_the_selected_session() {
                         "BSDRunner",
                     ]
                 );
-                assert_eq!(env, vec!["XDG_SESSION_TYPE=wayland"]);
+                assert_eq!(
+                    env,
+                    vec!["XDG_SESSION_TYPE=wayland", "BSDRUNNER_LOGIN_THEME=jinteki"]
+                );
             }
             request => panic!("unexpected request: {request:?}"),
         }
@@ -88,7 +91,8 @@ fn completes_secret_authentication_and_starts_the_selected_session() {
         json!({
             "type": "login",
             "username": "\u{1b}dberger",
-            "session": "bsdrunner"
+            "session": "bsdrunner",
+            "theme": "jinteki"
         })
     )
     .expect("send login request");

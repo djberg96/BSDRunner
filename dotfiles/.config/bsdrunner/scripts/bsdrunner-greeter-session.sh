@@ -21,6 +21,17 @@ launch_logged() {
     chmod 600 "$session_log"
     umask "$old_umask"
 
+    if [ "$session_name" = BSDRunner ] && [ -n "${BSDRUNNER_LOGIN_THEME:-}" ]; then
+        case "$BSDRUNNER_LOGIN_THEME" in
+            default|haas-bioroid|jinteki|nbn|weyland)
+                BSDRUNNER_THEME_PREPARE_ONLY=1 sh "$home_config/bsdrunner/scripts/bsdrunner-apply-theme.sh" \
+                    "$BSDRUNNER_LOGIN_THEME" >>"$session_log" 2>&1 || \
+                    printf '%s\n' "Could not apply the selected login theme." >>"$session_log"
+                ;;
+        esac
+    fi
+    unset BSDRUNNER_LOGIN_THEME
+
     exec "$launcher" "$@" >>"$session_log" 2>&1
 }
 

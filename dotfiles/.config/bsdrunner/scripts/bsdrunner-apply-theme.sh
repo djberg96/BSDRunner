@@ -305,6 +305,11 @@ else
     rm -f "$runner_home/current-wallpaper"
 fi
 
+if [ "${BSDRUNNER_THEME_PREPARE_ONLY:-0}" = 1 ]; then
+    echo ":: Prepared BSDRunner theme: $theme"
+    exit 0
+fi
+
 (sh "$runner_home/scripts/bsdrunner-start-waybar.sh" >/tmp/bsdrunner-waybar.log 2>&1 &) >/dev/null 2>&1
 
 pkill -f bsdrunner-start-wallpaper.sh 2>/dev/null || true

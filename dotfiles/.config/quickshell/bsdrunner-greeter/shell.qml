@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Controls
+import Qt.labs.folderlistmodel
 
 ShellRoot {
     id: root
@@ -21,7 +23,9 @@ ShellRoot {
             : "/usr/local/libexec/bsdrunner-greetd-greeter"
     }
     readonly property bool busy: loginInProgress && !awaitingResponse
-    property string wallpaperPath: String(Quickshell.env("BSDRUNNER_GREETER_WALLPAPER") || "")
+    readonly property string wallpaperPath: themeLoader.selectedTheme.length > 0
+        ? (wallpaperFiles.count > 0 ? String(wallpaperFiles.get(0, "filePath")) : "")
+        : String(Quickshell.env("BSDRUNNER_GREETER_WALLPAPER") || "")
     property bool backendReady: false
     property bool loginInProgress: false
     property bool awaitingResponse: false
@@ -31,9 +35,37 @@ ShellRoot {
     property string passwordText: ""
     property string selectedSession: "BSDRunner"
     property bool sessionMenuOpen: false
+    property bool themeMenuOpen: false
+    property bool motdOpen: false
     property string feedbackTone: "info"
     property string feedbackTitle: ""
     property string feedbackText: ""
+
+    FolderListModel {
+        id: themeFolders
+        folder: "file://" + themeLoader.greeterDir + "/themes"
+        showDirs: true
+        showFiles: false
+        showDotAndDotDot: false
+        sortField: FolderListModel.Name
+    }
+
+    FolderListModel {
+        id: wallpaperFiles
+        folder: "file://" + themeLoader.greeterDir + "/themes/" + themeLoader.activeTheme + "/wallpapers"
+        nameFilters: ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.JPG", "*.JPEG", "*.PNG", "*.WEBP"]
+        showDirs: false
+        showFiles: true
+        sortField: FolderListModel.Name
+    }
+
+    FileView {
+        id: motdFile
+        path: "/etc/motd"
+        blockLoading: true
+        watchChanges: true
+        onFileChanged: this.reload()
+    }
 
     property var sessions: [
         {
@@ -168,13 +200,15 @@ ShellRoot {
         passwordText = ""
         loginInProgress = true
         sessionMenuOpen = false
+        themeMenuOpen = false
         feedbackTone = "info"
         feedbackTitle = "Authenticating " + requestedUser
         feedbackText = "Beginning a new session through greetd."
         sendBackend({
             "type": "login",
             "username": requestedUser,
-            "session": selectedSession === "Terminal" ? "terminal" : "bsdrunner"
+            "session": selectedSession === "Terminal" ? "terminal" : "bsdrunner",
+            "theme": themeLoader.selectedTheme.length > 0 ? themeLoader.selectedTheme : null
         })
     }
 
@@ -287,6 +321,7 @@ ShellRoot {
                 anchors.margins: 54
 
                 Rectangle {
+                    id: signInFrame
                     width: 780
                     height: 424
                     anchors.centerIn: parent
@@ -299,7 +334,10 @@ ShellRoot {
                     border.color: root.palette.frameBorder
 
                     Item {
-                        anchors.fill: parent
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        height: 424
 
                         Rectangle {
                             anchors.left: parent.left
@@ -315,6 +353,7 @@ ShellRoot {
                         }
 
                         Column {
+                            id: loginColumn
                             width: 460
                             x: 44
                             anchors.verticalCenter: parent.verticalCenter
@@ -330,6 +369,7 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                id: usernameField
                                 width: parent.width
                                 height: 62
                                 radius: 18
@@ -366,7 +406,7 @@ ShellRoot {
                                         event.accepted = true
                                     }
                                     Keys.onBacktabPressed: function(event) {
-                                        passwordInput.forceActiveFocus()
+                                        motdButton.forceActiveFocus()
                                         event.accepted = true
                                     }
 
@@ -389,6 +429,7 @@ ShellRoot {
                             }
 
                             Rectangle {
+                                id: passwordField
                                 width: parent.width
                                 height: 62
                                 radius: 18
@@ -429,7 +470,7 @@ ShellRoot {
 
                                     Keys.onReturnPressed: root.requestLogin()
                                     Keys.onTabPressed: function(event) {
-                                        usernameInput.forceActiveFocus()
+                                        sessionButton.forceActiveFocus()
                                         event.accepted = true
                                     }
                                     Keys.onBacktabPressed: function(event) {
@@ -497,6 +538,7 @@ ShellRoot {
                             }
 
                             Row {
+                                id: signInRow
                                 width: parent.width
                                 spacing: 12
                                 height: 66
@@ -542,125 +584,307 @@ ShellRoot {
                         }
 
                         Item {
+                            id: rightControls
                             width: 220
-                            height: 300
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
                             x: parent.width - width - 34
-                            y: 34
 
-                            Column {
+                            Text {
+                                anchors.bottom: sessionButton.top
+                                anchors.bottomMargin: 10
+                                text: "SESSION"
+                                color: root.palette.mutedText
+                                font.pixelSize: 12
+                                font.bold: true
+                                font.letterSpacing: 1.2
+                            }
+
+                            Button {
+                                id: sessionButton
                                 width: parent.width
-                                spacing: 10
-
-                                Text {
-                                    text: root.palette.name.toUpperCase()
-                                    color: root.palette.accentStrong
-                                    font.pixelSize: 13
-                                    font.bold: true
-                                    font.letterSpacing: 1.4
+                                height: usernameField.height
+                                y: loginColumn.y + usernameField.y
+                                text: root.selectedSession + (root.sessionMenuOpen ? "   ˄" : "   ˅")
+                                enabled: !root.loginInProgress
+                                onClicked: { root.themeMenuOpen = false; root.sessionMenuOpen = !root.sessionMenuOpen }
+                                Keys.onDownPressed: {
+                                    root.themeMenuOpen = false
+                                    root.sessionMenuOpen = true
+                                    if (sessionOptions.count > 0) sessionOptions.itemAt(0).forceActiveFocus()
                                 }
-
-                                Text {
-                                    text: "SESSION"
-                                    color: root.palette.mutedText
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                    font.letterSpacing: 1.2
-                                }
-
-                                Rectangle {
-                                    width: parent.width
-                                    height: 58
+                                Keys.onBacktabPressed: function(event) { passwordInput.forceActiveFocus(); event.accepted = true }
+                                Keys.onTabPressed: function(event) { themeButton.forceActiveFocus(); event.accepted = true }
+                                background: Rectangle {
                                     radius: 18
-                                    color: root.palette.cardBackground
+                                    color: sessionButton.hovered || sessionButton.visualFocus ? root.palette.cardHover : root.palette.cardBackground
                                     border.width: 1
-                                    border.color: root.sessionMenuOpen
-                                        ? root.palette.accentStrong
-                                        : root.palette.panelBorder
-
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: 18
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: root.selectedSession
-                                        color: root.palette.primaryText
-                                        font.pixelSize: 16
-                                        font.bold: true
-                                    }
-
-                                    Text {
-                                        anchors.right: parent.right
-                                        anchors.rightMargin: 18
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: root.sessionMenuOpen ? "˄" : "˅"
-                                        color: root.palette.accentStrong
-                                        font.pixelSize: 18
-                                        font.bold: true
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        enabled: !root.loginInProgress
-                                        onClicked: root.sessionMenuOpen = !root.sessionMenuOpen
-                                    }
+                                    border.color: root.sessionMenuOpen || sessionButton.visualFocus ? root.palette.accentStrong : root.palette.panelBorder
                                 }
+                                contentItem: Text {
+                                    text: sessionButton.text
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    leftPadding: 18
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
 
-                                Rectangle {
-                                    visible: root.sessionMenuOpen
-                                    width: parent.width
-                                    height: sessionMenuColumn.implicitHeight + 16
+                            Button {
+                                id: themeButton
+                                width: parent.width
+                                height: passwordField.height
+                                y: loginColumn.y + passwordField.y
+                                text: "Theme: " + root.palette.name + (root.themeMenuOpen ? "  ˄" : "  ˅")
+                                enabled: !root.loginInProgress
+                                onClicked: { root.sessionMenuOpen = false; root.themeMenuOpen = !root.themeMenuOpen }
+                                Keys.onDownPressed: {
+                                    root.sessionMenuOpen = false
+                                    root.themeMenuOpen = true
+                                    if (themeOptions.count > 0) themeOptions.itemAt(0).forceActiveFocus()
+                                }
+                                Keys.onBacktabPressed: function(event) { sessionButton.forceActiveFocus(); event.accepted = true }
+                                Keys.onTabPressed: function(event) { motdButton.forceActiveFocus(); event.accepted = true }
+                                background: Rectangle {
                                     radius: 18
-                                    color: Qt.rgba(root.palette.cardBackground.r,
-                                                   root.palette.cardBackground.g,
-                                                   root.palette.cardBackground.b,
-                                                   0.94)
+                                    color: themeButton.hovered || themeButton.visualFocus ? root.palette.cardHover : root.palette.cardBackground
                                     border.width: 1
-                                    border.color: root.palette.panelBorder
+                                    border.color: root.themeMenuOpen || themeButton.visualFocus ? root.palette.accentStrong : root.palette.panelBorder
+                                }
+                                contentItem: Text {
+                                    text: themeButton.text
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    leftPadding: 18
+                                    rightPadding: 10
+                                    elide: Text.ElideRight
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
 
-                                    Column {
-                                        id: sessionMenuColumn
-                                        anchors.fill: parent
-                                        anchors.margins: 8
-                                        spacing: 6
+                            Button {
+                                id: motdButton
+                                width: parent.width
+                                height: signInButton.height
+                                y: loginColumn.y + signInRow.y
+                                text: "MOTD"
+                                enabled: !root.loginInProgress
+                                onClicked: {
+                                    root.sessionMenuOpen = false
+                                    root.themeMenuOpen = false
+                                    root.motdOpen = true
+                                    motdDialog.forceActiveFocus()
+                                }
+                                Keys.onBacktabPressed: function(event) { themeButton.forceActiveFocus(); event.accepted = true }
+                                Keys.onTabPressed: function(event) { usernameInput.forceActiveFocus(); event.accepted = true }
+                                background: Rectangle {
+                                    radius: 18
+                                    color: motdButton.hovered || motdButton.visualFocus ? root.palette.cardHover : root.palette.cardBackground
+                                    border.width: 1
+                                    border.color: motdButton.visualFocus ? root.palette.accentStrong : root.palette.panelBorder
+                                }
+                                contentItem: Text {
+                                    text: motdButton.text
+                                    color: root.palette.primaryText
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
 
-                                        Repeater {
-                                            model: root.sessions
-
-                                            delegate: Rectangle {
-                                                id: sessionOption
-                                                required property var modelData
-                                                readonly property bool active: root.selectedSession === modelData.label
-                                                width: parent.width
-                                                height: 44
-                                                radius: 12
-                                                color: sessionOption.active ? root.palette.cardHover : "transparent"
-                                                border.width: sessionOption.active ? 1 : 0
-                                                border.color: sessionOption.active ? themeLoader.actionAccent("session") : "transparent"
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: sessionOption.modelData.label
-                                                    color: sessionOption.active ? root.palette.accentStrong : root.palette.primaryText
-                                                    font.pixelSize: 15
-                                                    font.bold: true
-                                                }
-
-                                                MouseArea {
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    enabled: !root.loginInProgress
-                                                    onClicked: {
-                                                        root.selectedSession = parent.modelData.label
-                                                        root.sessionMenuOpen = false
-                                                    }
-                                                }
+                            Rectangle {
+                                z: 10
+                                visible: root.sessionMenuOpen
+                                anchors.top: sessionButton.bottom
+                                anchors.topMargin: 4
+                                width: parent.width
+                                height: sessionMenuColumn.implicitHeight + 16
+                                radius: 18
+                                color: root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+                                Column {
+                                    id: sessionMenuColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 6
+                                    Repeater {
+                                        id: sessionOptions
+                                        model: root.sessions
+                                        delegate: Button {
+                                            id: sessionOption
+                                            required property var modelData
+                                            required property int index
+                                            width: sessionMenuColumn.width
+                                            height: 44
+                                            text: modelData.label
+                                            Keys.onEscapePressed: { root.sessionMenuOpen = false; sessionButton.forceActiveFocus() }
+                                            Keys.onDownPressed: sessionOptions.itemAt((index + 1) % sessionOptions.count).forceActiveFocus()
+                                            Keys.onUpPressed: sessionOptions.itemAt((index + sessionOptions.count - 1) % sessionOptions.count).forceActiveFocus()
+                                            onClicked: {
+                                                root.selectedSession = modelData.label
+                                                root.sessionMenuOpen = false
+                                                sessionButton.forceActiveFocus()
+                                            }
+                                            background: Rectangle {
+                                                radius: 10
+                                                color: sessionOption.hovered || sessionOption.visualFocus || root.selectedSession === sessionOption.modelData.label ? root.palette.cardHover : "transparent"
+                                            }
+                                            contentItem: Text {
+                                                text: sessionOption.text
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 15
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
                                             }
                                         }
                                     }
                                 }
                             }
+
+                            Rectangle {
+                                z: 10
+                                visible: root.themeMenuOpen
+                                anchors.top: themeButton.bottom
+                                anchors.topMargin: 4
+                                width: parent.width
+                                height: themeMenuColumn.implicitHeight + 16
+                                radius: 18
+                                color: root.palette.cardBackground
+                                border.width: 1
+                                border.color: root.palette.panelBorder
+                                Column {
+                                    id: themeMenuColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 4
+                                    Repeater {
+                                        id: themeOptions
+                                        model: themeFolders
+                                        delegate: Button {
+                                            id: themeOption
+                                            required property string fileName
+                                            required property int index
+                                            Keys.onEscapePressed: { root.themeMenuOpen = false; themeButton.forceActiveFocus() }
+                                            Keys.onDownPressed: themeOptions.itemAt((index + 1) % themeOptions.count).forceActiveFocus()
+                                            Keys.onUpPressed: themeOptions.itemAt((index + themeOptions.count - 1) % themeOptions.count).forceActiveFocus()
+                                            width: themeMenuColumn.width
+                                            height: 40
+                                            text: fileName.split("-").map(function(part) {
+                                                return part.charAt(0).toUpperCase() + part.slice(1)
+                                            }).join("-")
+                                            onClicked: {
+                                                themeLoader.selectedTheme = fileName
+                                                root.themeMenuOpen = false
+                                                themeButton.forceActiveFocus()
+                                            }
+                                            background: Rectangle {
+                                                radius: 10
+                                                color: themeOption.hovered || themeOption.visualFocus || root.activeTheme === themeOption.fileName ? root.palette.cardHover : "transparent"
+                                            }
+                                            contentItem: Text {
+                                                text: themeOption.text
+                                                color: root.palette.primaryText
+                                                font.pixelSize: 15
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            FocusScope {
+                id: motdDialog
+                anchors.fill: parent
+                visible: root.motdOpen
+                z: 20
+                Keys.onEscapePressed: {
+                    root.motdOpen = false
+                    motdButton.forceActiveFocus()
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: "#bb000000"
+                    MouseArea { anchors.fill: parent }
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(780, parent.width - 80)
+                    height: Math.min(560, parent.height - 80)
+                    radius: 24
+                    color: root.palette.panelBackground
+                    border.width: 2
+                    border.color: root.palette.frameBorder
+
+                    Text {
+                        id: motdHeading
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.margins: 28
+                        text: "Message of the Day"
+                        color: root.palette.primaryText
+                        font.pixelSize: 25
+                        font.bold: true
+                    }
+
+                    Flickable {
+                        id: motdScroll
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: motdHeading.bottom
+                        anchors.bottom: closeMotd.top
+                        anchors.margins: 28
+                        clip: true
+                        contentWidth: width
+                        contentHeight: motdText.implicitHeight
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        Text {
+                            id: motdText
+                            width: motdScroll.width - 16
+                            text: motdFile.text().trim() || "No system message is available."
+                            textFormat: Text.PlainText
+                            color: root.palette.primaryText
+                            font.pixelSize: 17
+                            wrapMode: Text.Wrap
+                        }
+                    }
+
+                    Button {
+                        id: closeMotd
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 24
+                        width: 150
+                        height: 48
+                        text: "Close"
+                        focus: true
+                        Keys.onTabPressed: function(event) { event.accepted = true }
+                        Keys.onBacktabPressed: function(event) { event.accepted = true }
+                        onClicked: { root.motdOpen = false; motdButton.forceActiveFocus() }
+                        background: Rectangle {
+                            radius: 14
+                            color: closeMotd.hovered || closeMotd.visualFocus ? root.palette.cardHover : root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.accentStrong
+                        }
+                        contentItem: Text {
+                            text: closeMotd.text
+                            color: root.palette.primaryText
+                            font.pixelSize: 16
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                         }
                     }
                 }

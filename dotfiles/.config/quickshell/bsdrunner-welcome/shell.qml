@@ -1,8 +1,10 @@
 pragma ComponentBehavior: Bound
 
 import Quickshell
+import Quickshell.Io
 import QtCore
 import QtQuick
+import QtQuick.Controls
 
 ShellRoot {
     id: root
@@ -21,6 +23,16 @@ ShellRoot {
     readonly property string homeDir: localPath(StandardPaths.writableLocation(StandardPaths.HomeLocation))
     readonly property string activeTheme: themeLoader.activeTheme
     readonly property var palette: themeLoader.palette
+    property string freebsdTip: ""
+
+    Process {
+        command: ["/usr/bin/fortune", "freebsd-tips"]
+        running: true
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.freebsdTip = text.trim()
+        }
+    }
 
     function actionThemeName(action) {
         if (action.indexOf("theme:") !== 0) return ""
@@ -58,8 +70,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Welcome"
-        minimumSize: Qt.size(920, 620)
-        maximumSize: Qt.size(920, 620)
+        minimumSize: Qt.size(920, root.freebsdTip.length > 0 ? 740 : 620)
+        maximumSize: Qt.size(920, root.freebsdTip.length > 0 ? 740 : 620)
 
         color: "transparent"
 
@@ -302,6 +314,40 @@ ShellRoot {
                                     onExited: parent.color = root.palette.cardBackground
                                     onClicked: root.runAction(actionCard.modelData.action)
                                 }
+                            }
+                        }
+                    }
+
+                    Column {
+                        width: parent.width
+                        spacing: 6
+                        visible: root.freebsdTip.length > 0
+
+                        Text {
+                            text: "FreeBSD Tip"
+                            color: root.palette.accent
+                            font.pixelSize: 16
+                            font.bold: true
+                        }
+
+                        Flickable {
+                            id: tipScroll
+                            width: parent.width
+                            height: Math.min(74, tipText.implicitHeight)
+                            contentWidth: width
+                            contentHeight: tipText.implicitHeight
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                            Text {
+                                id: tipText
+                                width: tipScroll.width - 14
+                                text: root.freebsdTip
+                                textFormat: Text.PlainText
+                                color: root.palette.primaryText
+                                font.pixelSize: 16
+                                wrapMode: Text.Wrap
                             }
                         }
                     }

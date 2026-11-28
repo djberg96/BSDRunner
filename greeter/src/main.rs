@@ -15,8 +15,14 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum UiRequest {
-    Login { username: String, session: Session },
-    AuthResponse { response: Option<String> },
+    Login {
+        username: String,
+        session: Session,
+        theme: Option<Theme>,
+    },
+    AuthResponse {
+        response: Option<String>,
+    },
     Cancel,
 }
 
@@ -25,6 +31,28 @@ enum UiRequest {
 enum Session {
     Bsdrunner,
     Terminal,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum Theme {
+    Default,
+    HaasBioroid,
+    Jinteki,
+    Nbn,
+    Weyland,
+}
+
+impl Theme {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::HaasBioroid => "haas-bioroid",
+            Self::Jinteki => "jinteki",
+            Self::Nbn => "nbn",
+            Self::Weyland => "weyland",
+        }
+    }
 }
 
 impl Session {
@@ -88,6 +116,7 @@ enum UiErrorKind {
 struct Login {
     stream: UnixStream,
     session: Session,
+    theme: Option<Theme>,
 }
 
 enum State {
@@ -157,11 +186,15 @@ fn handle_response(mut login: Login, mut response: GreetdResponse) -> Result<Sta
             },
             GreetdResponse::Success => {
                 emit(UiEvent::StartingSession)?;
+                let mut environment = vec!["XDG_SESSION_TYPE=wayland".to_string()];
+                if let Some(theme) = login.theme {
+                    environment.push(format!("BSDRUNNER_LOGIN_THEME={}", theme.name()));
+                }
                 response = send(
                     &mut login.stream,
                     GreetdRequest::StartSession {
                         cmd: login.session.command(),
-                        env: vec!["XDG_SESSION_TYPE=wayland".to_string()],
+                        env: environment,
                     },
                 )?;
 
@@ -211,7 +244,14 @@ fn handle_response(mut login: Login, mut response: GreetdResponse) -> Result<Sta
 
 fn process(request: UiRequest, state: State, socket_path: &str) -> Result<State> {
     match (request, state) {
-        (UiRequest::Login { username, session }, State::Idle) => {
+        (
+            UiRequest::Login {
+                username,
+                session,
+                theme,
+            },
+            State::Idle,
+        ) => {
             if username.trim().is_empty() {
                 emit(UiEvent::Error {
                     kind: UiErrorKind::Input,
@@ -223,6 +263,7 @@ fn process(request: UiRequest, state: State, socket_path: &str) -> Result<State>
             let mut login = Login {
                 stream: UnixStream::connect(socket_path)?,
                 session,
+                theme,
             };
             let response = send(
                 &mut login.stream,

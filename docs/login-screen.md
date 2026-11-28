@@ -56,6 +56,14 @@ controls, overlays, and theme label so the interface remains legible and
 visually matched to its wallpaper. A new selection is made at boot and whenever
 greetd returns after logout. Set `BSDRUNNER_GREETER_THEME` in greetd's session
 environment to pin one installed theme for diagnostics.
+The theme picker changes the greeter's theme and wallpaper immediately. If a
+theme is selected, it is also applied to the BSDRunner desktop after successful
+authentication. If no theme is selected, the desktop keeps its previous theme.
+
+The MOTD button opens the system message from `/etc/motd` in a scrollable
+dialog. On FreeBSD, edit
+`/etc/motd.template` to change the persistent message used when the system
+regenerates `/etc/motd` at boot.
 
 The installer creates a timestamped backup of an existing BSDRunner bundle.
 
