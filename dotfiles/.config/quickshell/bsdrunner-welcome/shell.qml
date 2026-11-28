@@ -24,6 +24,7 @@ ShellRoot {
     readonly property string activeTheme: themeLoader.activeTheme
     readonly property var palette: themeLoader.palette
     property string freebsdTip: ""
+    property bool tipOpen: false
 
     Process {
         command: ["/usr/bin/fortune", "freebsd-tips"]
@@ -70,8 +71,8 @@ ShellRoot {
 
         visible: true
         title: "BSDRunner Welcome"
-        minimumSize: Qt.size(920, root.freebsdTip.length > 0 ? 740 : 620)
-        maximumSize: Qt.size(920, root.freebsdTip.length > 0 ? 740 : 620)
+        minimumSize: Qt.size(920, 620)
+        maximumSize: Qt.size(920, 620)
 
         color: "transparent"
 
@@ -318,44 +319,127 @@ ShellRoot {
                         }
                     }
 
-                    Column {
-                        width: parent.width
-                        spacing: 6
-                        visible: root.freebsdTip.length > 0
+                }
+
+                Button {
+                    id: tipButton
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.margins: 24
+                    width: 100
+                    height: 40
+                    text: "MOTD"
+                    onClicked: {
+                        root.tipOpen = true
+                        tipDialog.forceActiveFocus()
+                    }
+                    background: Rectangle {
+                        radius: 12
+                        color: tipButton.hovered || tipButton.visualFocus ? root.palette.cardHover : root.palette.cardBackground
+                        border.width: 1
+                        border.color: root.palette.accent
+                    }
+                    contentItem: Text {
+                        text: tipButton.text
+                        color: root.palette.primaryText
+                        font.pixelSize: 15
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+
+            FocusScope {
+                id: tipDialog
+                anchors.fill: parent
+                visible: root.tipOpen
+                z: 10
+                Keys.onEscapePressed: {
+                    root.tipOpen = false
+                    tipButton.forceActiveFocus()
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 24
+                    color: "#bb000000"
+                    MouseArea { anchors.fill: parent }
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(700, parent.width - 80)
+                    height: Math.min(440, parent.height - 80)
+                    radius: 22
+                    color: root.palette.panelBackground
+                    border.width: 2
+                    border.color: root.palette.frameBorder
+
+                    Text {
+                        id: tipHeading
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.margins: 28
+                        text: "FreeBSD Tip"
+                        color: root.palette.accent
+                        font.pixelSize: 24
+                        font.bold: true
+                    }
+
+                    Flickable {
+                        id: tipScroll
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: tipHeading.bottom
+                        anchors.bottom: closeTip.top
+                        anchors.margins: 28
+                        contentWidth: width
+                        contentHeight: tipText.implicitHeight
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                         Text {
-                            text: "FreeBSD Tip"
-                            color: root.palette.accent
-                            font.pixelSize: 16
-                            font.bold: true
-                        }
-
-                        Flickable {
-                            id: tipScroll
-                            width: parent.width
-                            height: Math.min(74, tipText.implicitHeight)
-                            contentWidth: width
-                            contentHeight: tipText.implicitHeight
-                            clip: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-                            Text {
-                                id: tipText
-                                width: tipScroll.width - 14
-                                text: root.freebsdTip
-                                textFormat: Text.PlainText
-                                color: root.palette.primaryText
-                                font.pixelSize: 16
-                                wrapMode: Text.Wrap
-                            }
+                            id: tipText
+                            width: tipScroll.width - 16
+                            text: root.freebsdTip || "No FreeBSD tip is available."
+                            textFormat: Text.PlainText
+                            color: root.palette.primaryText
+                            font.pixelSize: 18
+                            wrapMode: Text.Wrap
                         }
                     }
 
-                    Text {
-                        text: "Enable startup later with: touch ~/.config/bsdrunner/show-welcome-at-startup"
-                        color: root.palette.mutedText
-                        font.pixelSize: 14
+                    Button {
+                        id: closeTip
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 24
+                        width: 130
+                        height: 44
+                        text: "Close"
+                        focus: true
+                        Keys.onTabPressed: function(event) { event.accepted = true }
+                        Keys.onBacktabPressed: function(event) { event.accepted = true }
+                        onClicked: {
+                            root.tipOpen = false
+                            tipButton.forceActiveFocus()
+                        }
+                        background: Rectangle {
+                            radius: 12
+                            color: closeTip.hovered || closeTip.visualFocus ? root.palette.cardHover : root.palette.cardBackground
+                            border.width: 1
+                            border.color: root.palette.accent
+                        }
+                        contentItem: Text {
+                            text: closeTip.text
+                            color: root.palette.primaryText
+                            font.pixelSize: 16
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
                 }
             }
