@@ -4,12 +4,19 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import QtQuick.Controls
+import Qt.labs.settings
 
 ShellRoot {
     id: root
 
     ThemeLoader {
         id: themeLoader
+    }
+
+    Settings {
+        id: jailOrderSettings
+        fileName: themeLoader.homeDir + "/.config/bsdrunner/jails-order.ini"
+        property string order: "[]"
     }
 
     readonly property var palette: themeLoader.palette
@@ -252,7 +259,46 @@ ShellRoot {
         addJails(merged, seen, bastilleJails || [])
         addJails(merged, seen, runningJails || [])
         addJails(merged, seen, configuredJails || [])
-        return merged
+        var order = savedJailOrder()
+        var sorted = []
+        for (var i = 0; i < order.length; i += 1) {
+            for (var j = 0; j < merged.length; j += 1) {
+                if (jailKey(merged[j]) === order[i] && sorted.indexOf(merged[j]) < 0)
+                    sorted.push(merged[j])
+            }
+        }
+        for (var k = 0; k < merged.length; k += 1) {
+            if (sorted.indexOf(merged[k]) < 0)
+                sorted.push(merged[k])
+        }
+        return sorted
+    }
+
+    function jailKey(jail) {
+        return JSON.stringify([jail.backend || "native", jail.name || ""])
+    }
+
+    function savedJailOrder() {
+        try {
+            var order = JSON.parse(jailOrderSettings.order)
+            return Array.isArray(order) ? order : []
+        } catch (error) {
+            return []
+        }
+    }
+
+    function moveJail(from, to) {
+        var current = jails.slice()
+        if (from < 0 || from >= current.length || to < 0 || to >= current.length || from === to)
+            return
+        current.splice(to, 0, current.splice(from, 1)[0])
+        var order = current.map(function(jail) { return jailKey(jail) })
+        var saved = savedJailOrder()
+        for (var i = 0; i < saved.length; i += 1) {
+            if (order.indexOf(saved[i]) < 0)
+                order.push(saved[i])
+        }
+        jailOrderSettings.order = JSON.stringify(order)
     }
 
     function normalizedBlackshipJails(info) {
@@ -2475,7 +2521,7 @@ ShellRoot {
                                 Text {
                                     anchors.fill: parent
                                     anchors.margins: 10
-                                    text: root.jails.length === 0 ? "No configured jails found" : "Select a jail to inspect it"
+                                    text: root.jails.length === 0 ? "No configured jails found" : "Select a jail to inspect it • Drag to reorder"
                                     color: root.palette.secondaryText
                                     font.pixelSize: 12
                                     verticalAlignment: Text.AlignVCenter
@@ -2484,10 +2530,34 @@ ShellRoot {
                             }
 
                             Flickable {
+                                id: jailListFlick
+                                property var dragRow: null
+                                property real dragPointerY: 0
+                                readonly property int dropIndex: dragRow ? Math.max(0, Math.min(root.jails.length - 1, Math.floor((dragRow.y + dragRow.dragOffset + dragRow.height / 2) / (dragRow.height + jailListColumn.spacing)))) : -1
                                 width: parent.width
                                 height: parent.height - 90
                                 contentHeight: jailListColumn.height
                                 clip: true
+                                interactive: false
+
+                                WheelHandler {
+                                    onWheel: function(event) {
+                                        jailListFlick.contentY = Math.max(0, Math.min(Math.max(0, jailListFlick.contentHeight - jailListFlick.height), jailListFlick.contentY - event.angleDelta.y))
+                                        event.accepted = true
+                                    }
+                                }
+
+                                Timer {
+                                    interval: 30
+                                    repeat: true
+                                    running: jailListFlick.dragRow !== null
+                                    onTriggered: {
+                                        var step = jailListFlick.dragPointerY < 30 ? -8 : jailListFlick.dragPointerY > jailListFlick.height - 30 ? 8 : 0
+                                        var previous = jailListFlick.contentY
+                                        jailListFlick.contentY = Math.max(0, Math.min(Math.max(0, jailListFlick.contentHeight - jailListFlick.height), previous + step))
+                                        jailListFlick.dragRow.dragOffset += jailListFlick.contentY - previous
+                                    }
+                                }
 
                                 Column {
                                     id: jailListColumn
@@ -2500,6 +2570,9 @@ ShellRoot {
                                         Rectangle {
                                             id: jailRow
                                             required property var modelData
+                                            required property int index
+                                            property real dragOffset: 0
+                                            property bool dragging: false
 
                                             width: jailListColumn.width
                                             height: 78
@@ -2507,6 +2580,21 @@ ShellRoot {
                                             color: root.selectedJailName === jailRow.modelData.name && root.selectedJailBackend === jailRow.modelData.backend ? root.palette.cardHover : root.palette.panelBackground
                                             border.width: 1
                                             border.color: root.selectedJailName === jailRow.modelData.name && root.selectedJailBackend === jailRow.modelData.backend ? root.toneColor(root.stateTone(jailRow.modelData)) : root.palette.frameBorder
+                                            z: dragging ? 1 : 0
+                                            opacity: dragging ? 0.85 : 1
+                                            transform: Translate { y: jailRow.dragOffset }
+
+                                            Rectangle {
+                                                visible: jailListFlick.dragRow !== null && jailListFlick.dropIndex === jailRow.index && jailListFlick.dragRow !== jailRow
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.top: jailListFlick.dragRow && jailListFlick.dragRow.index < jailRow.index ? undefined : parent.top
+                                                anchors.bottom: jailListFlick.dragRow && jailListFlick.dragRow.index < jailRow.index ? parent.bottom : undefined
+                                                height: 4
+                                                radius: 2
+                                                color: root.palette.accent
+                                                z: 2
+                                            }
 
                                             Row {
                                                 anchors.fill: parent
@@ -2554,7 +2642,40 @@ ShellRoot {
                                             }
 
                                             MouseArea {
+                                                id: jailRowMouse
                                                 anchors.fill: parent
+                                                preventStealing: true
+                                                cursorShape: jailRow.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                                                property real pressY: 0
+                                                onPressed: function(mouse) {
+                                                    pressY = mapToItem(jailListColumn, mouse.x, mouse.y).y
+                                                }
+                                                onPositionChanged: function(mouse) {
+                                                    if (!pressed)
+                                                        return
+                                                    var delta = mapToItem(jailListColumn, mouse.x, mouse.y).y - pressY
+                                                    if (Math.abs(delta) >= 6)
+                                                        jailRow.dragging = true
+                                                    if (jailRow.dragging) {
+                                                        jailRow.dragOffset = delta
+                                                        jailListFlick.dragRow = jailRow
+                                                        jailListFlick.dragPointerY = mapToItem(jailListFlick, mouse.x, mouse.y).y
+                                                    }
+                                                }
+                                                onReleased: function(mouse) {
+                                                    if (jailRow.dragging) {
+                                                        var target = jailListFlick.dropIndex
+                                                        jailListFlick.dragRow = null
+                                                        jailRow.dragOffset = 0
+                                                        jailRow.dragging = false
+                                                        root.moveJail(jailRow.index, target)
+                                                    }
+                                                }
+                                                onCanceled: {
+                                                    jailListFlick.dragRow = null
+                                                    jailRow.dragOffset = 0
+                                                    jailRow.dragging = false
+                                                }
                                                 onClicked: root.selectJail(jailRow.modelData)
                                             }
                                         }
